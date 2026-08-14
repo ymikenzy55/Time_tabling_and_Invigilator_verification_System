@@ -1,0 +1,383 @@
+// Prisma schema — Examination Management System
+// Phase 1: core entities + placeholders for future phases.
+// Enums and relations are defined here so migrations create the full baseline.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -------------------- Enums --------------------
+
+enum Role {
+  SUPER_ADMIN
+  DEPARTMENT_HEAD
+  INVIGILATOR
+}
+
+enum UserStatus {
+  PENDING_APPROVAL  // User self-registered, awaiting super admin approval
+  ACTIVE
+  SUSPENDED
+  DISABLED
+  REJECTED
+}
+
+enum CourseStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum AttendanceResult {
+  RECORDED
+  REJECTED_WINDOW
+  REJECTED_DUPLICATE
+  REJECTED_UNASSIGNED
+  REJECTED_INVALID_QR
+  REJECTED_VENUE_MISMATCH
+}
+
+// -------------------- Core: Users & Auth --------------------
+
+model User {
+  id            String     @id @default(cuid())
+  email         String     @unique
+  passwordHash  String?
+  fullName      String
+  staffId       String?    @unique
+  phone         String?
+  role          Role
+  status        UserStatus @default(PENDING_APPROVAL)
+
+  departmentId  String?
+  department    Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  departmentName String?
+
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  approvedAt    DateTime?
+  approvedById  String?
+
+  courseSubmissions Course[] @relation("CourseCreator")
+  courseApprovals   Course[] @relation("CourseApprover")
+
+  invigilations     Invigilation[] @relation("Invigilator")
+  replacedBy        Invigilation[] @relation("Replacement")
+
+  attendanceRecords Attendance[]
+
+  venueAssignments  VenueAssignment[] @relation("VenueAssignmentInvigilator")
+  venueScans        VenueScan[]       @relation("VenueScanUser")
+
+  auditLogs         AuditLog[]
+
+  notifications     Notification[]
+
+  passwordResets    PasswordReset[]
+
+  @@index([role])
+  @@index([status])
+  @@index([departmentId])
+}
+
+model RegistrationWindow {
+  role      Role     @id
+  opensAt   DateTime
+  closesAt  DateTime
+  updatedAt DateTime @updatedAt
+  updatedById String?
+
+  @@index([opensAt, closesAt])
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// -------------------- Academic Structure --------------------
+
+model Faculty {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  code        String       @unique
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  departments Department[]
+}
+
+model Department {
+  id          String    @id @default(cuid())
+  name        String
+  code        String    @unique
+  facultyId   String
+  faculty     Faculty   @relation(fields: [facultyId], references: [id], onDelete: Restrict)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  users       User[]
+  courses     Course[]
+  courseLevels CourseLevel[]
+
+  @@unique([facultyId, name])
+}
+
+model AcademicYear {
+  id        String     @id @default(cuid())
+  name      String     @unique // e.g. "2025/2026"
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean    @default(false)
+  semesters Semester[]
+}
+
+model Semester {
+  id             String       @id @default(cuid())
+  name           String       // e.g. "First Semester"
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  startDate      DateTime
+  endDate        DateTime
+  isActive       Boolean      @default(false)
+
+  examinationSessions ExaminationSession[]
+  courses             Course[]
+
+  @@unique([academicYearId, name])
+}
+
+// -------------------- Courses --------------------
+
+model Course {
+  id                   String       @id @default(cuid())
+  code                 String
+  title                String
+  departmentId         String
+  department           Department   @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  level                Int
+  semesterId           String
+  semester             Semester     @relation(fields: [semesterId], references: [id], onDelete: Restrict)
+  creditHours          Int
+  studentCount         Int          @default(0)
+  examDurationMinutes  Int          @default(120)
+  specialRequirements  String?
+  instructorName       String?
+  status               CourseStatus @default(DRAFT)
+  rejectionComment     String?
+  locked               Boolean      @default(false)
+
+  createdById  String?
+  createdBy    User?   @relation("CourseCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  approvedById String?
+  approvedBy   User?   @relation("CourseApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  submittedAt  DateTime?
+  approvedAt   DateTime?
+
+  invigilations Invigilation[]
+
+  @@unique([code, semesterId])
+  @@index([status])
+  @@index([createdById, status])
+  @@index([createdById, updatedAt])
+  @@index([departmentId, semesterId])
+  @@index([semesterId, status])
+}
+
+model CourseLevel {
+  id            String     @id @default(cuid())
+  value         Int
+  label         String?
+  departmentId  String
+  department    Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@unique([departmentId, value])
+  @@index([departmentId, value])
+}
+
+// -------------------- Examinations (placeholder for Phase 5+) --------------------
+
+model ExaminationSession {
+  id           String    @id @default(cuid())
+  name         String
+  semesterId   String
+  semester     Semester  @relation(fields: [semesterId], references: [id], onDelete: Restrict)
+  startDate    DateTime
+  endDate      DateTime
+  isPublished  Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  invigilations Invigilation[]
+  venueAssignments VenueAssignment[]
+  venueScans       VenueScan[]
+}
+
+model Venue {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  capacity  Int
+  location  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invigilations Invigilation[]
+  venueAssignments VenueAssignment[]
+  venueScans       VenueScan[]
+
+  @@index([isActive])
+}
+
+model Invigilation {
+  id                   String   @id @default(cuid())
+  examinationSessionId String
+  examinationSession   ExaminationSession @relation(fields: [examinationSessionId], references: [id], onDelete: Cascade)
+  courseId             String
+  course               Course   @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  venueId        String?
+  venue          Venue?  @relation(fields: [venueId], references: [id], onDelete: SetNull)
+
+  invigilatorId  String?
+  invigilator    User?   @relation("Invigilator", fields: [invigilatorId], references: [id], onDelete: SetNull)
+
+  replacementId  String?
+  replacement    User?   @relation("Replacement", fields: [replacementId], references: [id], onDelete: SetNull)
+
+  isActive       Boolean  @default(true)
+  scheduledAt    DateTime
+  windowOpensAt  DateTime?
+  windowClosesAt DateTime?
+  gracePeriodMin Int      @default(0)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  attendance     Attendance[]
+
+  @@index([invigilatorId])
+  @@index([replacementId])
+  @@index([invigilatorId, scheduledAt])
+  @@index([examinationSessionId, scheduledAt])
+  @@index([courseId])
+  @@index([venueId, scheduledAt])
+}
+
+// -------------------- Attendance (placeholder for Phase 6) --------------------
+
+model Attendance {
+  id             String           @id @default(cuid())
+  invigilationId String
+  invigilation   Invigilation     @relation(fields: [invigilationId], references: [id], onDelete: Cascade)
+
+  userId         String?
+  user           User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  result         AttendanceResult
+  scannedAt      DateTime         @default(now())
+  ipAddress      String?
+  userAgent      String?
+  notes          String?
+
+  @@index([invigilationId, userId])
+}
+
+// -------------------- Venue-level invigilator assignment & QR attendance --------------------
+
+model VenueAssignment {
+  id                   String   @id @default(cuid())
+  examinationSessionId String
+  examinationSession   ExaminationSession @relation(fields: [examinationSessionId], references: [id], onDelete: Cascade)
+  venueId              String
+  venue                Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  invigilatorId        String
+  invigilator          User     @relation("VenueAssignmentInvigilator", fields: [invigilatorId], references: [id], onDelete: Cascade)
+  slotAt               DateTime
+  createdAt            DateTime @default(now())
+
+  @@unique([examinationSessionId, venueId, slotAt, invigilatorId])
+  @@index([invigilatorId, slotAt])
+  @@index([examinationSessionId, venueId])
+}
+
+model VenueScan {
+  id                   String   @id @default(cuid())
+  venueId              String
+  venue                Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  examinationSessionId String
+  examinationSession   ExaminationSession @relation(fields: [examinationSessionId], references: [id], onDelete: Cascade)
+  userId               String
+  user                 User     @relation("VenueScanUser", fields: [userId], references: [id], onDelete: Cascade)
+  result               AttendanceResult
+  scannedAt            DateTime @default(now())
+  ipAddress            String?
+  userAgent            String?
+
+  @@index([examinationSessionId, venueId])
+  @@index([userId, scannedAt])
+}
+
+// -------------------- Audit --------------------
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action     String   // e.g. "USER.LOGIN", "COURSE.APPROVE"
+  targetType String?  // e.g. "User", "Course"
+  targetId   String?
+  result     String   // "SUCCESS" | "FAILURE"
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// -------------------- Notifications --------------------
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // e.g. INVITATION_CREATED, APPROVAL_PENDING, COURSE_SUBMITTED
+  title     String
+  message   String
+  link      String?  // in-app path to navigate on click
+  data      Json?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead, createdAt])
+}
+
+// -------------------- Settings --------------------
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}

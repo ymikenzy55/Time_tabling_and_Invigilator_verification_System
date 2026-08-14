@@ -1,0 +1,113 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { font-family: 'Urbanist', ui-sans-serif, system-ui, sans-serif; }
+  body { @apply bg-surface-muted text-ink-700; }
+
+  /* Green focus ring everywhere — replaces the neutral slate ring. */
+  *:focus-visible { @apply outline-none ring-2 ring-primary-600 ring-offset-2 ring-offset-white; }
+  input:focus-visible, textarea:focus-visible, select:focus-visible { @apply ring-0 ring-offset-0 outline-none; }
+
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+    -webkit-text-fill-color: #16191f;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+
+  select, input[type='checkbox'], input[type='radio'] { accent-color: #16a34a; }
+  select.input { @apply pr-8 cursor-pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2316a34a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.6rem center; }
+  select.input option:checked,
+  select.input option:hover { background-color: #dcfce7 !important; color: #15803d !important; }
+  select.input:focus { border-color: #16a34a !important; }
+
+  ::selection { background-color: #dcfce7; color: #14532d; }
+}
+
+@layer components {
+  /* ---------- Containers ---------- */
+  /* Console container: hairline border, minimal elevation, square-ish corners. */
+  .panel        { @apply bg-white border border-surface-border rounded-lg shadow-panel; }
+  .panel-header { @apply flex items-start justify-between gap-4 px-4 py-3 border-b border-surface-border sm:px-5; }
+  .panel-title  { @apply text-base font-bold text-ink-900 leading-tight; }
+  .panel-desc   { @apply mt-0.5 text-sm text-ink-500; }
+  .panel-body   { @apply p-4 sm:p-5; }
+  .panel-footer { @apply flex items-center justify-end gap-2 px-4 py-3 border-t border-surface-border bg-surface-subtle rounded-b-lg sm:px-5; }
+  /* Back-compat: existing pages use .card. Keep it visually identical to .panel. */
+  .card         { @apply panel; }
+
+  /* ---------- Buttons ---------- */
+  .btn        { @apply inline-flex items-center justify-center gap-2 font-bold rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap; }
+  .btn-xs     { @apply h-7 px-2 text-xs; }
+  .btn-sm     { @apply h-8 px-3 text-sm; }
+  .btn-md     { @apply h-9 px-4 text-sm; }
+  .btn-lg     { @apply h-10 px-5 text-sm; }
+  /* Solid green — the single primary action on a view. */
+  .btn-primary   { @apply btn btn-md bg-primary-600 border-primary-600 text-white hover:bg-primary-700 hover:border-primary-700 active:bg-primary-800; }
+  /* Console "normal" button: white fill, green hairline + green label. */
+  .btn-secondary { @apply btn btn-md bg-white border-primary-600 text-primary-700 hover:bg-primary-50 active:bg-primary-100; }
+  /* Neutral outline for low-emphasis / cancel actions. */
+  .btn-neutral   { @apply btn btn-md bg-white border-surface-border text-ink-700 hover:bg-surface-subtle; }
+  .btn-ghost     { @apply btn btn-md border-transparent text-ink-700 hover:bg-surface-subtle; }
+  .btn-danger    { @apply btn btn-md bg-white border-rose-300 text-rose-700 hover:bg-rose-50; }
+  .btn-danger-solid { @apply btn btn-md bg-rose-600 border-rose-600 text-white hover:bg-rose-700; }
+  /* Inline text button that reads as a link. */
+  .btn-link      { @apply inline-flex items-center gap-1.5 font-bold text-sm text-primary-700 hover:text-primary-800 hover:underline underline-offset-2 disabled:opacity-40 disabled:cursor-not-allowed; }
+
+  /* ---------- Links ---------- */
+  .link      { @apply text-primary-700 hover:text-primary-800 hover:underline underline-offset-2; }
+  .link-info { @apply text-xs font-normal text-primary-700 hover:underline underline-offset-2; }
+
+  /* ---------- Forms ---------- */
+  .input    { @apply w-full h-9 px-3 rounded-lg border border-surface-border bg-white text-sm text-ink-900 placeholder:text-ink-400 transition-colors focus:border-primary-600 focus:ring-1 focus:ring-primary-600 focus:ring-offset-0; }
+  .textarea { @apply input h-auto py-2 leading-relaxed; }
+  input[type='password'] { font-size: 1.4rem; letter-spacing: 0.12em; }
+  input[type='password']::placeholder { font-size: 0.875rem; letter-spacing: normal; }
+  .label      { @apply block text-sm font-bold text-ink-900 mb-1; }
+  .label-hint { @apply block text-xs font-normal text-ink-500 mb-1.5; }
+  .field-error{ @apply mt-1 text-xs text-rose-700; }
+  .form-grid  { @apply grid grid-cols-1 gap-4 sm:grid-cols-2; }
+
+  /* ---------- Badges / status ---------- */
+  .badge { @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold whitespace-nowrap; }
+
+  /* ---------- Tables ---------- */
+  .table-wrap  { @apply w-full overflow-x-auto; }
+  .table       { @apply min-w-full text-sm text-left; }
+  .table thead th { @apply bg-surface-subtle px-4 py-2.5 text-xs font-bold text-ink-700 border-b border-surface-border whitespace-nowrap; }
+  .table tbody td { @apply px-4 py-3 border-b border-surface-divider text-ink-700 align-middle; }
+  .table tbody tr:last-child td { @apply border-b-0; }
+  .table tbody tr:hover { @apply bg-surface-subtle; }
+  .table tbody tr.is-selected { @apply bg-primary-50; }
+  .td-strong   { @apply font-bold text-ink-900; }
+  .td-muted    { @apply text-ink-500; }
+
+  /* ---------- Tabs ---------- */
+  .tabs    { @apply flex items-center gap-0 overflow-x-auto border-b border-surface-border; }
+  .tab     { @apply relative shrink-0 px-4 py-2.5 text-sm font-bold text-ink-500 border-b-2 border-transparent transition-colors hover:text-ink-900 hover:bg-surface-subtle; }
+  .tab-active { @apply text-primary-700 border-primary-600; }
+
+  /* ---------- Breadcrumbs ---------- */
+  .crumbs      { @apply flex items-center gap-1.5 text-sm text-ink-500 flex-wrap; }
+  .crumb-link  { @apply text-primary-700 hover:underline underline-offset-2; }
+  .crumb-current { @apply font-bold text-ink-900; }
+
+  /* ---------- Key/value description lists ---------- */
+  .kv       { @apply grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3; }
+  .kv-key   { @apply text-xs font-bold text-ink-500; }
+  .kv-value { @apply mt-0.5 text-sm text-ink-900 break-words; }
+
+  /* ---------- Inline alerts ---------- */
+  .alert          { @apply flex items-start gap-2.5 rounded-lg border p-3 text-sm; }
+  .alert-info     { @apply alert border-primary-200 bg-primary-50 text-primary-800; }
+  .alert-success  { @apply alert border-emerald-200 bg-emerald-50 text-emerald-800; }
+  .alert-warning  { @apply alert border-amber-200 bg-amber-50 text-amber-800; }
+  .alert-danger   { @apply alert border-rose-200 bg-rose-50 text-rose-800; }
+
+  /* ---------- Section heading inside a page ---------- */
+  .section-title { @apply text-sm font-bold text-ink-900; }
+  .section-desc  { @apply text-xs text-ink-500; }
+}

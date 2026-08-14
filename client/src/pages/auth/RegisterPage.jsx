@@ -1,0 +1,398 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import toast from 'react-hot-toast';
+import {
+  ShieldCheck, Loader2, AlertTriangle, Eye, EyeOff, CheckCircle2, Calendar,
+  ArrowLeft, ArrowRight, Check,
+} from 'lucide-react';
+import { registrationApi } from '@/features/registration/registrationApi';
+import { strongPassword } from '@/lib/passwordRules';
+import { PasswordChecklist, MatchIndicator } from '@/features/users/PasswordChecklist';
+
+const roleLabels = {
+  DEPARTMENT_HEAD: 'Department Head',
+  INVIGILATOR: 'Invigilator',
+};
+
+const buildSchema = (role) => z.object({
+  role: z.enum(['DEPARTMENT_HEAD', 'INVIGILATOR']),
+  email: z.string().email('Please enter a valid email address.'),
+  fullName: z.string().trim().min(2, 'Full name is required.'),
+  staffId: z.string().trim().min(1, 'Staff ID is required.'),
+  phone: z.string().trim().optional(),
+  password: strongPassword(),
+  confirm: z.string().min(1, 'Please confirm your password.'),
+  departmentName: z.string().trim().min(1, 'Department name is required.'),
+}).refine((v) => v.password === v.confirm, {
+  message: 'Passwords do not match.',
+  path: ['confirm'],
+});
+
+const PwdInput = ({ id, label, register, autoComplete }) => {
+  const [show, setShow] = useState(false);
+  return (
+    <div>
+      <label className="label" htmlFor={id}>{label}</label>
+      <div className="relative">
+        <input
+          id={id}
+          type={show ? 'text' : 'password'}
+          autoComplete={autoComplete}
+          className="input pr-10"
+          {...register}
+        />
+        <button
+          type="button"
+          onClick={() => setShow((v) => !v)}
+          className="absolute inset-y-0 right-0 px-3 text-ink-400 hover:text-ink-700"
+          tabIndex={-1}
+          aria-label={show ? 'Hide password' : 'Show password'}
+        >
+          {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const formatDate = (d) =>
+  d ? new Date(d).toLocaleString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+  }) : '';
+
+export const RegisterPage = () => {
+  const navigate = useNavigate();
+  const [role, setRole] = useState('');
+  const [staffIdCheck, setStaffIdCheck] = useState({ checking: false, available: null, message: '' });
+
+  const statusQuery = useQuery({
+    queryKey: ['registration', 'status'],
+    queryFn: () => registrationApi.status(),
+    refetchInterval: 60000,
+  });
+
+  const schema = useMemo(() => buildSchema(role), [role]);
+
+  const [step, setStep] = useState(0);
+
+  const {
+    register: rf, handleSubmit, watch, reset, setValue, trigger,
+    formState: { errors },
+  } = useForm({
+    resolver: zodResolver(schema),
+    mode: 'onChange',
+    defaultValues: {
+      role: '', email: '', fullName: '', staffId: '', phone: '',
+      password: '', confirm: '', departmentName: '',
+    },
+  });
+
+  useEffect(() => {
+    setValue('role', role);
+  }, [role, setValue]);
+
+  const password = watch('password');
+  const confirm = watch('confirm');
+
+  const submitMutation = useMutation({
+    mutationFn: (values) => registrationApi.register({
+      role: values.role,
+      email: values.email,
+      fullName: values.fullName,
+      staffId: values.staffId,
+      phone: values.phone || undefined,
+      password: values.password,
+      departmentName: values.departmentName,
+    }),
+    onSuccess: () => {
+      toast.success('Account submitted. Awaiting Super Admin approval.');
+      reset();
+    },
+    onError: (err) => toast.error(err.message || 'Registration failed.'),
+  });
+
+  if (statusQuery.isLoading) {
+    return (
+      <div className="panel p-8 flex flex-col items-center text-ink-500">
+        <Loader2 className="w-6 h-6 animate-spin" />
+        <p className="mt-3 text-sm">Checking registration availability…</p>
+      </div>
+    );
+  }
+
+  if (statusQuery.isError) {
+    return (
+      <div>
+        <div className="mb-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 grid place-items-center">
+            <AlertTriangle className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-ink-900">Cannot reach the server</h2>
+            <p className="text-sm text-ink-500">
+              {statusQuery.error?.message || 'The registration service is unavailable right now.'}
+            </p>
+          </div>
+        </div>
+        <Link to="/login" className="btn-secondary mt-4 inline-flex">Back to sign in</Link>
+      </div>
+    );
+  }
+
+  const roles = statusQuery.data?.roles || [];
+  const openRoles = roles.filter((r) => r.open);
+  const nextOpen = roles.find((r) => !r.open && r.opensAt && new Date(r.opensAt) > new Date());
+
+  if (submitMutation.isSuccess) {
+    return (
+      <div className="panel p-8 text-center">
+        <div className="w-12 h-12 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 grid place-items-center mx-auto mb-4">
+          <CheckCircle2 className="w-6 h-6" />
+        </div>
+        <h2 className="text-xl font-bold text-ink-900">Application submitted</h2>
+        <p className="mt-2 text-sm text-ink-500">
+          Your account is under review. Once a Super Admin approves it, you can sign in.
+        </p>
+        <button className="btn-primary mt-6" onClick={() => navigate('/login', { replace: true })}>
+          Back to sign in
+        </button>
+      </div>
+    );
+  }
+
+  if (!openRoles.length) {
+    return (
+      <div>
+        <div className="mb-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 grid place-items-center">
+            <AlertTriangle className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-ink-900">Registration closed</h2>
+            <p className="text-sm text-ink-500">There are no active registration windows right now.</p>
+          </div>
+        </div>
+        {nextOpen && (
+          <div className="panel p-4 text-sm text-ink-700 flex items-start gap-3">
+            <Calendar className="w-4 h-4 mt-0.5 text-ink-500" />
+            <div>
+              Registration for <strong>{roleLabels[nextOpen.role]}</strong> opens on{' '}
+              <strong>{formatDate(nextOpen.opensAt)}</strong>.
+            </div>
+          </div>
+        )}
+        <Link to="/login" className="btn-secondary mt-6 inline-flex">Back to sign in</Link>
+      </div>
+    );
+  }
+
+  const stepFields = [
+    ['fullName', 'email', 'staffId', 'phone'],
+    ['departmentName'],
+    ['password', 'confirm'],
+  ];
+  const stepLabels = ['Personal', 'Department', 'Security'];
+  const totalSteps = stepFields.length;
+  const isLastStep = step === totalSteps - 1;
+
+  const handleNext = async () => {
+    const valid = await trigger(stepFields[step]);
+    if (!valid) return;
+
+    if (step === 0) {
+      const staffId = watch('staffId')?.trim();
+      if (staffId) {
+        setStaffIdCheck({ checking: true, available: null, message: '' });
+        try {
+          const result = await registrationApi.checkStaffId(staffId);
+          if (!result.available) {
+            setStaffIdCheck({ checking: false, available: false, message: 'This Staff ID is already in use.' });
+            return;
+          }
+          setStaffIdCheck({ checking: false, available: true, message: 'Staff ID is available.' });
+        } catch {
+          setStaffIdCheck({ checking: false, available: null, message: '' });
+        }
+      }
+    }
+
+    setStep((s) => Math.min(s + 1, totalSteps - 1));
+  };
+
+  const handleBack = () => setStep((s) => Math.max(s - 1, 0));
+
+  return (
+    <div>
+      <div className="mb-6 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-lg bg-primary-50 text-primary-600 border border-primary-100 grid place-items-center">
+          <ShieldCheck className="w-5 h-5" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-ink-900">Create your account</h2>
+          <p className="text-sm text-ink-500">
+            Choose your role and complete the form below.
+          </p>
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <label className="label">Registering as</label>
+        <div className="grid grid-cols-2 gap-2">
+          {openRoles.map((r) => (
+            <button
+              key={r.role}
+              type="button"
+              onClick={() => { setRole(r.role); setStep(0); }}
+              className={`p-3 rounded-lg border text-sm font-bold text-left transition-colors ${
+                role === r.role
+                  ? 'border-primary-600 bg-primary-50 text-primary-800'
+                  : 'border-surface-border hover:bg-surface-subtle text-ink-700'
+              }`}
+            >
+              <div>{roleLabels[r.role]}</div>
+              <div className="text-xs text-ink-500 mt-0.5">
+                Open until {formatDate(r.closesAt)}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {!role ? (
+        <p className="text-sm text-ink-500 text-center">Select a role to continue.</p>
+      ) : (
+        <form onSubmit={handleSubmit((v) => submitMutation.mutate(v))} className="space-y-4" noValidate>
+          <input type="hidden" value={role} {...rf('role')} />
+
+          {/* Step indicator */}
+          <div className="flex items-center gap-2 mb-2">
+            {stepLabels.map((label, i) => (
+              <div key={label} className="flex items-center gap-2 flex-1">
+                <div className={`flex items-center gap-2 ${i <= step ? 'text-primary-700' : 'text-ink-400'}`}>
+                  <div className={`w-6 h-6 rounded-full grid place-items-center text-xs font-bold border ${
+                    i < step
+                      ? 'bg-primary-600 text-white border-primary-600'
+                      : i === step
+                        ? 'border-primary-600 text-primary-700'
+                        : 'border-surface-border text-ink-400'
+                  }`}>
+                    {i < step ? <Check className="w-3.5 h-3.5" /> : i + 1}
+                  </div>
+                  <span className="text-xs font-bold hidden sm:inline">{label}</span>
+                </div>
+                {i < stepLabels.length - 1 && (
+                  <div className={`flex-1 h-px ${i < step ? 'bg-primary-600' : 'bg-surface-border'}`} />
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Step 0: Personal Info */}
+          {step === 0 && (
+            <div className="space-y-4">
+              <div>
+                <label className="label">Full name</label>
+                <input className="input" placeholder="Jane Doe" {...rf('fullName')} />
+                {errors.fullName && <p className="field-error">{errors.fullName.message}</p>}
+              </div>
+
+              <div>
+                <label className="label">Email address</label>
+                <input className="input" type="email" autoComplete="email" placeholder="you@university.edu" {...rf('email')} />
+                {errors.email && <p className="field-error">{errors.email.message}</p>}
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Staff ID</label>
+                  <input className="input" placeholder="e.g. DH-0001" {...rf('staffId')} />
+                  {errors.staffId && <p className="field-error">{errors.staffId.message}</p>}
+                  {staffIdCheck.checking && (
+                    <p className="text-xs text-ink-500 mt-1 flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Checking availability…
+                    </p>
+                  )}
+                  {staffIdCheck.available === false && (
+                    <p className="field-error mt-1">{staffIdCheck.message}</p>
+                  )}
+                  {staffIdCheck.available === true && (
+                    <p className="text-xs text-emerald-600 mt-1">{staffIdCheck.message}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="label">Phone (optional)</label>
+                  <input className="input" placeholder="+233..." {...rf('phone')} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 1: Department */}
+          {step === 1 && (
+            <div className="space-y-4">
+              <div>
+                <label className="label">
+                  {role === 'DEPARTMENT_HEAD' ? 'Department you are heading' : 'Your department'}
+                </label>
+                <input
+                  className="input"
+                  placeholder="e.g. Computer Science"
+                  {...rf('departmentName')}
+                />
+                {errors.departmentName && <p className="field-error">{errors.departmentName.message}</p>}
+                <p className="text-xs text-ink-500 mt-1">
+                  Enter the full department name. If it already exists, you'll be linked to it; otherwise it will be created.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Security */}
+          {step === 2 && (
+            <div className="space-y-4">
+              <div>
+                <PwdInput id="password" label="Password" register={rf('password')} autoComplete="new-password" />
+                <PasswordChecklist value={password} />
+              </div>
+              <div>
+                <PwdInput id="confirm" label="Confirm password" register={rf('confirm')} autoComplete="new-password" />
+                <MatchIndicator password={password} confirm={confirm} />
+                {errors.confirm && <p className="field-error">{errors.confirm.message}</p>}
+              </div>
+            </div>
+          )}
+
+          {/* Navigation buttons */}
+          <div className="flex items-center gap-2 pt-2">
+            {step > 0 && (
+              <button type="button" className="btn-secondary" onClick={handleBack}>
+                <ArrowLeft className="w-4 h-4" /> Back
+              </button>
+            )}
+            {!isLastStep ? (
+              <button type="button" className="btn-primary ml-auto" onClick={handleNext} disabled={staffIdCheck.checking}>
+                {staffIdCheck.checking ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
+                Next
+              </button>
+            ) : (
+              <button type="submit" className="btn-primary ml-auto" disabled={submitMutation.isPending}>
+                {submitMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4" />
+                )}
+                {submitMutation.isPending ? 'Submitting…' : 'Submit application'}
+              </button>
+            )}
+          </div>
+        </form>
+      )}
+
+      <Link to="/login" className="btn-ghost mt-6 inline-flex w-full">Back to sign in</Link>
+    </div>
+  );
+};

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/assets/images/uenrLogo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#16a34a" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <title>Examination Management System</title>
+    <style>
+      #app-preloader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        background: #ffffff;
+        z-index: 9999;
+        transition: opacity 400ms ease;
+      }
+      #app-preloader img {
+        width: 96px;
+        height: 96px;
+        object-fit: contain;
+        animation: uenr-pulse 1.6s ease-in-out infinite;
+      }
+      #app-preloader .uenr-title {
+        font-family: 'Urbanist', system-ui, sans-serif;
+        font-weight: 600;
+        color: #0f172a;
+        font-size: 14px;
+        letter-spacing: 0.02em;
+      }
+      #app-preloader .uenr-sub {
+        font-family: 'Urbanist', system-ui, sans-serif;
+        color: #64748b;
+        font-size: 12px;
+      }
+      @keyframes uenr-pulse {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.05); opacity: 0.85; }
+      }
+      #app-preloader.hide { opacity: 0; pointer-events: none; }
+    </style>
+  </head>
+  <body class="antialiased">
+    <div id="app-preloader">
+      <img src="/assets/images/uenrLogo.png" alt="UENR" />
+      <div class="uenr-title">Examination Management System</div>
+      <div class="uenr-sub">University of Energy and Natural Resources</div>
+    </div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
