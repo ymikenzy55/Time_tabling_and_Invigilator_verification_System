@@ -88,7 +88,7 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
 
     const handlePendingAccount = (data) => {
       if (data?.fullName) {
-        toast.success(`${data.fullName} registered and is awaiting approval.`);
+        toast.success(`${data.fullName} registered and is awaiting approval.`, { duration: Infinity });
       }
       qc.invalidateQueries({ queryKey: ['notifications'] });
       qc.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
@@ -96,7 +96,7 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
     };
 
     const handleCourseSubmitted = () => {
-      toast.success('A course has been submitted for approval.');
+      toast.success('A course has been submitted for approval.', { duration: Infinity });
       qc.invalidateQueries({ queryKey: ['courses', 'pending-approval'] });
       qc.invalidateQueries({ queryKey: ['courses'] });
       qc.invalidateQueries({ queryKey: ['notifications'] });
@@ -109,7 +109,7 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
     };
 
     const handleCourseApproved = () => {
-      toast.success('Course approved.');
+      toast.success('Course approved.', { duration: Infinity });
       qc.invalidateQueries({ queryKey: ['courses', 'pending-approval'] });
       qc.invalidateQueries({ queryKey: ['courses'] });
       qc.invalidateQueries({ queryKey: ['notifications'] });
@@ -117,7 +117,7 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
     };
 
     const handleCourseRejected = () => {
-      toast.success('Course rejected.');
+      toast.success('Course rejected.', { duration: Infinity });
       qc.invalidateQueries({ queryKey: ['courses', 'pending-approval'] });
       qc.invalidateQueries({ queryKey: ['courses'] });
       qc.invalidateQueries({ queryKey: ['notifications'] });
@@ -130,7 +130,7 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
       const time = data?.scannedAt
         ? new Date(data.scannedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         : '';
-      toast.success(`${name} checked in at ${venueName}${time ? ` \u2014 ${time}` : ''}.`);
+      toast.success(`${name} checked in at ${venueName}${time ? ` — ${time}` : ''}.`, { duration: Infinity });
       qc.invalidateQueries({ queryKey: ['venue-scans'] });
       qc.invalidateQueries({ queryKey: ['attendance'] });
       qc.invalidateQueries({ queryKey: ['notifications'] });
