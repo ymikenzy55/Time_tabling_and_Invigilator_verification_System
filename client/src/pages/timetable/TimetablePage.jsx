@@ -486,13 +486,11 @@ export const TimetablePage = () => {
     // If entries are being fetched (e.g. right after generation), wait for
     // the fresh data before building the PDF to avoid exporting stale data.
     let freshEntries = entries;
-    let freshDeptGrids = deptGrids;
     if (entriesQuery.isFetching) {
       toast.loading('Updating timetable data…', { id: 'pdf-export' });
       const result = await entriesQuery.refetch();
       toast.success('Data updated. Opening PDF…', { id: 'pdf-export' });
       freshEntries = applyFilters(result.data || []);
-      freshDeptGrids = buildDeptGrids(freshEntries);
     }
     const session = sessions.find((s) => s.id === sessionId);
     const semName = session?.semester?.name || '';
@@ -508,137 +506,189 @@ export const TimetablePage = () => {
       clashCountMap.set(key, (clashCountMap.get(key) || 0) + 1);
     }
 
-    // Fetch logo as base64 to avoid cross-origin / blank-page issues in print
-    let logoSrc = LOGO_IMAGE;
-    try {
-      const resp = await fetch(LOGO_IMAGE);
-      const blob = await resp.blob();
-      logoSrc = await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.onerror = () => resolve(LOGO_IMAGE);
-        reader.readAsDataURL(blob);
-      });
-    } catch { /* fallback to path */ }
+    // --- Build the flat day-grouped structure used by the official layout ---
+    // Merge entries with the same course code + title in the same slot into a
+    // single row (shared courses sit at the same time in different venues).
+    const classLabel = (e) => {
+      const dept = e.course?.department;
+      const deptTag = (dept?.code || dept?.name || '').toUpperCase();
+      return `L${e.course?.level ?? ''} ${deptTag}`.trim();
+    };
 
-    const renderEntryRows = (list) => {
-      const rows = list.map((e, idx) => {
-        const deptLevelKey = `${e.course?.department?.id}:${e.course?.level}`;
-        const slotKey = `${dateKey(e.scheduledAt)}-${periodIndex(e.scheduledAt)}`;
-        const isClashing = clashCountMap.get(`${slotKey}:${deptLevelKey}`) > 1;
-        const clashBorder = isClashing ? 'border-left:2pt solid #c00;' : '';
-        const clashTag = isClashing ? '<div style="color:#c00;font-weight:bold;font-size:7pt;margin-top:1pt;">&#9888; CLASH</div>' : '';
-        const lastBorder = idx === list.length - 1 ? '' : 'border-bottom:0.5pt solid #000;';
-        return `<tr${isClashing ? ' style="background:#fee2e1;"' : ''}>
-          <td style="border:none;padding:1.5pt 2pt;${lastBorder}${clashBorder}">
-            <div style="font-weight:bold;">${e.course?.code || ''}</div>
-            <div>${e.course?.title || ''}</div>
-            <div style="font-weight:bold;">${e.course?.studentCount ?? 0} students</div>
-            <div style="font-weight:bold;">${e.venue?.name || ''}</div>
-            <div style="color:#555;">${e.course?.instructorName || ''}</div>
-            ${clashTag}
-          </td>
+    const mergedRows = new Map(); // key: date|period|code|title -> row
+    for (const e of freshEntries) {
+      const code = (e.course?.code || '').trim().toUpperCase();
+      const title = (e.course?.title || '').trim();
+      const dk = dateKey(e.scheduledAt);
+      const pi = periodIndex(e.scheduledAt);
+      const key = `${dk}|${pi}|${code}|${title.toUpperCase()}`;
+
+      const deptLevelKey = `${e.course?.department?.id}:${e.course?.level}`;
+      const slotKey = `${dk}-${pi}`;
+      const isClashing = clashCountMap.get(`${slotKey}:${deptLevelKey}`) > 1;
+
+      if (!mergedRows.has(key)) {
+        mergedRows.set(key, {
+          dateKey: dk,
+          period: pi,
+          scheduledAt: e.scheduledAt,
+          code,
+          title,
+          classes: [],
+          students: 0,
+          examiners: new Set(),
+          venues: new Set(),
+          clash: false,
+        });
+      }
+      const row = mergedRows.get(key);
+      const cls = classLabel(e);
+      if (cls && !row.classes.includes(cls)) row.classes.push(cls);
+      row.students += e.course?.studentCount || 0;
+      if (e.course?.instructorName) row.examiners.add(e.course.instructorName);
+      if (e.venue?.name) row.venues.add(e.venue.name);
+      if (isClashing) row.clash = true;
+    }
+
+    // Group merged rows by day.
+    const dayGroups = new Map(); // dateKey -> { date, rows: [] }
+    for (const row of mergedRows.values()) {
+      if (!dayGroups.has(row.dateKey)) dayGroups.set(row.dateKey, { date: row.scheduledAt, rows: [] });
+      dayGroups.get(row.dateKey).rows.push(row);
+    }
+    const sortedDays = [...dayGroups.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, val]) => ({
+        key,
+        date: val.date,
+        rows: val.rows.sort((a, b) => a.period - b.period || a.code.localeCompare(b.code)),
+      }));
+
+    // Exam period range for the sub-header.
+    const allDates = sortedDays.map((d) => new Date(d.date));
+    const rangeStart = allDates[0];
+    const rangeEnd = allDates[allDates.length - 1];
+    const fmtLong = (d) => {
+      const day = d.getDate();
+      const suffix = day % 10 === 1 && day !== 11 ? 'st' : day % 10 === 2 && day !== 12 ? 'nd' : day % 10 === 3 && day !== 13 ? 'rd' : 'th';
+      const month = d.toLocaleDateString('en-US', { month: 'long' }).toUpperCase();
+      const weekday = d.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
+      return `${weekday}, ${day}${suffix} ${month}, ${d.getFullYear()}`;
+    };
+    const fmtShort = (d) => {
+      const dt = new Date(d);
+      return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`;
+    };
+
+    const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    // Render body rows: for each day — a day-name row, then one row per course.
+    const bodyRows = sortedDays.map((day) => {
+      const dayName = new Date(day.date).toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
+
+      const courseRows = day.rows.map((row, idx) => {
+        const clashStyle = row.clash ? ' style="background:#fee2e1;"' : '';
+        const dateCell = idx === Math.max(0, Math.floor((day.rows.length - 1) / 2))
+          ? `<td class="date-cell date-value">${fmtShort(day.date)}</td>`
+          : '<td class="date-cell"></td>';
+        const timeLabel = PERIODS[row.period]?.label?.split('–')[0]?.trim() || '';
+        return `<tr${clashStyle}>
+          ${dateCell}
+          <td class="code-cell">${esc(row.code)}<div class="time-tag">${esc(timeLabel)}</div></td>
+          <td class="title-cell">${esc(row.title)}${row.clash ? ' <span class="clash-tag">&#9888; CLASH</span>' : ''}</td>
+          <td class="class-cell">${esc(row.classes.join(', '))}</td>
+          <td class="stds-cell">${row.students || ''}</td>
+          <td class="examiner-cell">${esc([...row.examiners].join(', '))}</td>
+          <td class="venue-cell">${esc([...row.venues].join(', '))}</td>
         </tr>`;
       }).join('');
-      return `<table style="width:100%;border-collapse:collapse;border:none;"><tbody>${rows}</tbody></table>`;
-    };
 
-    // Department + Level grouped layout — mirrors on-screen rendering
-    const renderDeptLevel = (dg) => {
-      const levelSections = dg.levels.map((lv) => {
-        const dayRows = lv.days.map((day) => {
-          const dayName = new Date(day.date).toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
-          const dateStr = new Date(day.date).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase();
-          const cells = day.periods.map((list) => {
-            if (list.length === 0) return '<td class="empty-cell">—</td>';
-            return `<td>${renderEntryRows(list)}</td>`;
-          }).join('');
-          return `<tr><td class="day-cell">${dayName}<br>${dateStr}</td>${cells}</tr>`;
-        }).join('');
+      // Day header row (7 columns: date + 6 others)
+      const dayHeader = `<tr class="day-row">
+        <td class="date-cell day-name">${dayName}</td>
+        <td></td><td></td><td></td><td></td><td></td><td></td>
+      </tr>`;
 
-        return `<div class="level-section">
-          <div class="level-heading">Level ${lv.level}</div>
-          <table class="grid-table">
-            <thead><tr>
-              <th style="width:16%">Date</th>
-              ${PERIODS.map((p) => `<th>${p.label}</th>`).join('')}
-            </tr></thead>
-            <tbody>${dayRows}</tbody>
-          </table>
-        </div>`;
-      }).join('');
+      return dayHeader + courseRows;
+    }).join('');
 
-      return `<div class="dept-section">
-        <div class="dept-heading">${dg.deptName}</div>
-        ${levelSections}
-      </div>`;
-    };
-
-    const bodyContent = freshDeptGrids.map(renderDeptLevel).join('');
-
+    const semLabel = (semName || '').toUpperCase();
     const html = `<!doctype html><html><head><title>Examination Timetable</title><style>
-      @page { size: A4 portrait; margin: 1.2cm; }
+      @page { size: A4 landscape; margin: 1cm; }
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
-        font-family: 'Times New Roman', 'Cambria', 'Calibri', serif;
+        font-family: 'Times New Roman', 'Cambria', serif;
         color: #000;
         background: #fff;
-        padding: 0;
       }
-      .document { width: 100%; margin: 0; }
-      .doc-header { text-align: center; margin-bottom: 0.5cm; border-bottom: 1.5pt solid #000; padding-bottom: 0.25cm; }
-      .doc-header img { width: 1.8cm; height: 1.8cm; object-fit: contain; margin: 0 auto 0.1cm; display: block; }
-      .doc-header .institution { font-size: 14pt; font-weight: bold; line-height: 1.3; }
-      .doc-header .doc-title { font-size: 12pt; font-weight: bold; margin-top: 0.08cm; text-transform: uppercase; letter-spacing: 0.02em; }
-      .doc-header .doc-sub { font-size: 10pt; margin-top: 0.08cm; font-style: italic; }
-      .dept-section { margin-bottom: 0.4cm; page-break-inside: auto; }
-      .dept-heading {
-        font-size: 11pt; font-weight: bold; text-align: center;
-        text-transform: uppercase; letter-spacing: 0.04em;
-        margin-top: 0.3cm; border-top: 1pt solid #000; border-bottom: 0.5pt solid #000;
-        padding: 0.08cm 0;
+      .document { width: 100%; border: 2pt solid #000; }
+      .head-block { border-bottom: 1.5pt solid #000; text-align: center; padding: 0.12cm 0.2cm; }
+      .head-block.institution { font-size: 16pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.03em; }
+      .head-block.doc-title { font-size: 11.5pt; font-weight: bold; }
+      .head-block.doc-title .provisional { color: #c00; }
+      .head-block.doc-title .highlight { color: #c00; }
+      .head-block.date-range { font-size: 11pt; font-weight: bold; }
+      .main-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      .main-table thead { display: table-header-group; }
+      .main-table th {
+        border: 1pt solid #000; padding: 0.08cm 0.06cm;
+        font-size: 8.5pt; font-weight: bold; text-align: center;
       }
-      .level-section { margin-bottom: 0.3cm; page-break-inside: avoid; }
-      .level-heading {
-        font-size: 9pt; font-weight: bold; margin: 0.15cm 0 0.08cm 0;
-        text-transform: uppercase; letter-spacing: 0.02em;
-        border-left: 3pt solid #000; padding-left: 0.2cm;
+      .main-table td {
+        border: 1pt solid #000; padding: 0.07cm 0.08cm;
+        font-size: 8.5pt; vertical-align: middle; word-wrap: break-word;
       }
-      .grid-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-      .grid-table thead { display: table-header-group; }
-      .grid-table > thead > tr > th {
-        border: 1pt solid #000; border-bottom: 1.5pt solid #000;
-        padding: 0.08cm 0.06cm; font-size: 8pt; font-weight: bold;
-        text-align: center; vertical-align: middle; background: #fff;
-      }
-      .grid-table > tbody > tr > td {
-        border: 0.5pt solid #000; padding: 0.08cm; font-size: 7pt;
-        vertical-align: top; word-wrap: break-word;
-      }
-      .grid-table > tbody > tr > .day-cell {
-        font-weight: bold; font-size: 7.5pt; text-align: center;
-        background: #f5f5f5; vertical-align: middle; padding: 0.08cm 0.06cm;
-      }
-      .grid-table > tbody > tr > .empty-cell { text-align: center; color: #999; vertical-align: middle; padding: 0.08cm; }
-      .grid-table tbody tr { page-break-inside: avoid; }
+      .main-table .day-row td { border-bottom: none; height: 0.42cm; }
+      .main-table .day-name { font-weight: bold; font-size: 9pt; }
+      .main-table .date-cell { text-align: left; font-weight: bold; }
+      .main-table .date-value { font-weight: bold; }
+      .main-table .code-cell { font-weight: bold; text-align: left; }
+      .main-table .code-cell .time-tag { font-weight: normal; font-size: 7pt; color: #444; }
+      .main-table .title-cell { font-weight: bold; text-align: left; }
+      .main-table .class-cell { font-weight: bold; text-align: center; }
+      .main-table .stds-cell { text-align: center; font-weight: bold; }
+      .main-table .examiner-cell { text-align: center; }
+      .main-table .venue-cell { text-align: center; font-weight: bold; }
+      .clash-tag { color: #c00; font-size: 7pt; font-weight: bold; }
+      .main-table tbody tr { page-break-inside: avoid; }
       @media print {
-        @page { size: A4 portrait; }
+        @page { size: A4 landscape; }
         html, body { width: 100%; height: auto; }
-        body { padding: 0; }
-        .dept-section { page-break-inside: auto; }
-        .level-section { page-break-inside: avoid; }
-        .grid-table thead { display: table-header-group; }
-        .grid-table tbody tr { page-break-inside: avoid; }
+        .main-table thead { display: table-header-group; }
+        .main-table tbody tr { page-break-inside: avoid; }
       }
     </style></head><body>
       <div class="document">
-        <div class="doc-header">
-          <img src="${logoSrc}" alt="UENR Logo" />
-          <div class="institution">${INSTITUTION_NAME}</div>
-          <div class="doc-title">Examination Timetable</div>
-          <div class="doc-sub">${sessionName || semName}${ayName ? ' &mdash; ' + ayName : ''}</div>
+        <div class="head-block institution">${INSTITUTION_NAME}, SUNYANI</div>
+        <div class="head-block doc-title">
+          <span class="provisional">PROVISIONAL</span> TIMETABLE FOR
+          <span class="highlight">END OF ${esc(semLabel)}</span> EXAMINATIONS${ayName ? `, ${esc(ayName)} ACADEMIC YEAR` : ''}
         </div>
-        ${bodyContent}
+        ${rangeStart && rangeEnd ? `<div class="head-block date-range">${fmtLong(rangeStart)} &nbsp;-&nbsp; ${fmtLong(rangeEnd)}</div>` : ''}
+        ${sessionName ? `<div class="head-block date-range" style="font-size:9.5pt;">${esc(sessionName)}</div>` : ''}
+        <table class="main-table">
+          <colgroup>
+            <col style="width:11%" />
+            <col style="width:10%" />
+            <col style="width:29%" />
+            <col style="width:13%" />
+            <col style="width:6%" />
+            <col style="width:15%" />
+            <col style="width:16%" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>DATE/ TIME</th>
+              <th>CODE</th>
+              <th>COURSE CODE/ TITLE</th>
+              <th>CLASS</th>
+              <th>STDS</th>
+              <th>EXAMINER</th>
+              <th>VENUE</th>
+            </tr>
+          </thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
       </div>
     </body></html>`;
 
@@ -648,7 +698,7 @@ export const TimetablePage = () => {
     const iframe = document.createElement('iframe');
     // Give the iframe real A4 portrait dimensions so the browser's print
     // engine doesn't auto-rotate to landscape. Visually hidden but sized.
-    iframe.style.cssText = 'position:fixed;right:-9999px;top:0;width:210mm;height:297mm;border:0;opacity:0;pointer-events:none;';
+    iframe.style.cssText = 'position:fixed;right:-9999px;top:0;width:297mm;height:210mm;border:0;opacity:0;pointer-events:none;';
     document.body.appendChild(iframe);
 
     const doc = iframe.contentDocument || iframe.contentWindow.document;

@@ -124,12 +124,26 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
       qc.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
     };
 
+    const handleInvigilatorCheckin = (data) => {
+      const name = data?.invigilator?.fullName || 'An invigilator';
+      const venueName = data?.venue?.name || 'a venue';
+      const time = data?.scannedAt
+        ? new Date(data.scannedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : '';
+      toast.success(`${name} checked in at ${venueName}${time ? ` \u2014 ${time}` : ''}.`);
+      qc.invalidateQueries({ queryKey: ['venue-scans'] });
+      qc.invalidateQueries({ queryKey: ['attendance'] });
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+      qc.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+    };
+
     socket.on('notification.created', handleNotification);
     socket.on('pending-account', handlePendingAccount);
     socket.on('course-submitted', handleCourseSubmitted);
     socket.on('course-updated', handleCourseUpdated);
     socket.on('course-approved', handleCourseApproved);
     socket.on('course-rejected', handleCourseRejected);
+    socket.on('invigilator-checkin', handleInvigilatorCheckin);
 
     return () => {
       socket.off('connect', onConnect);
@@ -140,6 +154,7 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
       socket.off('course-updated', handleCourseUpdated);
       socket.off('course-approved', handleCourseApproved);
       socket.off('course-rejected', handleCourseRejected);
+      socket.off('invigilator-checkin', handleInvigilatorCheckin);
     };
   }, [qc, user?.id]);
 

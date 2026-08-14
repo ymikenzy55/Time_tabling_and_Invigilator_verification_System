@@ -3,7 +3,7 @@ import { useSearchParams, useLocation } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { Html5Qrcode } from 'html5-qrcode';
 import toast from 'react-hot-toast';
-import { Loader2, QrCode, ScanLine, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Loader2, QrCode, ScanLine, CheckCircle2, AlertCircle, AlertTriangle, MapPin } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Modal } from '@/components/ui/Modal';
 import { attendanceApi } from '@/features/attendance/attendanceApi';
@@ -177,6 +177,25 @@ export const ScanPage = () => {
               <div className="text-sm text-rose-700 mt-2 flex items-start justify-center gap-1.5">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>{result.message}</span>
+              </div>
+            )}
+            {result.result === 'REJECTED_VENUE_MISMATCH' && result.assignedVenue && (
+              <div className="mt-3 rounded-lg border border-primary-200 bg-primary-50 p-3 text-left">
+                <div className="flex items-center gap-2 text-xs font-bold text-primary-800 uppercase tracking-wide">
+                  <MapPin className="w-3.5 h-3.5" /> Your assigned venue today
+                </div>
+                <div className="mt-1.5 text-base font-bold text-ink-900">{result.assignedVenue.name}</div>
+                {result.assignedVenue.location && (
+                  <div className="text-sm text-ink-600">{result.assignedVenue.location}</div>
+                )}
+                {result.assignedVenue.slotAt && (
+                  <div className="text-xs text-ink-500 mt-1">
+                    Slot: {new Date(result.assignedVenue.slotAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                )}
+                <div className="text-xs text-primary-700 mt-2">
+                  Please head there and scan the QR code posted at that venue.
+                </div>
               </div>
             )}
             {result.venue && (

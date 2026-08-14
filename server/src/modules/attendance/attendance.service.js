@@ -2,17 +2,34 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../../utils/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { env } from '../../config/env.js';
-import { createNotification } from '../notifications/notifications.service.js';
+import { createNotification, notifyRole } from '../notifications/notifications.service.js';
+import { broadcast } from '../../utils/broadcast.js';
 
 const QR_SECRET = env.QR_SIGNING_SECRET || env.JWT_SECRET;
 const QR_TOKEN_EXPIRY = '8h';
-const VENUE_QR_EXPIRY = '24h';
+const VENUE_QR_FALLBACK_EXPIRY = '7d';
 
 export const signQrToken = (invigilationId) =>
   jwt.sign({ invigilationId, type: 'QR_ATTENDANCE' }, QR_SECRET, { expiresIn: QR_TOKEN_EXPIRY });
 
-export const signVenueQrToken = (venueId, examinationSessionId) =>
-  jwt.sign({ venueId, examinationSessionId, type: 'VENUE_QR' }, QR_SECRET, { expiresIn: VENUE_QR_EXPIRY });
+/**
+ * Venue QR tokens stay valid until the examination window ends (session
+ * endDate + 1 day of grace), so one printed QR per venue lasts the whole
+ * exam period. Falls back to 7 days if the session has no end date.
+ */
+export const signVenueQrToken = (venueId, examinationSessionId, sessionEndDate) => {
+  const payload = { venueId, examinationSessionId, type: 'VENUE_QR' };
+  if (sessionEndDate) {
+    const end = new Date(sessionEndDate);
+    end.setHours(23, 59, 59, 999);
+    end.setDate(end.getDate() + 1); // 1 day grace
+    const secondsUntilEnd = Math.floor((end.getTime() - Date.now()) / 1000);
+    if (secondsUntilEnd > 0) {
+      return jwt.sign(payload, QR_SECRET, { expiresIn: secondsUntilEnd });
+    }
+  }
+  return jwt.sign(payload, QR_SECRET, { expiresIn: VENUE_QR_FALLBACK_EXPIRY });
+};
 
 export const verifyQrToken = (token) => {
   try {
@@ -147,7 +164,7 @@ export const attendanceService = {
 
     const session = await prisma.examinationSession.findUnique({
       where: { id: examinationSessionId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, endDate: true },
     });
     if (!session) throw ApiError.notFound('Examination session not found.');
 
@@ -167,7 +184,7 @@ export const attendanceService = {
     return {
       session,
       venues: venues.map((venue) => {
-        const token = signVenueQrToken(venue.id, examinationSessionId);
+        const token = signVenueQrToken(venue.id, examinationSessionId, session.endDate);
         return {
           venueId: venue.id,
           venue,
@@ -191,7 +208,7 @@ export const attendanceService = {
 
     const session = await prisma.examinationSession.findUnique({
       where: { id: examinationSessionId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, endDate: true },
     });
     if (!session) throw ApiError.notFound('Examination session not found.');
 
@@ -202,7 +219,7 @@ export const attendanceService = {
       throw ApiError.badRequest('No timetable entries for this venue in this session. Generate a timetable first.');
     }
 
-    const token = signVenueQrToken(venueId, examinationSessionId);
+    const token = signVenueQrToken(venueId, examinationSessionId, session.endDate);
     return {
       token,
       link: `${env.CLIENT_ORIGIN}/scan?token=${encodeURIComponent(token)}`,
@@ -248,15 +265,34 @@ export const attendanceService = {
       return { result: 'REJECTED_INVALID_QR' };
     }
 
-    // Verify the invigilator is assigned to this venue for this session
+    // Verify the invigilator is assigned to THIS venue on THIS day.
+    const now = new Date();
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+
     const assignment = await prisma.venueAssignment.findFirst({
       where: {
         invigilatorId: actor.id,
         venueId: payload.venueId,
         examinationSessionId: payload.examinationSessionId,
+        slotAt: { gte: dayStart, lt: dayEnd },
       },
     });
     if (!assignment) {
+      // Find where the invigilator IS assigned today so we can point them there.
+      const todayAssignment = await prisma.venueAssignment.findFirst({
+        where: {
+          invigilatorId: actor.id,
+          examinationSessionId: payload.examinationSessionId,
+          slotAt: { gte: dayStart, lt: dayEnd },
+        },
+        orderBy: { slotAt: 'asc' },
+        select: {
+          slotAt: true,
+          venue: { select: { id: true, name: true, location: true } },
+        },
+      });
+
       const scan = await prisma.venueScan.create({
         data: {
           venueId: payload.venueId,
@@ -267,20 +303,36 @@ export const attendanceService = {
           userAgent,
         },
       });
+
+      let message;
+      if (todayAssignment) {
+        const slotTime = new Date(todayAssignment.slotAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const loc = todayAssignment.venue.location ? ` (${todayAssignment.venue.location})` : '';
+        message = `This QR code is for ${venue.name}, but today you are assigned to ${todayAssignment.venue.name}${loc} at ${slotTime}. Please proceed to your assigned venue and scan the QR code there.`;
+      } else {
+        message = `This QR code is for ${venue.name}, but you have no venue assignment for today in this examination session. Please check your assignments or contact the exam officer.`;
+      }
+
       return {
         result: 'REJECTED_VENUE_MISMATCH',
         scan,
         venue,
-        message: `You are not assigned to ${venue.name}. You can only scan QR codes for venues you are assigned to.`,
+        assignedVenue: todayAssignment
+          ? { ...todayAssignment.venue, slotAt: todayAssignment.slotAt }
+          : null,
+        message,
       };
     }
 
+    // Duplicate check is scoped to today — the same venue QR is valid for the
+    // whole exam window, so the invigilator checks in once per day.
     const existing = await prisma.venueScan.findFirst({
       where: {
         venueId: payload.venueId,
         examinationSessionId: payload.examinationSessionId,
         userId: actor.id,
         result: 'RECORDED',
+        scannedAt: { gte: dayStart, lt: dayEnd },
       },
     });
     if (existing) {
@@ -308,24 +360,29 @@ export const attendanceService = {
       },
     });
 
-    // Notify all exam officers about the check-in
-    const examOfficers = await prisma.user.findMany({
-      where: { role: 'SUPER_ADMIN', status: 'ACTIVE' },
-      select: { id: true },
+    // Notify all exam officers about the check-in (fire-and-forget) and
+    // broadcast instantly via Socket.IO so the admin page updates live.
+    const checkInTime = new Date(scan.scannedAt || Date.now()).toLocaleString();
+    notifyRole('SUPER_ADMIN', {
+      type: 'INVIGILATOR_CHECKIN',
+      title: 'Invigilator checked in',
+      message: `${invigilator.fullName} checked in at ${venue.name} — ${checkInTime}.`,
+      link: '/invigilator-assignments',
+      data: { venueId: payload.venueId, examinationSessionId: payload.examinationSessionId, scanId: scan.id },
+    }).catch(() => {});
+
+    broadcast.toRoles('SUPER_ADMIN', 'invigilator-checkin', {
+      scanId: scan.id,
+      scannedAt: scan.scannedAt,
+      venue: { id: venue.id, name: venue.name, location: venue.location },
+      invigilator: {
+        id: invigilator.id,
+        fullName: invigilator.fullName,
+        email: invigilator.email,
+        staffId: invigilator.staffId,
+      },
+      examinationSessionId: payload.examinationSessionId,
     });
-    const checkInTime = new Date().toLocaleString();
-    await Promise.all(
-      examOfficers.map((officer) =>
-        createNotification({
-          userId: officer.id,
-          type: 'INVIGILATOR_CHECKIN',
-          title: 'Invigilator checked in',
-          message: `${invigilator.fullName} checked in at ${venue.name} — ${checkInTime}.`,
-          link: '/invigilator-assignments',
-          data: { venueId: payload.venueId, examinationSessionId: payload.examinationSessionId, scanId: scan.id },
-        }).catch(() => {})
-      )
-    );
 
     return {
       result: 'RECORDED',

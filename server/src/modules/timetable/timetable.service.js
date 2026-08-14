@@ -90,12 +90,31 @@ const shuffle = (arr) => {
   return arr;
 };
 
+/**
+ * Courses sharing the same course code AND title (e.g. a service course
+ * taught to several departments at the same level) must be written on the
+ * SAME day and at the SAME time, but normally in DIFFERENT venues.
+ * Grouping them by a normalized code+title key lets the scheduler place
+ * the whole group atomically into one slot.
+ */
+const courseGroupKey = (c) =>
+  `${(c.code || '').trim().toUpperCase()}::${(c.title || '').trim().toUpperCase()}`;
+
 const scheduleCourses = (courses, slots, venues) => {
-  // Largest classes first — they are the hardest to place.
-  const ordered = [...courses].sort((a, b) => (b.studentCount || 0) - (a.studentCount || 0));
+  // Group same code+title courses — they must sit the same day & time.
+  const groupsMap = new Map();
+  for (const c of courses) {
+    const key = courseGroupKey(c);
+    if (!groupsMap.has(key)) groupsMap.set(key, []);
+    groupsMap.get(key).push(c);
+  }
+  const groupStudents = (g) => g.reduce((sum, c) => sum + (c.studentCount || 0), 0);
+  // Largest groups first — they are the hardest to place.
+  const groups = [...groupsMap.values()].sort((a, b) => groupStudents(b) - groupStudents(a));
 
   // Sort venues by capacity ascending — first fit = best-fit (smallest that works).
   const sortedVenues = [...venues].sort((a, b) => a.capacity - b.capacity);
+  const largestCapacity = sortedVenues[sortedVenues.length - 1]?.capacity || 0;
 
   // Shuffle slots so courses spread evenly across periods and days.
   const shuffledSlots = shuffle([...slots]);
@@ -112,84 +131,112 @@ const scheduleCourses = (courses, slots, venues) => {
   const placements = [];
   const unscheduled = [];
 
-  // Shared placement logic — tries to place a course in a slot, returns true if placed.
-  const tryPlace = (course, slot, deptLevelKey, useGapConstraint) => {
-    // Hard: no same dept+level in same slot
-    const busy = deptLevelBusy.get(slot.key);
-    if (busy && busy.has(deptLevelKey)) return false;
-
-    // Hard: one exam per day per dept+level
+  /**
+   * Try to place an entire group (1..N same-code courses) into one slot.
+   * All members must satisfy dept+level constraints and get a venue,
+   * preferring a DIFFERENT venue per member. Atomic: places all or none.
+   */
+  const tryPlaceGroup = (group, slot, useGapConstraint) => {
     const dk = dateKeyOf(slot);
+    const busy = deptLevelBusy.get(slot.key);
     const dayBusy = deptLevelDayBusy.get(dk);
-    if (dayBusy && dayBusy.has(deptLevelKey)) return false;
 
-    // Soft: random gap after last exam day
+    const deptLevelKeys = group.map((c) => `${c.departmentId}:${c.level}`);
+    for (const k of deptLevelKeys) {
+      // Hard: no same dept+level already in this slot / this day
+      if (busy && busy.has(k)) return false;
+      if (dayBusy && dayBusy.has(k)) return false;
+    }
+
+    // Soft: random gap after last exam day (checked for every member)
     if (useGapConstraint) {
-      const lastDate = deptLevelLastDate.get(deptLevelKey);
-      if (lastDate !== undefined) {
-        const diffDays = Math.round((dk - lastDate) / 86_400_000);
-        if (diffDays === 1 && Math.random() < 0.55) return false;
-        if (diffDays === 2 && Math.random() < 0.25) return false;
-        if (diffDays === 3 && Math.random() < 0.10) return false;
+      for (const k of deptLevelKeys) {
+        const lastDate = deptLevelLastDate.get(k);
+        if (lastDate !== undefined) {
+          const diffDays = Math.round((dk - lastDate) / 86_400_000);
+          if (diffDays === 1 && Math.random() < 0.55) return false;
+          if (diffDays === 2 && Math.random() < 0.25) return false;
+          if (diffDays === 3 && Math.random() < 0.10) return false;
+        }
       }
     }
 
-    // Find first venue that fits (venues sorted ascending = best-fit)
     let remaining = venueRemaining.get(slot.key);
     if (!remaining) {
       remaining = new Map(sortedVenues.map((v) => [v.id, v.capacity]));
       venueRemaining.set(slot.key, remaining);
     }
 
-    let chosenVenue = null;
-    let chosenLeft = 0;
-    for (const venue of sortedVenues) {
-      const left = remaining.get(venue.id);
-      if (left >= course.studentCount && course.studentCount <= venue.capacity) {
-        chosenVenue = venue;
-        chosenLeft = left;
-        break;
+    // Simulate venue allocation on a copy — commit only if every member fits.
+    const trial = new Map(remaining);
+    const usedVenues = new Set();
+    const chosen = [];
+    const members = [...group].sort((a, b) => (b.studentCount || 0) - (a.studentCount || 0));
+
+    for (const course of members) {
+      const students = course.studentCount || 0;
+      let pick = null;
+
+      // Prefer a venue not already used by this group (different locations).
+      for (const venue of sortedVenues) {
+        if (usedVenues.has(venue.id)) continue;
+        if (trial.get(venue.id) >= students && students <= venue.capacity) { pick = venue; break; }
       }
+      // Fallback: share a venue already used by the group if capacity allows.
+      if (!pick) {
+        for (const venue of sortedVenues) {
+          if (trial.get(venue.id) >= students && students <= venue.capacity) { pick = venue; break; }
+        }
+      }
+      if (!pick) return false;
+
+      trial.set(pick.id, trial.get(pick.id) - students);
+      usedVenues.add(pick.id);
+      chosen.push({ course, venue: pick });
     }
-    if (!chosenVenue) return false;
 
-    remaining.set(chosenVenue.id, chosenLeft - course.studentCount);
+    // Commit the placement.
+    for (const [vid, left] of trial) remaining.set(vid, left);
     if (!deptLevelBusy.has(slot.key)) deptLevelBusy.set(slot.key, new Set());
-    deptLevelBusy.get(slot.key).add(deptLevelKey);
     if (!deptLevelDayBusy.has(dk)) deptLevelDayBusy.set(dk, new Set());
-    deptLevelDayBusy.get(dk).add(deptLevelKey);
-    deptLevelLastDate.set(deptLevelKey, dk);
-
-    placements.push({ course, slot, venue: chosenVenue });
+    for (const k of deptLevelKeys) {
+      deptLevelBusy.get(slot.key).add(k);
+      deptLevelDayBusy.get(dk).add(k);
+      deptLevelLastDate.set(k, dk);
+    }
+    for (const { course, venue } of chosen) placements.push({ course, slot, venue });
     return true;
   };
 
-  for (const course of ordered) {
-    const deptLevelKey = `${course.departmentId}:${course.level}`;
+  for (const group of groups) {
     let placed = false;
 
     // --- Pass 1: with gap soft constraint ---
     for (const slot of shuffledSlots) {
-      if (tryPlace(course, slot, deptLevelKey, true)) { placed = true; break; }
+      if (tryPlaceGroup(group, slot, true)) { placed = true; break; }
     }
 
-    if (placed) continue;
-
     // --- Pass 2: fallback without gap constraint ---
-    for (const slot of shuffledSlots) {
-      if (tryPlace(course, slot, deptLevelKey, false)) { placed = true; break; }
+    if (!placed) {
+      for (const slot of shuffledSlots) {
+        if (tryPlaceGroup(group, slot, false)) { placed = true; break; }
+      }
     }
 
     if (!placed) {
-      unscheduled.push({
-        id: course.id,
-        code: course.code,
-        title: course.title,
-        studentCount: course.studentCount || 0,
-        reason: (course.studentCount || 0) > sortedVenues[sortedVenues.length - 1].capacity
-          ? 'Student count exceeds every venue capacity.'
-          : 'No conflict-free slot with enough venue capacity in the selected period.',
-      });
+      for (const course of group) {
+        unscheduled.push({
+          id: course.id,
+          code: course.code,
+          title: course.title,
+          studentCount: course.studentCount || 0,
+          reason: (course.studentCount || 0) > largestCapacity
+            ? 'Student count exceeds every venue capacity.'
+            : group.length > 1
+              ? 'This course is shared across departments and no single slot had enough venue capacity for all sections together.'
+              : 'No conflict-free slot with enough venue capacity in the selected period.',
+        });
+      }
     }
   }
 
