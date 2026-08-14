@@ -739,7 +739,7 @@ export const TimetablePage = () => {
         description="View, filter, and export the generated examination timetable."
         actions={(
           <div className="flex items-center gap-2">
-            <button className="btn-secondary" onClick={exportPdf} disabled={!grid.length || entriesQuery.isFetching}>
+            <button className="btn-secondary" onClick={exportPdf} disabled={!grid.length}>
               <FileDown className="w-4 h-4" /> Export PDF
             </button>
             {isAdmin && (
