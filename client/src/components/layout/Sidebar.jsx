@@ -69,7 +69,7 @@ export const Sidebar = ({ open = true }) => {
   return (
     <aside
       className={cn(
-        'fixed top-14 bottom-0 left-0 z-30 bg-white border-r border-surface-border transition-all duration-300 ease-in-out overflow-hidden flex flex-col',
+        'hidden lg:flex fixed top-14 bottom-0 left-0 z-30 bg-white border-r border-surface-border transition-all duration-300 ease-in-out overflow-hidden flex-col',
         open ? 'w-64' : 'w-16'
       )}
     >

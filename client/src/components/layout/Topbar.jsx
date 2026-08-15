@@ -181,7 +181,7 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
         <button
           type="button"
           onClick={onToggleSidebar}
-          className="p-2 rounded-md text-chrome-text hover:bg-chrome-hover hover:text-white shrink-0 transition-colors"
+          className="hidden lg:flex p-2 rounded-md text-chrome-text hover:bg-chrome-hover hover:text-white shrink-0 transition-colors"
           aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
           aria-expanded={sidebarOpen}
         >
@@ -219,7 +219,7 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
             </button>
 
             {notifOpen && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-popover border border-surface-border z-50 overflow-hidden">
+              <div className="absolute right-0 mt-2 w-[calc(100vw-1.5rem)] max-w-sm sm:w-96 bg-white rounded-lg shadow-popover border border-surface-border z-50 overflow-hidden">
                 <div className="p-3 border-b border-surface-border flex items-center justify-between gap-3 bg-surface-subtle">
                   <div className="flex flex-col">
                     <div className="text-sm font-bold text-ink-900">Notifications</div>

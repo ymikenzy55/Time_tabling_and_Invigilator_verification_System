@@ -141,3 +141,61 @@ export const filterNavForRole = (role) => {
     })
     .filter(Boolean);
 };
+
+/**
+ * Flatten the nav tree into a single list of { label, to, icon } items.
+ */
+export const flattenNav = (role) => {
+  const nav = filterNavForRole(role);
+  const flat = [];
+  for (const entry of nav) {
+    if (entry.kind === 'item') {
+      flat.push({ label: entry.label, to: entry.to, icon: entry.icon });
+    } else {
+      for (const child of entry.items) {
+        if (child.type === 'course-semester-level-links') continue; // skip dynamic nested
+        flat.push({ label: child.label, to: child.to, icon: child.icon });
+      }
+    }
+  }
+  return flat;
+};
+
+/**
+ * Primary routes shown in the mobile bottom nav per role.
+ * Everything else goes in the "More" sheet.
+ */
+const BOTTOM_NAV_PRIMARY = {
+  INVIGILATOR: ['/dashboard', '/my-assignments', '/scan', '/timetable'],
+  SUPER_ADMIN: ['/dashboard', '/timetable', '/venues', '/attendance'],
+  DEPARTMENT_HEAD: ['/dashboard', '/my-department', '/courses', '/timetable'],
+};
+
+/**
+ * Returns { primary, overflow } arrays for the bottom nav.
+ * `primary` has at most 4 items; `overflow` has the rest.
+ * The scan route is pulled out separately so the caller can render it
+ * as a prominent center button.
+ */
+export const bottomNavItems = (role) => {
+  const flat = flattenNav(role);
+  const primaryRoutes = BOTTOM_NAV_PRIMARY[role] || [];
+  const primary = [];
+  const overflow = [];
+  let scanItem = null;
+
+  for (const item of flat) {
+    if (item.to === '/scan') {
+      scanItem = item;
+    } else if (primaryRoutes.includes(item.to)) {
+      primary.push(item);
+    } else {
+      overflow.push(item);
+    }
+  }
+
+  // Sort primary to match the configured order
+  primary.sort((a, b) => primaryRoutes.indexOf(a.to) - primaryRoutes.indexOf(b.to));
+
+  return { primary, overflow, scanItem };
+};
