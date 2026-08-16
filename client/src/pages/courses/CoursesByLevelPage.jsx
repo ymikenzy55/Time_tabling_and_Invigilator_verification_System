@@ -26,6 +26,7 @@ const schema = z.object({
   examDurationMinutes: z.coerce.number().int().min(15).max(300).optional(),
   specialRequirements: z.string().trim().max(500).optional(),
   instructorName: z.string().trim().min(2, 'Instructor name is required.').max(120),
+  isPractical: z.boolean().default(false),
 });
 
 const statusBadge = {
@@ -89,7 +90,7 @@ export const CoursesByLevelPage = () => {
     defaultValues: {
       code: '', title: '',
       creditHours: 3, studentCount: 0, examDurationMinutes: 120,
-      specialRequirements: '', instructorName: '',
+      specialRequirements: '', instructorName: '', isPractical: false,
     },
   });
 
@@ -104,12 +105,13 @@ export const CoursesByLevelPage = () => {
           examDurationMinutes: selected.examDurationMinutes ?? 120,
           specialRequirements: selected.specialRequirements || '',
           instructorName: selected.instructorName || '',
+          isPractical: selected.isPractical ?? false,
         });
       } else {
         reset({
           code: '', title: '',
           creditHours: 3, studentCount: 0, examDurationMinutes: 120,
-          specialRequirements: '', instructorName: '',
+          specialRequirements: '', instructorName: '', isPractical: false,
         });
       }
     }
@@ -359,7 +361,16 @@ export const CoursesByLevelPage = () => {
                             )}
                           </td>
                         )}
-                        <td className="px-4 py-3 font-medium text-ink-900">{course.code}</td>
+                        <td className="px-4 py-3 font-medium text-ink-900">
+                          <div className="flex items-center gap-1.5">
+                            {course.code}
+                            {course.isPractical && (
+                              <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">
+                                Practical
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-4 py-3 text-ink-700">{course.title}</td>
                         <td className="px-4 py-3 text-ink-500">{course.semester?.name || '—'}</td>
                         <td className="px-4 py-3 text-ink-700">{course.instructorName || '—'}</td>
@@ -452,6 +463,14 @@ export const CoursesByLevelPage = () => {
             <label className="label">Special requirements</label>
             <textarea className="input min-h-[80px]" {...register('specialRequirements')} />
           </div>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              {...register('isPractical')}
+              className="w-4 h-4 rounded border-surface-border text-primary-600 focus:ring-primary-500"
+            />
+            <span className="text-sm text-ink-700">This is a practical course</span>
+          </label>
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" className="btn-secondary" onClick={closeModal}>Cancel</button>
             <button type="submit" className="btn-primary" disabled={isSubmitting}>

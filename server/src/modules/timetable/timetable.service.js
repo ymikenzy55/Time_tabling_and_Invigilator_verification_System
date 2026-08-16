@@ -109,8 +109,18 @@ const scheduleCourses = (courses, slots, venues) => {
     groupsMap.get(key).push(c);
   }
   const groupStudents = (g) => g.reduce((sum, c) => sum + (c.studentCount || 0), 0);
-  // Largest groups first — they are the hardest to place.
-  const groups = [...groupsMap.values()].sort((a, b) => groupStudents(b) - groupStudents(a));
+  const groupIsPractical = (g) => g.some((c) => c.isPractical);
+  const groupMinLevel = (g) => Math.min(...g.map((c) => c.level || 0));
+  // Practical groups first, then lower level first, then largest groups first.
+  const groups = [...groupsMap.values()].sort((a, b) => {
+    const aPrac = groupIsPractical(a) ? 1 : 0;
+    const bPrac = groupIsPractical(b) ? 1 : 0;
+    if (aPrac !== bPrac) return bPrac - aPrac;
+    const aLevel = groupMinLevel(a);
+    const bLevel = groupMinLevel(b);
+    if (aLevel !== bLevel) return aLevel - bLevel;
+    return groupStudents(b) - groupStudents(a);
+  });
 
   // Sort venues by capacity ascending — first fit = best-fit (smallest that works).
   const sortedVenues = [...venues].sort((a, b) => a.capacity - b.capacity);
@@ -208,6 +218,56 @@ const scheduleCourses = (courses, slots, venues) => {
     return true;
   };
 
+  /**
+   * Relaxed placement: enforces no same dept+level in the same slot and
+   * venue capacity, but allows the same dept+level to sit another exam
+   * on the same day. Used as a last-resort fallback.
+   */
+  const tryPlaceGroupRelaxed = (group, slot) => {
+    const busy = deptLevelBusy.get(slot.key);
+    const deptLevelKeys = group.map((c) => `${c.departmentId}:${c.level}`);
+    for (const k of deptLevelKeys) {
+      if (busy && busy.has(k)) return false;
+    }
+
+    let remaining = venueRemaining.get(slot.key);
+    if (!remaining) {
+      remaining = new Map(sortedVenues.map((v) => [v.id, v.capacity]));
+      venueRemaining.set(slot.key, remaining);
+    }
+
+    const trial = new Map(remaining);
+    const usedVenues = new Set();
+    const chosen = [];
+    const members = [...group].sort((a, b) => (b.studentCount || 0) - (a.studentCount || 0));
+
+    for (const course of members) {
+      const students = course.studentCount || 0;
+      let pick = null;
+      for (const venue of sortedVenues) {
+        if (usedVenues.has(venue.id)) continue;
+        if (trial.get(venue.id) >= students && students <= venue.capacity) { pick = venue; break; }
+      }
+      if (!pick) {
+        for (const venue of sortedVenues) {
+          if (trial.get(venue.id) >= students && students <= venue.capacity) { pick = venue; break; }
+        }
+      }
+      if (!pick) return false;
+      trial.set(pick.id, trial.get(pick.id) - students);
+      usedVenues.add(pick.id);
+      chosen.push({ course, venue: pick });
+    }
+
+    for (const [vid, left] of trial) remaining.set(vid, left);
+    if (!deptLevelBusy.has(slot.key)) deptLevelBusy.set(slot.key, new Set());
+    for (const k of deptLevelKeys) {
+      deptLevelBusy.get(slot.key).add(k);
+    }
+    for (const { course, venue } of chosen) placements.push({ course, slot, venue });
+    return true;
+  };
+
   for (const group of groups) {
     let placed = false;
 
@@ -220,6 +280,13 @@ const scheduleCourses = (courses, slots, venues) => {
     if (!placed) {
       for (const slot of shuffledSlots) {
         if (tryPlaceGroup(group, slot, false)) { placed = true; break; }
+      }
+    }
+
+    // --- Pass 3: relaxed — allow same dept+level on the same day ---
+    if (!placed) {
+      for (const slot of shuffledSlots) {
+        if (tryPlaceGroupRelaxed(group, slot)) { placed = true; break; }
       }
     }
 
@@ -279,7 +346,7 @@ export const timetableService = {
           course: {
             select: {
               id: true, code: true, title: true, level: true, studentCount: true,
-              instructorName: true, examDurationMinutes: true,
+              instructorName: true, examDurationMinutes: true, isPractical: true,
               department: { select: { id: true, name: true, code: true } },
             },
           },
@@ -354,7 +421,7 @@ export const timetableService = {
         course: {
           select: {
             id: true, code: true, title: true, level: true, studentCount: true,
-            instructorName: true, examDurationMinutes: true,
+            instructorName: true, examDurationMinutes: true, isPractical: true,
             department: { select: { id: true, name: true, code: true } },
           },
         },
@@ -423,7 +490,7 @@ export const timetableService = {
       }),
       prisma.course.findMany({
         where: { status: 'APPROVED', semesterId: session.semesterId },
-        orderBy: [{ level: 'asc' }, { code: 'asc' }],
+        orderBy: [{ isPractical: 'desc' }, { level: 'asc' }, { code: 'asc' }],
       }),
       clearExisting
         ? prisma.invigilation.deleteMany({
@@ -512,7 +579,7 @@ export const timetableService = {
       where: { id: entryId },
       data,
       include: {
-        course: { select: { id: true, code: true, title: true, level: true, studentCount: true, instructorName: true, department: { select: { id: true, name: true, code: true } } } },
+        course: { select: { id: true, code: true, title: true, level: true, studentCount: true, instructorName: true, isPractical: true, department: { select: { id: true, name: true, code: true } } } },
         venue: { select: { id: true, name: true, capacity: true, location: true } },
       },
     });

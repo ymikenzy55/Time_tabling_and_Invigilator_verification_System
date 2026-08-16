@@ -5,16 +5,22 @@ import { ApiError } from '../../utils/ApiError.js';
 import { courseLevelsService } from '../courseLevels/courseLevels.service.js';
 import { linkDepartmentToUser } from '../departments/departmentAutoLink.js';
 import { logAudit } from '../../utils/auditLog.js';
+import bcrypt from 'bcryptjs';
 
 const GENERIC_LOGIN_ERROR = 'The email or password you entered is incorrect.';
+
+// Pre-computed dummy hash for timing-attack mitigation on user-not-found.
+const DUMMY_HASH = bcrypt.hashSync('dummy', 10);
 
 export const authService = {
   async login({ email, password, ipAddress, userAgent }) {
     const user = await prisma.user.findUnique({ where: { email } });
 
     // Generic error for the "user not found" / "wrong password" branches
-    // to avoid leaking which one failed.
+    // to avoid leaking which one failed. Run a dummy bcrypt compare when
+    // the user doesn't exist so both branches take similar time.
     if (!user || !user.passwordHash) {
+      await verifyPassword(password, DUMMY_HASH);
       logAudit({
         action: 'USER.LOGIN',
         result: 'FAILURE',

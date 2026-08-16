@@ -13,6 +13,7 @@ export const courseBaseSchema = z.object({
   examDurationMinutes: z.coerce.number().int().min(15).max(300).optional(),
   specialRequirements: z.string().trim().max(500).optional().nullable(),
   instructorName: z.string().trim().min(2, 'Instructor name is required.').max(120),
+  isPractical: z.boolean().optional().default(false),
 });
 
 export const createCourseSchema = courseBaseSchema;
@@ -49,5 +50,6 @@ export const bulkImportCoursesSchema = z.object({
     studentCount: z.coerce.number().int().min(0).optional(),
     examDurationMinutes: z.coerce.number().int().min(15).max(300).optional(),
     instructorName: z.string().trim().max(120).optional(),
+    isPractical: z.boolean().optional(),
   })).min(1, 'At least one course is required.').max(1000, 'Too many courses in one import.'),
 });

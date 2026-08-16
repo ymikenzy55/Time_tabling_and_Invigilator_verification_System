@@ -2,6 +2,7 @@ import { useAuth } from '@/context/AuthContext';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { dashboardApi } from '@/features/dashboard/dashboardApi';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -88,7 +89,35 @@ export const DashboardPage = () => {
       />
 
       {isLoading ? (
-        <div className="panel p-6 text-sm text-ink-500">Loading dashboard…</div>
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="panel p-5">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-2 flex-1">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-7 w-16" />
+                  </div>
+                  <Skeleton className="w-10 h-10 rounded-lg" />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-5 panel p-5">
+            <Skeleton className="h-5 w-40 mb-4" />
+            <div className="space-y-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-surface-subtle border border-surface-divider">
+                  <div className="space-y-1.5 flex-1">
+                    <Skeleton className="h-3.5 w-48" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                  <Skeleton className="h-3 w-20" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">

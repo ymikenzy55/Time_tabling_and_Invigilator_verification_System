@@ -177,6 +177,7 @@ model Course {
   examDurationMinutes  Int          @default(120)
   specialRequirements  String?
   instructorName       String?
+  isPractical          Boolean      @default(false)
   status               CourseStatus @default(DRAFT)
   rejectionComment     String?
   locked               Boolean      @default(false)

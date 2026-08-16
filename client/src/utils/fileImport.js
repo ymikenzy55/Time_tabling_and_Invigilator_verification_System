@@ -45,6 +45,7 @@ const HEADER_MAP = {
   studentcount: 'studentCount', students: 'studentCount', numberofstudents: 'studentCount', count: 'studentCount',
   examdurationminutes: 'examDurationMinutes', duration: 'examDurationMinutes', examduration: 'examDurationMinutes',
   instructorname: 'instructorName', instructor: 'instructorName', examiner: 'instructorName', lecturer: 'instructorName',
+  ispractical: 'isPractical', practical: 'isPractical', ispracticalcourse: 'isPractical',
 };
 
 const normaliseKey = (key) => {
@@ -94,6 +95,9 @@ export const rowsToCourses = (rows) => {
       studentCount: mapped.studentCount !== undefined ? parseInt(mapped.studentCount, 10) : undefined,
       examDurationMinutes: mapped.examDurationMinutes ? parseInt(mapped.examDurationMinutes, 10) : undefined,
       instructorName: mapped.instructorName ? String(mapped.instructorName).trim() : undefined,
+      isPractical: mapped.isPractical !== undefined
+        ? String(mapped.isPractical).toLowerCase() === 'true' || mapped.isPractical === '1' || String(mapped.isPractical).toLowerCase() === 'yes'
+        : false,
     };
   }).filter((c) => c.code && c.title && c.departmentName);
 };

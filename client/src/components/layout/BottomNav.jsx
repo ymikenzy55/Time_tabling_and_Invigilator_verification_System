@@ -69,7 +69,7 @@ export const BottomNav = () => {
 
       {/* Bottom navigation bar */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-white border-t border-surface-border pb-safe">
-        <div className="flex items-stretch justify-around h-14">
+        <div className="flex items-stretch justify-around h-16">
           {/* Primary items — first half */}
           {primary.slice(0, 2).map((item) => (
             <BottomTab key={item.to} item={item} />
@@ -96,7 +96,7 @@ export const BottomNav = () => {
                   </span>
                   <span
                     className={cn(
-                      'text-[10px] font-bold mt-0.5 leading-none',
+                      'text-[11px] font-bold mt-0.5 leading-none',
                       isActive ? 'text-primary-800' : 'text-primary-700'
                     )}
                   >
@@ -129,7 +129,7 @@ export const BottomNav = () => {
               <MoreHorizontal
                 className={cn('w-5 h-5', isMoreActive && 'text-primary-600')}
               />
-              <span className="text-[10px] font-medium leading-none">More</span>
+              <span className="text-[11px] font-medium leading-none">More</span>
             </button>
           )}
         </div>
@@ -140,12 +140,13 @@ export const BottomNav = () => {
 
 const BottomTab = ({ item }) => {
   const Icon = item.icon;
+  const label = item.shortLabel || item.label;
   return (
     <NavLink
       to={item.to}
       className={({ isActive }) =>
         cn(
-          'flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 transition-colors',
+          'flex flex-col items-center justify-center gap-1 flex-1 min-w-0 transition-colors',
           isActive
             ? 'text-primary-800 font-bold'
             : 'text-ink-500 hover:text-ink-700'
@@ -162,8 +163,8 @@ const BottomTab = ({ item }) => {
               )}
             />
           )}
-          <span className="text-[10px] font-medium leading-none truncate max-w-full px-0.5">
-            {item.label}
+          <span className="text-[11px] font-medium leading-none truncate max-w-full px-0.5">
+            {label}
           </span>
         </>
       )}

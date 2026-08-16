@@ -13,6 +13,7 @@ export const navConfig = [
   {
     kind: 'item',
     label: 'Dashboard',
+    shortLabel: 'Home',
     to: '/dashboard',
     icon: LayoutDashboard,
     roles: ['SUPER_ADMIN', 'DEPARTMENT_HEAD', 'INVIGILATOR'],
@@ -44,6 +45,7 @@ export const navConfig = [
   {
     kind: 'item',
     label: 'My Department',
+    shortLabel: 'Dept',
     to: '/my-department',
     icon: GraduationCap,
     roles: ['DEPARTMENT_HEAD'],
@@ -63,7 +65,7 @@ export const navConfig = [
     icon: BookOpen,
     roles: ['SUPER_ADMIN', 'DEPARTMENT_HEAD'],
     items: [
-      { label: 'All Courses', to: '/courses', roles: ['SUPER_ADMIN', 'DEPARTMENT_HEAD'], icon: BookOpen },
+      { label: 'All Courses', shortLabel: 'Courses', to: '/courses', roles: ['SUPER_ADMIN', 'DEPARTMENT_HEAD'], icon: BookOpen },
       {
         label: 'Add Courses',
         to: '/courses/add',
@@ -78,6 +80,7 @@ export const navConfig = [
   {
     kind: 'item',
     label: 'Venues',
+    shortLabel: 'Venues',
     to: '/venues',
     icon: Building,
     roles: ['SUPER_ADMIN'],
@@ -85,6 +88,7 @@ export const navConfig = [
   {
     kind: 'item',
     label: 'Timetable',
+    shortLabel: 'Exams',
     to: '/timetable',
     icon: CalendarRange,
     roles: ['SUPER_ADMIN', 'DEPARTMENT_HEAD', 'INVIGILATOR'],
@@ -97,7 +101,7 @@ export const navConfig = [
     items: [
       { label: 'Sessions', to: '/examinations', roles: ['SUPER_ADMIN'] },
       { label: 'Invigilator Assignments', to: '/invigilator-assignments', roles: ['SUPER_ADMIN'] },
-      { label: 'My Assignments', to: '/my-assignments', roles: ['INVIGILATOR'] },
+      { label: 'My Assignments', shortLabel: 'Duties', to: '/my-assignments', roles: ['INVIGILATOR'] },
     ],
   },
   {
@@ -108,7 +112,7 @@ export const navConfig = [
     items: [
       { label: 'Scan QR', to: '/scan', roles: ['INVIGILATOR'] },
       { label: 'My History', to: '/attendance/history', roles: ['INVIGILATOR'] },
-      { label: 'All Records', to: '/attendance', roles: ['SUPER_ADMIN'] },
+      { label: 'All Records', shortLabel: 'Records', to: '/attendance', roles: ['SUPER_ADMIN'] },
       { label: 'Venue QR Codes', to: '/venue-qr-codes', icon: QrCode, roles: ['SUPER_ADMIN'] },
     ],
   },
@@ -150,11 +154,11 @@ export const flattenNav = (role) => {
   const flat = [];
   for (const entry of nav) {
     if (entry.kind === 'item') {
-      flat.push({ label: entry.label, to: entry.to, icon: entry.icon });
+      flat.push({ label: entry.label, shortLabel: entry.shortLabel, to: entry.to, icon: entry.icon });
     } else {
       for (const child of entry.items) {
         if (child.type === 'course-semester-level-links') continue; // skip dynamic nested
-        flat.push({ label: child.label, to: child.to, icon: child.icon });
+        flat.push({ label: child.label, shortLabel: child.shortLabel, to: child.to, icon: child.icon });
       }
     }
   }

@@ -18,7 +18,7 @@ export const DashboardLayout = () => {
           sidebarOpen ? 'lg:pl-64' : 'lg:pl-16'
         )}
       >
-        <main className="px-4 py-5 sm:px-6 sm:py-6 max-w-[1440px] mx-auto pb-20 lg:pb-6">
+        <main className="px-4 py-5 sm:px-6 sm:py-6 max-w-[1440px] mx-auto pb-24 lg:pb-6">
           <Outlet />
         </main>
       </div>

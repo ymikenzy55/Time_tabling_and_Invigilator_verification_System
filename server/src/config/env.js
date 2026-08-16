@@ -9,7 +9,7 @@ const schema = z.object({
 
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
   JWT_EXPIRES_IN: z.string().default('1d'),
-  BCRYPT_ROUNDS: z.coerce.number().int().min(8).max(15).default(12),
+  BCRYPT_ROUNDS: z.coerce.number().int().min(8).max(15).default(10),
 
   CLIENT_ORIGIN: z.string().url().default('http://localhost:5173'),
 
