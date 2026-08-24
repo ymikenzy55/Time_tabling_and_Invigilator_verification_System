@@ -179,6 +179,8 @@ export const TimetablePage = () => {
   const readiness = readinessQuery.data;
   const isReady = !!readiness?.ready;
 
+  const [invigilatorsAssigned, setInvigilatorsAssigned] = useState(false);
+
   const generateMutation = useMutation({
     mutationFn: timetableApi.generate,
     onSuccess: (data) => {
@@ -190,7 +192,11 @@ export const TimetablePage = () => {
       setGenerateOpen(false);
       // If user chose to assign invigilators during generation, do it now
       if (generateAssignInvigilators && hasInvigilators) {
-        assignMutation.mutate(sessionId);
+        assignMutation.mutate(sessionId, {
+          onSuccess: () => setInvigilatorsAssigned(true),
+        });
+      } else {
+        setInvigilatorsAssigned(false);
       }
       setGenerateAssignInvigilators(false);
     },
@@ -213,6 +219,7 @@ export const TimetablePage = () => {
     onSuccess: (data) => {
       toast.success(`Invigilators assigned: ${data.assigned} assignments across ${data.invigilators} invigilators.`);
       qc.invalidateQueries({ queryKey: ['venue-assignments'] });
+      setInvigilatorsAssigned(true);
     },
     onError: (err) => toast.error(err.message || 'Failed to assign invigilators.'),
   });
@@ -857,9 +864,34 @@ export const TimetablePage = () => {
         </div>
       )}
 
+      {/* Generation in-progress overlay */}
+      {generateMutation.isPending && (
+        <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-lg px-8 py-6 flex flex-col items-center gap-4 max-w-sm">
+            <Loader2 className="w-10 h-10 text-primary-600 animate-spin" />
+            <div className="text-center">
+              <div className="text-lg font-bold text-ink-900">Generating Timetable…</div>
+              <div className="text-sm text-ink-500 mt-1">Scheduling courses into time slots with venue and clash constraints. This may take a moment.</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invigilator assignment in-progress indicator */}
+      {assignMutation.isPending && (
+        <div className="fixed bottom-4 right-4 z-[60] bg-white rounded-lg shadow-lg border border-surface-border px-4 py-3 flex items-center gap-3">
+          <Loader2 className="w-5 h-5 text-primary-600 animate-spin" />
+          <div className="text-sm text-ink-700">Assigning invigilators to venues…</div>
+        </div>
+      )}
+
       {/* Generation result summary */}
       {result && (
         <div className="panel p-5 mb-6 space-y-4">
+          <div className="flex items-center gap-2 text-emerald-700 font-bold text-sm">
+            <CheckCircle2 className="w-5 h-5" /> Timetable Generation Complete
+          </div>
+
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-surface-subtle p-3 rounded-lg text-center">
               <div className="text-2xl font-bold text-ink-900">{result.total}</div>
@@ -871,7 +903,7 @@ export const TimetablePage = () => {
             </div>
             <div className="bg-amber-50 p-3 rounded-lg text-center">
               <div className="text-2xl font-bold text-amber-700">{result.unscheduled?.length || 0}</div>
-              <div className="text-xs text-amber-600">Unscheduled</div>
+              <div className="text-xs text-amber-600">Not Assigned</div>
             </div>
             <div className="bg-primary-50 p-3 rounded-lg text-center">
               <div className="text-2xl font-bold text-primary-700">
@@ -884,13 +916,35 @@ export const TimetablePage = () => {
           {result.unscheduled?.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
               <div className="flex items-center gap-2 text-amber-800 font-medium text-sm mb-2">
-                <AlertCircle className="w-4 h-4" /> Could not schedule
+                <AlertCircle className="w-4 h-4" /> {result.unscheduled.length} course{result.unscheduled.length === 1 ? '' : 's'} could not be scheduled
               </div>
               <ul className="list-disc list-inside text-xs text-amber-700 space-y-1">
                 {result.unscheduled.map((c) => (
                   <li key={c.id}>{c.code} — {c.title} {c.reason ? `(${c.reason})` : ''}</li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {result.venuesAssigned && (
+            <div className="flex items-center gap-2 text-sm text-emerald-700">
+              <CheckCircle2 className="w-4 h-4" /> Venues have been assigned to all scheduled exams.
+            </div>
+          )}
+
+          {invigilatorsAssigned ? (
+            <div className="flex items-center gap-2 text-sm text-emerald-700">
+              <CheckCircle2 className="w-4 h-4" /> Invigilators have been assigned to venues.
+            </div>
+          ) : (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+              <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+              <div className="text-sm text-amber-900">
+                <span className="font-bold">No invigilators assigned yet.</span>{' '}
+                {hasInvigilators
+                  ? 'Click "Assign Invigilators" above to auto-assign invigilators to venues.'
+                  : 'No invigilators are registered in the system. Register invigilators first, then assign them.'}
+              </div>
             </div>
           )}
 
