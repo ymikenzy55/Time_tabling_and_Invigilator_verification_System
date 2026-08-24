@@ -632,66 +632,96 @@ export const TimetablePage = () => {
       clashCountMap.set(key, (clashCountMap.get(key) || 0) + 1);
     }
 
-    // --- Build the flat day-grouped structure used by the official layout ---
     // Merge entries with the same course code + title in the same slot into a
-    // single row (shared courses sit at the same time in different venues).
+    // single row (shared courses sit at the same time in different venues),
+    // then group the merged rows by day.
     const classLabel = (e) => {
       const dept = e.course?.department;
       const deptTag = (dept?.code || dept?.name || '').toUpperCase();
       return `L${e.course?.level ?? ''} ${deptTag}`.trim();
     };
 
-    const mergedRows = new Map(); // key: date|period|code|title -> row
-    for (const e of freshEntries) {
-      const code = (e.course?.code || '').trim().toUpperCase();
-      const title = (e.course?.title || '').trim();
-      const dk = dateKey(e.scheduledAt);
-      const pi = periodIndex(e.scheduledAt);
-      const key = `${dk}|${pi}|${code}|${title.toUpperCase()}`;
+    const buildSortedDays = (list) => {
+      const mergedRows = new Map(); // key: date|period|code|title -> row
+      for (const e of list) {
+        const code = (e.course?.code || '').trim().toUpperCase();
+        const title = (e.course?.title || '').trim();
+        const dk = dateKey(e.scheduledAt);
+        const pi = periodIndex(e.scheduledAt);
+        const key = `${dk}|${pi}|${code}|${title.toUpperCase()}`;
 
-      const deptLevelKey = `${e.course?.department?.id}:${e.course?.level}`;
-      const slotKey = `${dk}-${pi}`;
-      const isClashing = clashCountMap.get(`${slotKey}:${deptLevelKey}`) > 1;
+        const deptLevelKey = `${e.course?.department?.id}:${e.course?.level}`;
+        const slotKey = `${dk}-${pi}`;
+        const isClashing = clashCountMap.get(`${slotKey}:${deptLevelKey}`) > 1;
 
-      if (!mergedRows.has(key)) {
-        mergedRows.set(key, {
-          dateKey: dk,
-          period: pi,
-          scheduledAt: e.scheduledAt,
-          code,
-          title,
-          classes: [],
-          students: 0,
-          examiners: new Set(),
-          venues: new Set(),
-          clash: false,
-        });
+        if (!mergedRows.has(key)) {
+          mergedRows.set(key, {
+            dateKey: dk,
+            period: pi,
+            scheduledAt: e.scheduledAt,
+            code,
+            title,
+            classes: [],
+            students: 0,
+            examiners: new Set(),
+            venues: new Set(),
+            clash: false,
+          });
+        }
+        const row = mergedRows.get(key);
+        const cls = classLabel(e);
+        if (cls && !row.classes.includes(cls)) row.classes.push(cls);
+        row.students += e.course?.studentCount || 0;
+        if (e.course?.instructorName) row.examiners.add(e.course.instructorName);
+        if (e.venue?.name) row.venues.add(e.venue.name);
+        if (isClashing) row.clash = true;
       }
-      const row = mergedRows.get(key);
-      const cls = classLabel(e);
-      if (cls && !row.classes.includes(cls)) row.classes.push(cls);
-      row.students += e.course?.studentCount || 0;
-      if (e.course?.instructorName) row.examiners.add(e.course.instructorName);
-      if (e.venue?.name) row.venues.add(e.venue.name);
-      if (isClashing) row.clash = true;
-    }
 
-    // Group merged rows by day.
-    const dayGroups = new Map(); // dateKey -> { date, rows: [] }
-    for (const row of mergedRows.values()) {
-      if (!dayGroups.has(row.dateKey)) dayGroups.set(row.dateKey, { date: row.scheduledAt, rows: [] });
-      dayGroups.get(row.dateKey).rows.push(row);
+      const dayGroups = new Map(); // dateKey -> { date, rows: [] }
+      for (const row of mergedRows.values()) {
+        if (!dayGroups.has(row.dateKey)) dayGroups.set(row.dateKey, { date: row.scheduledAt, rows: [] });
+        dayGroups.get(row.dateKey).rows.push(row);
+      }
+      return [...dayGroups.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, val]) => ({
+          key,
+          date: val.date,
+          rows: val.rows.sort((a, b) => a.period - b.period || a.code.localeCompare(b.code)),
+        }));
+    };
+
+    // Group the exported entries by department -> level -> practical/theory so
+    // the PDF mirrors the on-screen layout instead of one flat list.
+    const pdfDepts = new Map();
+    for (const e of freshEntries) {
+      const deptId = e.course?.department?.id || 'unknown';
+      const deptName = e.course?.department?.name || 'Unassigned';
+      const level = e.course?.level || 0;
+      if (!pdfDepts.has(deptId)) pdfDepts.set(deptId, { deptName, levels: new Map() });
+      const dept = pdfDepts.get(deptId);
+      if (!dept.levels.has(level)) dept.levels.set(level, { practical: [], theory: [] });
+      const lv = dept.levels.get(level);
+      if (e.course?.isPractical) lv.practical.push(e);
+      else lv.theory.push(e);
     }
-    const sortedDays = [...dayGroups.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, val]) => ({
-        key,
-        date: val.date,
-        rows: val.rows.sort((a, b) => a.period - b.period || a.code.localeCompare(b.code)),
+    const pdfSections = [...pdfDepts.values()]
+      .sort((a, b) => a.deptName.localeCompare(b.deptName))
+      .map((dept) => ({
+        deptName: dept.deptName,
+        levels: [...dept.levels.entries()]
+          .sort(([a], [b]) => a - b)
+          .map(([level, lv]) => ({
+            level,
+            practicalDays: lv.practical.length ? buildSortedDays(lv.practical) : [],
+            theoryDays: lv.theory.length ? buildSortedDays(lv.theory) : [],
+          })),
       }));
 
-    // Exam period range for the sub-header.
-    const allDates = sortedDays.map((d) => new Date(d.date));
+    // Exam period range for the sub-header (across every exported entry).
+    const allDates = [...new Set(freshEntries.map((e) => dateKey(e.scheduledAt)))]
+      .sort((a, b) => a.localeCompare(b))
+      .map((k) => new Date(k));
     const rangeStart = allDates[0];
     const rangeEnd = allDates[allDates.length - 1];
     const fmtLong = (d) => {
@@ -709,7 +739,7 @@ export const TimetablePage = () => {
     const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
     // Render body rows: for each day — a day-name row, then one row per course.
-    const bodyRows = sortedDays.map((day) => {
+    const renderBodyRows = (sortedDays) => sortedDays.map((day) => {
       const dayName = new Date(day.date).toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
 
       const courseRows = day.rows.map((row, idx) => {
@@ -736,6 +766,60 @@ export const TimetablePage = () => {
       </tr>`;
 
       return dayHeader + courseRows;
+    }).join('');
+
+    const tableHead = `<colgroup>
+            <col style="width:11%" />
+            <col style="width:10%" />
+            <col style="width:29%" />
+            <col style="width:13%" />
+            <col style="width:6%" />
+            <col style="width:15%" />
+            <col style="width:16%" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>DATE/ TIME</th>
+              <th>CODE</th>
+              <th>COURSE CODE/ TITLE</th>
+              <th>CLASS</th>
+              <th>STDS</th>
+              <th>EXAMINER</th>
+              <th>VENUE</th>
+            </tr>
+          </thead>`;
+
+    const renderSection = (label, labelClass, sortedDays) => {
+      if (!sortedDays.length) return '';
+      return `<div class="section-label ${labelClass}">${esc(label)}</div>
+        <table class="main-table">${tableHead}<tbody>${renderBodyRows(sortedDays)}</tbody></table>`;
+    };
+
+    // Department -> Level -> Practical / Theory sections.
+    const bodyContent = pdfSections.map((dept) => {
+      const levelBlocks = dept.levels.map((lv) => {
+        const hasPractical = lv.practicalDays.length > 0;
+        const hasTheory = lv.theoryDays.length > 0;
+        if (!hasPractical && !hasTheory) return '';
+        const practicalBlock = hasPractical
+          ? renderSection('PRACTICAL COURSES', 'practical', lv.practicalDays)
+          : '';
+        const theoryBlock = hasTheory
+          ? (hasPractical
+            ? renderSection('THEORY COURSES', 'theory', lv.theoryDays)
+            : `<table class="main-table">${tableHead}<tbody>${renderBodyRows(lv.theoryDays)}</tbody></table>`)
+          : '';
+        return `<div class="level-block">
+          <div class="level-heading">LEVEL ${lv.level}</div>
+          ${practicalBlock}
+          ${theoryBlock}
+        </div>`;
+      }).join('');
+
+      return `<div class="dept-block">
+        <div class="dept-heading">${esc(dept.deptName.toUpperCase())}</div>
+        ${levelBlocks}
+      </div>`;
     }).join('');
 
     const semLabel = (semName || '').toUpperCase();
@@ -777,6 +861,27 @@ export const TimetablePage = () => {
       .main-table .venue-cell { text-align: center; font-weight: bold; }
       .clash-tag { color: #c00; font-size: 7pt; font-weight: bold; }
       .main-table tbody tr { page-break-inside: avoid; }
+      .dept-block { page-break-inside: auto; }
+      .dept-heading {
+        border-top: 1.5pt solid #000; border-bottom: 1.5pt solid #000;
+        background: #e8e8e8; text-align: center;
+        font-size: 11pt; font-weight: bold; letter-spacing: 0.06em;
+        padding: 0.12cm 0.2cm; text-transform: uppercase;
+      }
+      .level-block { page-break-inside: auto; }
+      .level-heading {
+        border-bottom: 1pt solid #000; background: #f4f4f4;
+        font-size: 9.5pt; font-weight: bold; letter-spacing: 0.05em;
+        padding: 0.08cm 0.25cm; text-transform: uppercase;
+      }
+      .section-label {
+        font-size: 8.5pt; font-weight: bold; letter-spacing: 0.05em;
+        padding: 0.06cm 0.25cm; text-transform: uppercase;
+        border-bottom: 1pt solid #000;
+      }
+      .section-label.practical { background: #dbeafe; color: #1e3a8a; }
+      .section-label.theory { background: #f1f5f9; color: #334155; }
+      .dept-heading, .level-heading, .section-label { page-break-after: avoid; }
       @media print {
         @page { size: A4 landscape; }
         html, body { width: 100%; height: auto; }
@@ -792,29 +897,7 @@ export const TimetablePage = () => {
         </div>
         ${rangeStart && rangeEnd ? `<div class="head-block date-range">${fmtLong(rangeStart)} &nbsp;-&nbsp; ${fmtLong(rangeEnd)}</div>` : ''}
         ${sessionName ? `<div class="head-block date-range" style="font-size:9.5pt;">${esc(sessionName)}</div>` : ''}
-        <table class="main-table">
-          <colgroup>
-            <col style="width:11%" />
-            <col style="width:10%" />
-            <col style="width:29%" />
-            <col style="width:13%" />
-            <col style="width:6%" />
-            <col style="width:15%" />
-            <col style="width:16%" />
-          </colgroup>
-          <thead>
-            <tr>
-              <th>DATE/ TIME</th>
-              <th>CODE</th>
-              <th>COURSE CODE/ TITLE</th>
-              <th>CLASS</th>
-              <th>STDS</th>
-              <th>EXAMINER</th>
-              <th>VENUE</th>
-            </tr>
-          </thead>
-          <tbody>${bodyRows}</tbody>
-        </table>
+        ${bodyContent}
       </div>
     </body></html>`;
 
@@ -1116,7 +1199,7 @@ export const TimetablePage = () => {
           />
         </div>
       ) : (
-        <div className="bg-white border border-slate-300 mx-auto print:border-none print:shadow-none" style={{ fontFamily: "'Times New Roman', Cambria, Calibri, serif", maxWidth: '27cm' }}>
+        <div className="bg-white border border-slate-300 w-full print:border-none print:shadow-none" style={{ fontFamily: "'Times New Roman', Cambria, Calibri, serif" }}>
           {/* Document header with logo */}
           <div className="text-center py-6 border-b-2 border-black">
             <img src={LOGO_IMAGE} alt="UENR" className="mx-auto mb-2" style={{ width: '70px', height: '70px', objectFit: 'contain' }} />
