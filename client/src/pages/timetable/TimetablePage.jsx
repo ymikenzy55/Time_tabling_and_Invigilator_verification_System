@@ -71,6 +71,108 @@ const periodIndex = (scheduledAt) => {
   return 2;
 };
 
+const DayPeriodGrid = ({ days, clashes, isAdmin, isPracticalSection, onEditEntry, onDeleteEntry, onGenerateVenueQr, venueQrLoading }) => (
+  <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
+    <thead>
+      <tr>
+        <th className="border border-black border-b-2 px-2 py-1.5 text-[10pt] font-bold text-black text-center" style={{ width: '16%' }}>Date</th>
+        {PERIODS.map((p) => (
+          <th key={p.hour} className="border border-black border-b-2 px-2 py-1.5 text-[10pt] font-bold text-black text-center">
+            {p.label}
+          </th>
+        ))}
+      </tr>
+    </thead>
+    <tbody>
+      {days.map((day) => {
+        const dayName = new Date(day.date).toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
+        const dateStr = new Date(day.date).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase();
+        return (
+          <tr key={day.key} className="align-top">
+            <td className="border border-black px-2 py-1.5 text-[10pt] font-bold text-black text-center align-middle bg-slate-50">
+              {dayName}<br />{dateStr}
+            </td>
+            {day.periods.map((list, i) => (
+              <td key={i} className="border border-black px-1 py-1 align-top">
+                {list.length === 0 ? (
+                  <div className="text-center text-slate-400 text-[10pt]">—</div>
+                ) : (
+                  <table className="w-full border-collapse">
+                    <tbody>
+                      {list.map((entry) => {
+                        const isClashing = clashes.has(entry.id);
+                        const isPractical = !!entry.course?.isPractical;
+                        return (
+                          <tr key={entry.id} className={`group relative border-b border-black last:border-b-0 ${isClashing ? 'bg-rose-50' : isPractical ? 'bg-blue-50' : ''}`}>
+                            <td className={`px-1.5 py-1.5 text-[9pt] text-black ${isClashing ? 'border-l-[3px] border-l-rose-600' : isPractical ? 'border-l-[3px] border-l-blue-500' : ''}`}>
+                              <div className="flex items-center gap-1 mb-0.5">
+                                <span className="font-bold">{entry.course?.code}</span>
+                                {isPractical && (
+                                  <span className="inline-block text-[7pt] font-bold text-white bg-blue-600 rounded px-1 py-0.5 leading-none">PRAC</span>
+                                )}
+                              </div>
+                              <div className="leading-tight mb-1">{entry.course?.title}</div>
+                              <div className="flex items-center gap-1 text-[8pt] text-slate-700 mb-0.5">
+                                <MapPin className="w-2.5 h-2.5 shrink-0" />
+                                <span className="font-medium">{entry.venue?.name || 'No venue'}</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-[8pt] text-slate-700 mb-0.5">
+                                <User className="w-2.5 h-2.5 shrink-0" />
+                                <span>{entry.course?.instructorName || 'N/A'}</span>
+                              </div>
+                              <div className="text-[8pt] font-bold text-slate-800">
+                                {entry.course?.studentCount ?? 0} students
+                              </div>
+                              {isClashing && (
+                                <div className="text-rose-600 font-bold text-[7pt] mt-0.5">⚠ CLASH</div>
+                              )}
+                              {isAdmin && (
+                                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 mt-1 print:hidden">
+                                  <button
+                                    type="button"
+                                    className="p-0.5 hover:bg-slate-100 text-slate-500 hover:text-primary-700 rounded"
+                                    onClick={() => onEditEntry(entry)}
+                                    title="Edit entry"
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="p-0.5 hover:bg-slate-100 text-slate-500 hover:text-rose-600 rounded"
+                                    onClick={() => onDeleteEntry(entry)}
+                                    title="Delete entry"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                  {entry.venue?.id && (
+                                    <button
+                                      type="button"
+                                      className="p-0.5 hover:bg-slate-100 text-slate-500 hover:text-primary-700 rounded"
+                                      onClick={() => onGenerateVenueQr(entry.venue.id)}
+                                      disabled={venueQrLoading === entry.venue.id}
+                                      title="Venue QR"
+                                    >
+                                      {venueQrLoading === entry.venue.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <QrCode className="w-3 h-3" />}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </td>
+            ))}
+          </tr>
+        );
+      })}
+    </tbody>
+  </table>
+);
+
 export const TimetablePage = () => {
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -286,6 +388,8 @@ export const TimetablePage = () => {
   const watchStartDate = watchGen('startDate');
   const watchDurationWeeks = watchGen('durationWeeks');
   const watchSkipWeekends = watchGen('skipWeekends');
+  const watchAssignVenues = watchGen('assignVenues');
+  const venueCount = (venuesQuery.data || []).length;
 
   // Auto-fill start date when semester changes
   useEffect(() => {
@@ -452,16 +556,20 @@ export const TimetablePage = () => {
   }, [entries]);
 
   // Group entries by department → level, then build a day×period grid per dept+level.
+  // Practical courses are separated and shown first with their own heading.
   const buildDeptGrids = (rawEntries) => {
     const byDept = new Map();
     for (const entry of rawEntries) {
       const deptId = entry.course?.department?.id || 'unknown';
       const deptName = entry.course?.department?.name || 'Unassigned';
       const level = entry.course?.level || 0;
+      const isPractical = !!entry.course?.isPractical;
       if (!byDept.has(deptId)) byDept.set(deptId, { deptId, deptName, levels: new Map() });
       const dept = byDept.get(deptId);
-      if (!dept.levels.has(level)) dept.levels.set(level, { level, entries: [] });
-      dept.levels.get(level).entries.push(entry);
+      if (!dept.levels.has(level)) dept.levels.set(level, { level, practicalEntries: [], theoryEntries: [] });
+      const lv = dept.levels.get(level);
+      if (isPractical) lv.practicalEntries.push(entry);
+      else lv.theoryEntries.push(entry);
     }
     return [...byDept.entries()]
       .sort(([, a], [, b]) => a.deptName.localeCompare(b.deptName))
@@ -471,15 +579,23 @@ export const TimetablePage = () => {
         levels: [...val.levels.entries()]
           .sort(([a], [b]) => a - b)
           .map(([level, lv]) => {
-            const days = new Map();
-            for (const entry of lv.entries) {
-              const key = dateKey(entry.scheduledAt);
-              if (!days.has(key)) days.set(key, { date: entry.scheduledAt, periods: [[], [], []] });
-              days.get(key).periods[periodIndex(entry.scheduledAt)].push(entry);
-            }
+            const buildDays = (entries) => {
+              const days = new Map();
+              for (const entry of entries) {
+                const key = dateKey(entry.scheduledAt);
+                if (!days.has(key)) days.set(key, { date: entry.scheduledAt, periods: [[], [], []] });
+                days.get(key).periods[periodIndex(entry.scheduledAt)].push(entry);
+              }
+              return [...days.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => ({ key, ...value }));
+            };
             return {
               level,
-              days: [...days.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => ({ key, ...value })),
+              hasPractical: lv.practicalEntries.length > 0,
+              practicalDays: buildDays(lv.practicalEntries),
+              hasTheory: lv.theoryEntries.length > 0,
+              theoryDays: buildDays(lv.theoryEntries),
+              // Keep combined days for backward compat (export etc.)
+              days: buildDays([...lv.practicalEntries, ...lv.theoryEntries]),
             };
           }),
       }));
@@ -926,9 +1042,16 @@ export const TimetablePage = () => {
             </div>
           )}
 
-          {result.venuesAssigned && (
+          {result.venuesAssigned ? (
             <div className="flex items-center gap-2 text-sm text-emerald-700">
               <CheckCircle2 className="w-4 h-4" /> Venues have been assigned to all scheduled exams.
+            </div>
+          ) : (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+              <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+              <div className="text-sm text-amber-900">
+                <span className="font-bold">No venues assigned.</span> Exams are scheduled without venues. You can assign venues later by regenerating with venue assignment enabled.
+              </div>
             </div>
           )}
 
@@ -1005,6 +1128,22 @@ export const TimetablePage = () => {
             </div>
           </div>
 
+          {/* Color legend */}
+          <div className="flex items-center gap-4 px-4 py-2 border-b border-slate-200 text-[9pt] text-slate-600 print:hidden">
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded bg-blue-50 border border-blue-300" />
+              <span>Practical</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded bg-white border border-slate-300" />
+              <span>Theory</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded bg-rose-50 border border-rose-400" />
+              <span>Clash</span>
+            </div>
+          </div>
+
           {/* Department sections */}
           {deptGrids.map((dg) => (
             <div key={dg.id} className="mt-6 mb-8">
@@ -1023,92 +1162,45 @@ export const TimetablePage = () => {
                     </div>
                   </div>
 
-                  {/* Day × Period grid table */}
-                  <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
-                    <thead>
-                      <tr>
-                        <th className="border border-black border-b-2 px-2 py-1.5 text-[10pt] font-bold text-black text-center" style={{ width: '16%' }}>Date</th>
-                        {PERIODS.map((p) => (
-                          <th key={p.hour} className="border border-black border-b-2 px-2 py-1.5 text-[10pt] font-bold text-black text-center">
-                            {p.label}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lv.days.map((day) => {
-                        const dayName = new Date(day.date).toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
-                        const dateStr = new Date(day.date).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase();
-                        return (
-                          <tr key={day.key} className="align-top">
-                            <td className="border border-black px-2 py-1.5 text-[10pt] font-bold text-black text-center align-middle bg-slate-50">
-                              {dayName}<br />{dateStr}
-                            </td>
-                            {day.periods.map((list, i) => (
-                              <td key={i} className="border border-black px-1 py-1 align-top">
-                                {list.length === 0 ? (
-                                  <div className="text-center text-slate-400 text-[10pt]">—</div>
-                                ) : (
-                                  <table className="w-full border-collapse">
-                                    <tbody>
-                                      {list.map((entry) => {
-                                        const isClashing = clashes.has(entry.id);
-                                        return (
-                                          <tr key={entry.id} className={`group relative border-b border-black last:border-b-0 ${isClashing ? 'bg-rose-50' : ''}`}>
-                                            <td className={`px-1 py-1 text-[9pt] text-black ${isClashing ? 'border-l-[3px] border-l-rose-600' : ''}`}>
-                                              <div className="font-bold">{entry.course?.code}</div>
-                                              <div>{entry.course?.title}</div>
-                                              <div className="font-bold text-black">{entry.course?.studentCount ?? 0} students</div>
-                                              <div className="font-bold text-black">{entry.venue?.name || ''}</div>
-                                              <div className="text-slate-600">{entry.course?.instructorName || ''}</div>
-                                              {isClashing && (
-                                                <div className="text-rose-600 font-bold text-[8pt] mt-0.5">⚠ CLASH</div>
-                                              )}
-                                              {isAdmin && (
-                                                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 mt-0.5 print:hidden">
-                                                  <button
-                                                    type="button"
-                                                    className="p-0.5 hover:bg-slate-100 text-slate-500 hover:text-primary-700 rounded"
-                                                    onClick={() => setEditEntry(entry)}
-                                                    title="Edit entry"
-                                                  >
-                                                    <Pencil className="w-3 h-3" />
-                                                  </button>
-                                                  <button
-                                                    type="button"
-                                                    className="p-0.5 hover:bg-slate-100 text-slate-500 hover:text-rose-600 rounded"
-                                                    onClick={() => { setDeleteTarget(entry); setDeleteConfirm(true); }}
-                                                    title="Delete entry"
-                                                  >
-                                                    <Trash2 className="w-3 h-3" />
-                                                  </button>
-                                                  {entry.venue?.id && (
-                                                    <button
-                                                      type="button"
-                                                      className="p-0.5 hover:bg-slate-100 text-slate-500 hover:text-primary-700 rounded"
-                                                      onClick={() => generateVenueQr(entry.venue.id)}
-                                                      disabled={venueQrLoading === entry.venue.id}
-                                                      title="Venue QR"
-                                                    >
-                                                      {venueQrLoading === entry.venue.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <QrCode className="w-3 h-3" />}
-                                                    </button>
-                                                  )}
-                                                </div>
-                                              )}
-                                            </td>
-                                          </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                )}
-                              </td>
-                            ))}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                  {/* Practical courses section — shown first */}
+                  {lv.hasPractical && (
+                    <div className="mb-4">
+                      <div className="flex items-center gap-2 mb-2 bg-blue-100 border border-blue-300 rounded px-3 py-1.5">
+                        <div className="w-2 h-2 rounded-full bg-blue-600" />
+                        <span className="text-[10pt] font-bold text-blue-900 uppercase tracking-wide">Practical Courses</span>
+                      </div>
+                      <DayPeriodGrid
+                        days={lv.practicalDays}
+                        clashes={clashes}
+                        isAdmin={isAdmin}
+                        onEditEntry={setEditEntry}
+                        onDeleteEntry={(entry) => { setDeleteTarget(entry); setDeleteConfirm(true); }}
+                        onGenerateVenueQr={generateVenueQr}
+                        venueQrLoading={venueQrLoading}
+                      />
+                    </div>
+                  )}
+
+                  {/* Theory / non-practical courses section */}
+                  {lv.hasTheory && (
+                    <div>
+                      {lv.hasPractical && (
+                        <div className="flex items-center gap-2 mb-2 bg-slate-100 border border-slate-300 rounded px-3 py-1.5">
+                          <div className="w-2 h-2 rounded-full bg-slate-500" />
+                          <span className="text-[10pt] font-bold text-slate-700 uppercase tracking-wide">Theory Courses</span>
+                        </div>
+                      )}
+                      <DayPeriodGrid
+                        days={lv.theoryDays}
+                        clashes={clashes}
+                        isAdmin={isAdmin}
+                        onEditEntry={setEditEntry}
+                        onDeleteEntry={(entry) => { setDeleteTarget(entry); setDeleteConfirm(true); }}
+                        onGenerateVenueQr={generateVenueQr}
+                        venueQrLoading={venueQrLoading}
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1205,40 +1297,69 @@ export const TimetablePage = () => {
           <p className="text-xs text-ink-500">Weekends are skipped when the option above is checked, so the period may extend across more calendar days.</p>
 
           {/* Generation options: venue + invigilator assignment */}
-          <div className="space-y-3 rounded-lg border border-surface-border bg-surface-subtle px-4 py-3">
+          <div className="space-y-4 rounded-lg border border-surface-border bg-surface-subtle px-4 py-3">
             <div className="text-sm font-bold text-ink-900">Generation Options</div>
 
-            {/* Venue assignment */}
-            <div className="space-y-1.5">
-              <label className="flex items-center gap-2 text-sm text-ink-700 cursor-pointer">
-                <input type="checkbox" {...registerGen('assignVenues')} />
-                Assign venues to exams
-              </label>
-              <p className="text-xs text-ink-500 pl-6">
-                {(venuesQuery.data || []).length > 0
-                  ? `${(venuesQuery.data || []).length} active venue${(venuesQuery.data || []).length === 1 ? '' : 's'} available. Venues will be auto-assigned based on capacity and student count.`
-                  : 'No venues found. Add venues first, or uncheck to generate without venue assignments.'}
-              </p>
+            {/* Venue assignment — explicit yes/no prompt */}
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-ink-800">Assign venues to exams?</div>
+              <div className="flex items-center gap-3">
+                <label className={`flex items-center gap-2 text-sm cursor-pointer px-3 py-1.5 rounded-lg border transition-colors ${watchAssignVenues ? 'border-primary-300 bg-primary-50 text-primary-800' : 'border-surface-border bg-white text-ink-600 hover:bg-surface-subtle'}`}>
+                  <input type="radio" value="true" checked={watchAssignVenues === true} onChange={() => setGenValue('assignVenues', true)} className="sr-only" />
+                  <Building className="w-4 h-4" /> Yes, assign venues
+                </label>
+                <label className={`flex items-center gap-2 text-sm cursor-pointer px-3 py-1.5 rounded-lg border transition-colors ${!watchAssignVenues ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-surface-border bg-white text-ink-600 hover:bg-surface-subtle'}`}>
+                  <input type="radio" value="false" checked={watchAssignVenues === false} onChange={() => setGenValue('assignVenues', false)} className="sr-only" />
+                  No, generate without venues
+                </label>
+              </div>
+              {watchAssignVenues ? (
+                venueCount > 0 ? (
+                  <p className="text-xs text-emerald-700 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    {venueCount} active venue{venueCount === 1 ? '' : 's'} available. Venues will be auto-assigned based on capacity and student count.
+                  </p>
+                ) : (
+                  <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 mt-0.5 shrink-0" />
+                    <div className="text-xs text-rose-800">
+                      <span className="font-bold">No venues available.</span> Please add venues in the Venues tab before continuing, or choose "No" to generate without venue assignments.
+                    </div>
+                  </div>
+                )
+              ) : (
+                <p className="text-xs text-amber-700 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Timetable will be generated without venue assignments. You can assign venues later.
+                </p>
+              )}
             </div>
 
             {/* Invigilator assignment */}
-            <div className="space-y-1.5">
-              <label className="flex items-center gap-2 text-sm text-ink-700 cursor-pointer">
-                <input type="checkbox" {...registerGen('assignInvigilators')} disabled={!hasInvigilators} />
-                Assign invigilators to venues
-              </label>
-              <p className="text-xs text-ink-500 pl-6">
+            <div className="space-y-2 border-t border-surface-border pt-3">
+              <div className="text-sm font-medium text-ink-800">Assign invigilators to venues?</div>
+              <div className="flex items-center gap-3">
+                <label className={`flex items-center gap-2 text-sm cursor-pointer px-3 py-1.5 rounded-lg border transition-colors ${watchGen('assignInvigilators') ? 'border-primary-300 bg-primary-50 text-primary-800' : 'border-surface-border bg-white text-ink-600 hover:bg-surface-subtle'} ${!hasInvigilators ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  <input type="radio" value="true" checked={watchGen('assignInvigilators') === true} disabled={!hasInvigilators} onChange={() => setGenValue('assignInvigilators', true)} className="sr-only" />
+                  <Users className="w-4 h-4" /> Yes, assign invigilators
+                </label>
+                <label className={`flex items-center gap-2 text-sm cursor-pointer px-3 py-1.5 rounded-lg border transition-colors ${!watchGen('assignInvigilators') ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-surface-border bg-white text-ink-600 hover:bg-surface-subtle'}`}>
+                  <input type="radio" value="false" checked={watchGen('assignInvigilators') === false} onChange={() => setGenValue('assignInvigilators', false)} className="sr-only" />
+                  No, assign later
+                </label>
+              </div>
+              <p className="text-xs text-ink-500">
                 {hasInvigilators
-                  ? `${invigilatorCountQuery.data} active invigilator${invigilatorCountQuery.data === 1 ? '' : 's'} registered. Check to auto-assign them after timetable generation. Invigilators will not be assigned to their own department's exams.`
+                  ? `${invigilatorCountQuery.data} active invigilator${invigilatorCountQuery.data === 1 ? '' : 's'} registered. Invigilators will not be assigned to their own department's exams.`
                   : 'No invigilators registered. You can assign them later after registration.'}
               </p>
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" className="btn-secondary" onClick={() => setGenerateOpen(false)}>Cancel</button>
-            <button type="submit" className="btn-primary" disabled={generateMutation.isPending}>
+            <button type="submit" className="btn-primary" disabled={generateMutation.isPending || (watchAssignVenues && venueCount === 0)}>
               {generateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-              Generate
+              {watchAssignVenues && venueCount === 0 ? 'Add venues first' : 'Generate'}
             </button>
           </div>
         </form>
