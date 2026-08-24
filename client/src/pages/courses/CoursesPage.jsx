@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -57,6 +58,7 @@ const statusBadge = {
 export const CoursesPage = () => {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
@@ -443,6 +445,14 @@ export const CoursesPage = () => {
                 {user.departmentName}
               </span>
             ) : null}
+            {isAdmin && (
+              <button
+                className="btn-secondary"
+                onClick={() => navigate('/timetable', { state: { generate: true } })}
+              >
+                Generate Timetable
+              </button>
+            )}
             {selectedDrafts.length > 0 && (
               <button
                 className="btn-primary"

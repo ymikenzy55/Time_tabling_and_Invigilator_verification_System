@@ -25,7 +25,7 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
 
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications'],
-    queryFn: () => notificationsApi.list({ unread: true }),
+    queryFn: () => notificationsApi.list({ limit: 20 }),
     refetchInterval: streamConnected ? false : 30000,
   });
 
@@ -37,7 +37,9 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
   const markReadMutation = useMutation({
     mutationFn: (id) => notificationsApi.markRead(id),
     onSuccess: (_res, id) => {
-      qc.setQueryData(['notifications'], (prev) => (prev || []).filter((n) => n.id !== id));
+      qc.setQueryData(['notifications'], (prev) =>
+        (prev || []).map((n) => (n.id === id ? { ...n, isRead: true } : n))
+      );
       qc.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
     },
   });
@@ -45,7 +47,9 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
   const markAllReadMutation = useMutation({
     mutationFn: () => notificationsApi.markAllRead(),
     onSuccess: () => {
-      qc.setQueryData(['notifications'], []);
+      qc.setQueryData(['notifications'], (prev) =>
+        (prev || []).map((n) => ({ ...n, isRead: true }))
+      );
       qc.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
     },
   });
@@ -58,11 +62,6 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
     return () => document.removeEventListener('click', onClick);
   }, []);
 
-  useEffect(() => {
-    if (notifOpen && unreadCount > 0 && !markAllReadMutation.isPending) {
-      markAllReadMutation.mutate();
-    }
-  }, [notifOpen, unreadCount, markAllReadMutation]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -222,7 +221,7 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
             </button>
 
             {notifOpen && (
-              <div className="absolute right-0 mt-2 w-[calc(100vw-1.5rem)] max-w-sm sm:w-96 bg-white rounded-lg shadow-popover border border-surface-border z-50 overflow-hidden">
+              <div className="fixed right-2 sm:right-4 top-14 sm:top-14 w-[calc(100vw-1rem)] max-w-sm bg-white rounded-lg shadow-popover border border-surface-border z-50 overflow-hidden">
                 <div className="p-3 border-b border-surface-border flex items-center justify-between gap-3 bg-surface-subtle">
                   <div className="flex flex-col">
                     <div className="text-sm font-bold text-ink-900">Notifications</div>
@@ -260,7 +259,6 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
                         onClick={() => {
                           if (n.link) navigate(n.link);
                           if (!n.isRead) markReadMutation.mutate(n.id);
-                          setNotifOpen(false);
                         }}
                         className={`w-full text-left px-4 py-3 border-b border-surface-divider hover:bg-surface-subtle transition-colors ${
                           n.isRead ? 'opacity-70' : 'bg-primary-50/60'
