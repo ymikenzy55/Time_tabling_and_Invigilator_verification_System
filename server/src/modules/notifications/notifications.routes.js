@@ -10,6 +10,7 @@ router.get('/', notificationsController.list);
 router.get('/unread-count', notificationsController.unreadCount);
 router.post('/read-all', notificationsController.markAllRead);
 router.post('/read-by-type', notificationsController.markByType);
+router.post('/delegate-message', notificationsController.delegateMessage);
 router.post('/:id/read', notificationsController.markRead);
 
 export default router;

@@ -197,7 +197,7 @@ export const AdminsManager = () => {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-3" noValidate>
           <div>
             <label className="label">Full name</label>
-            <input className="input" placeholder="Jane Doe" {...register('fullName')} />
+            <input className="input" placeholder="Enter your name" {...register('fullName')} />
             {errors.fullName && <p className="field-error">{errors.fullName.message}</p>}
           </div>
           <div className="grid sm:grid-cols-2 gap-3">

@@ -4,6 +4,7 @@ import { createNotification, notifyRole } from '../notifications/notifications.s
 import { broadcast } from '../../utils/broadcast.js';
 import { courseLevelsService } from '../courseLevels/courseLevels.service.js';
 import { logAudit, logAuditBatch } from '../../utils/auditLog.js';
+import { cache } from '../../utils/cache.js';
 
 const ALLOWED_SEMESTER_NAMES = new Set(['first semester', 'second semester']);
 
@@ -70,26 +71,33 @@ const verifyCourseOwnership = async (courseId, user) => {
   return course;
 };
 
+const clearCoursesCache = () => {
+  cache.clearPrefix('courses:list:');
+};
+
 export const coursesService = {
   async list({ departmentId, semesterId, status, level, q } = {}, actor) {
     const targetDepartmentId = actor?.role === 'DEPARTMENT_HEAD' ? actor.departmentId : departmentId;
     if (actor?.role === 'DEPARTMENT_HEAD' && !actor.departmentId) {
       throw ApiError.forbidden('You are not assigned to a department.');
     }
-    return prisma.course.findMany({
-      where: {
-        ...(targetDepartmentId ? { departmentId: targetDepartmentId } : {}),
-        ...(semesterId ? { semesterId } : {}),
-        ...(status ? { status } : {}),
-        ...(level ? { level: Number(level) } : {}),
-        ...(q ? { OR: [
-          { code: { contains: q, mode: 'insensitive' } },
-          { title: { contains: q, mode: 'insensitive' } },
-        ]} : {}),
-      },
-      orderBy: { createdAt: 'desc' },
-      select: listSelect,
-    });
+    const cacheKey = `courses:list:${targetDepartmentId || 'all'}:${semesterId || 'all'}:${status || 'all'}:${level || 'all'}:${q || 'all'}`;
+    return cache.remember(cacheKey, 15_000, async () =>
+      prisma.course.findMany({
+        where: {
+          ...(targetDepartmentId ? { departmentId: targetDepartmentId } : {}),
+          ...(semesterId ? { semesterId } : {}),
+          ...(status ? { status } : {}),
+          ...(level ? { level: Number(level) } : {}),
+          ...(q ? { OR: [
+            { code: { contains: q, mode: 'insensitive' } },
+            { title: { contains: q, mode: 'insensitive' } },
+          ]} : {}),
+        },
+        orderBy: { createdAt: 'desc' },
+        select: listSelect,
+      })
+    );
   },
 
   async getById(id, actor) {
@@ -165,6 +173,8 @@ export const coursesService = {
       },
       select: publicSelect,
     });
+
+    clearCoursesCache();
 
     logAudit({
       actorId: actor.id,
@@ -267,6 +277,8 @@ export const coursesService = {
       );
     }
 
+    clearCoursesCache();
+
     logAudit({
       actorId: actor.id,
       action: 'COURSE.BULK_IMPORT',
@@ -323,6 +335,8 @@ export const coursesService = {
       select: publicSelect,
     });
 
+    clearCoursesCache();
+
     if (course.status === 'SUBMITTED') {
       broadcast.toRoles('SUPER_ADMIN', 'course-updated', { courseId: id });
     }
@@ -350,6 +364,8 @@ export const coursesService = {
       data: { status: 'SUBMITTED', submittedAt: new Date() },
       select: { id: true, code: true, title: true, status: true, createdById: true, departmentId: true, semesterId: true, level: true, locked: true },
     });
+
+    clearCoursesCache();
 
     logAudit({
       actorId: actor.id,
@@ -397,6 +413,8 @@ export const coursesService = {
       if (!exists) throw ApiError.notFound('Course not found.');
       throw ApiError.badRequest('Only submitted courses can be approved.');
     }
+
+    clearCoursesCache();
 
     // Fire-and-forget audit (1 connection, released instantly)
     logAudit({
@@ -453,6 +471,8 @@ export const coursesService = {
         rejectionComment: null,
       },
     });
+
+    clearCoursesCache();
 
     // Batch all audit entries into a single createMany — 1 DB query instead of N
     logAuditBatch(
@@ -511,6 +531,8 @@ export const coursesService = {
       throw ApiError.badRequest('Only submitted courses can be rejected.');
     }
 
+    clearCoursesCache();
+
     logAudit({
       actorId: actor.id,
       action: 'COURSE.REJECT',
@@ -550,6 +572,8 @@ export const coursesService = {
     }
 
     await prisma.course.delete({ where: { id } });
+
+    clearCoursesCache();
 
     logAudit({
       actorId: actor.id,

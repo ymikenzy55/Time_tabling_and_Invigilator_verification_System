@@ -37,6 +37,15 @@ export const createPeerDepartmentHeadSchema = z.object({
   password: strongPassword,
 });
 
+export const createDelegateSchema = z.object({
+  email: z.string().email('Please enter a valid email address.'),
+  fullName: z.string().trim().min(2, 'Full name is required.'),
+  staffId: z.string().trim().min(1).optional(),
+  phone: z.string().trim().optional(),
+  password: strongPassword,
+  createdById: z.string().optional(),
+});
+
 export const updateUserSchema = z.object({
   fullName: z.string().trim().min(2).optional(),
   staffId: z.string().trim().optional(),

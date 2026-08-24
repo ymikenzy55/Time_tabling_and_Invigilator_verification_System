@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { ScanLine, MoreHorizontal, X, Grid2x2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/cn';
 import { useAuth } from '@/context/AuthContext';
 import { bottomNavItems } from '@/config/nav';
+import { venueAssignmentsApi } from '@/features/venueAssignments/venueAssignmentsApi';
 
 /**
  * Mobile-only bottom navigation bar.
@@ -17,6 +19,19 @@ export const BottomNav = () => {
   const { primary, overflow, scanItem } = bottomNavItems(user?.role);
   const [moreOpen, setMoreOpen] = useState(false);
   const location = useLocation();
+
+  const todayCountQuery = useQuery({
+    queryKey: ['venue-assignments', 'today-count'],
+    queryFn: venueAssignmentsApi.todayCount,
+    enabled: user?.role === 'INVIGILATOR',
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  });
+  const todayDutyCount = todayCountQuery.data || 0;
+  const lastSeenDate = typeof window !== 'undefined' ? localStorage.getItem('invigilator-last-seen-duties') : null;
+  const today = new Date().toDateString();
+  const showDutyBadge = todayDutyCount > 0 && lastSeenDate !== today;
 
   const isMoreActive = overflow.some((item) => location.pathname === item.to);
 
@@ -72,49 +87,37 @@ export const BottomNav = () => {
         <div className="flex items-stretch justify-around h-16">
           {/* Primary items — first half */}
           {primary.slice(0, 2).map((item) => (
-            <BottomTab key={item.to} item={item} />
+            <BottomTab key={item.to} item={item} badge={item.to === '/my-assignments' ? showDutyBadge : false} />
           ))}
 
           {/* Center: Scan QR prominent button (invigilators) OR a primary item */}
           {scanItem ? (
             <NavLink
               to={scanItem.to}
-              className="flex flex-col items-center justify-start relative -mt-5"
+              className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 transition-colors"
               aria-label="Scan QR"
             >
               {({ isActive }) => (
                 <>
-                  <span
-                    className={cn(
-                      'w-12 h-12 rounded-full grid place-items-center shadow-lg ring-4 ring-white transition-colors',
-                      isActive
-                        ? 'bg-primary-700 text-white'
-                        : 'bg-primary-600 text-white'
-                    )}
-                  >
-                    <ScanLine className="w-6 h-6" />
-                  </span>
-                  <span
-                    className={cn(
-                      'text-[11px] font-bold mt-0.5 leading-none',
-                      isActive ? 'text-primary-800' : 'text-primary-700'
-                    )}
-                  >
-                    Scan
-                  </span>
+                  <div className="relative">
+                    <div className="w-12 h-12 -mt-4 rounded-full bg-primary-600 text-white flex items-center justify-center shadow-lg ring-4 ring-white">
+                      <ScanLine className="w-6 h-6" />
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-medium leading-none">Scan</span>
                 </>
               )}
             </NavLink>
-          ) : (
-            primary[2] && <BottomTab key={primary[2].to} item={primary[2]} />
-          )}
+          ) : primary[2] ? (
+            <BottomTab key={primary[2].to} item={primary[2]} />
+          ) : null}
 
           {/* Primary items — second half */}
           {primary.slice(scanItem ? 2 : 3).map((item) => (
-            <BottomTab key={item.to} item={item} />
+            <BottomTab key={item.to} item={item} badge={item.to === '/my-assignments' ? showDutyBadge : false} />
           ))}
 
-          {/* More button */}
+          {/* More button - only show if there are overflow items */}
           {overflow.length > 0 && (
             <button
               onClick={() => setMoreOpen(true)}
@@ -124,11 +127,9 @@ export const BottomNav = () => {
                   ? 'text-primary-800 font-bold'
                   : 'text-ink-500 hover:text-ink-700'
               )}
-              aria-label="More navigation"
+              aria-label="More"
             >
-              <MoreHorizontal
-                className={cn('w-5 h-5', isMoreActive && 'text-primary-600')}
-              />
+              <MoreHorizontal className="w-5 h-5" />
               <span className="text-[11px] font-medium leading-none">More</span>
             </button>
           )}
@@ -138,8 +139,8 @@ export const BottomNav = () => {
   );
 };
 
-const BottomTab = ({ item }) => {
-  const Icon = item.icon;
+const BottomTab = ({ item, badge = false }) => {
+  const Icon = item.icon || Grid2x2;
   const label = item.shortLabel || item.label;
   return (
     <NavLink
@@ -155,15 +156,18 @@ const BottomTab = ({ item }) => {
     >
       {({ isActive }) => (
         <>
-          {Icon && (
+          <div className="relative">
             <Icon
               className={cn(
                 'w-5 h-5 shrink-0',
                 isActive ? 'text-primary-600' : 'text-ink-400'
               )}
             />
-          )}
-          <span className="text-[11px] font-medium leading-none truncate max-w-full px-0.5">
+            {badge && (
+              <span className="absolute -top-1.5 -right-1.5 w-2 h-2 rounded-full bg-primary-600 animate-pulse" />
+            )}
+          </div>
+          <span className="text-[11px] font-medium leading-none truncate max-w-full px-0.5 text-center">
             {label}
           </span>
         </>

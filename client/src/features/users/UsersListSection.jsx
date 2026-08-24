@@ -77,6 +77,89 @@ export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
     );
   }, [users, q]);
 
+  const renderRow = (u, isSub) => (
+    <tr key={u.id} className={`hover:bg-surface-subtle/50 ${isSub ? 'bg-surface-subtle/30' : ''}`}>
+      <td className="px-4 py-3">
+        <div className={`flex items-center gap-3 ${isSub ? 'pl-6' : ''}`}>
+          <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-700 grid place-items-center text-xs font-bold shrink-0">
+            {(u.fullName || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-ink-900 ${isSub ? 'font-medium' : 'font-medium'}`}>{u.fullName}</span>
+            {isSub && (
+              <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 border border-indigo-200">
+                Sub-Head
+              </span>
+            )}
+            {isSub && u.createdBy && (
+              <span className="text-[11px] text-ink-400">
+                added by {u.createdBy.fullName}
+              </span>
+            )}
+          </div>
+        </div>
+      </td>
+      <td className="px-4 py-3 text-ink-700">{u.email}</td>
+      <td className="px-4 py-3 text-ink-700">{u.staffId || '—'}</td>
+      <td className="px-4 py-3 text-ink-700">{u.departmentName || u.department?.name || '—'}</td>
+      <td className="px-4 py-3"><StatusBadge status={u.status} /></td>
+      <td className="px-4 py-3 text-ink-500">{formatDate(u.createdAt)}</td>
+      <td className="px-4 py-3">
+        <div className="flex items-center justify-end gap-2">
+          {u.status === 'ACTIVE' ? (
+            <button
+              type="button"
+              disabled={u.id === me?.id || statusMutation.isPending}
+              onClick={async () => {
+                const ok = await confirm({
+                  title: 'Restrict this user?',
+                  description: `${u.fullName} will be suspended and unable to sign in until re-enabled.`,
+                  confirmText: 'Suspend',
+                  tone: 'warning',
+                });
+                if (ok) statusMutation.mutate({ id: u.id, status: 'SUSPENDED' });
+              }}
+              className="btn btn-sm text-amber-700 border border-amber-200 hover:bg-amber-50 disabled:opacity-50"
+              title="Suspend"
+            >
+              <Ban className="w-4 h-4" />
+              <span className="hidden sm:inline ml-1">Suspend</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={u.id === me?.id || statusMutation.isPending}
+              onClick={() => statusMutation.mutate({ id: u.id, status: 'ACTIVE' })}
+              className="btn btn-sm text-emerald-700 border border-emerald-200 hover:bg-emerald-50 disabled:opacity-50"
+              title="Enable"
+            >
+              <CheckCircle className="w-4 h-4" />
+              <span className="hidden sm:inline ml-1">Enable</span>
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={u.id === me?.id}
+            onClick={() => {
+              confirm({
+                title: 'Delete this user?',
+                description: `${u.fullName} (${u.email}) will be permanently removed. This cannot be undone.`,
+                confirmText: 'Delete',
+                tone: 'danger',
+                onConfirm: () => removeMutation.mutate(u.id),
+              });
+            }}
+            className="btn btn-sm text-rose-700 border border-rose-200 hover:bg-rose-50 disabled:opacity-50"
+            title="Delete"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span className="hidden sm:inline ml-1">Delete</span>
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -138,76 +221,35 @@ export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-divider">
-                {filtered.map((u) => (
-                  <tr key={u.id} className="hover:bg-surface-subtle/50">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-700 grid place-items-center text-xs font-bold">
-                          {(u.fullName || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
-                        </div>
-                        <div className="font-medium text-ink-900">{u.fullName}</div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-ink-700">{u.email}</td>
-                    <td className="px-4 py-3 text-ink-700">{u.staffId || '—'}</td>
-                    <td className="px-4 py-3 text-ink-700">{u.departmentName || u.department?.name || '—'}</td>
-                    <td className="px-4 py-3"><StatusBadge status={u.status} /></td>
-                    <td className="px-4 py-3 text-ink-500">{formatDate(u.createdAt)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
-                        {u.status === 'ACTIVE' ? (
-                          <button
-                            type="button"
-                            disabled={u.id === me?.id || statusMutation.isPending}
-                            onClick={async () => {
-                              const ok = await confirm({
-                                title: 'Restrict this user?',
-                                description: `${u.fullName} will be suspended and unable to sign in until re-enabled.`,
-                                confirmText: 'Suspend',
-                                tone: 'warning',
-                              });
-                              if (ok) statusMutation.mutate({ id: u.id, status: 'SUSPENDED' });
-                            }}
-                            className="btn btn-sm text-amber-700 border border-amber-200 hover:bg-amber-50 disabled:opacity-50"
-                            title="Suspend"
-                          >
-                            <Ban className="w-4 h-4" />
-                            <span className="hidden sm:inline ml-1">Suspend</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={u.id === me?.id || statusMutation.isPending}
-                            onClick={() => statusMutation.mutate({ id: u.id, status: 'ACTIVE' })}
-                            className="btn btn-sm text-emerald-700 border border-emerald-200 hover:bg-emerald-50 disabled:opacity-50"
-                            title="Enable"
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                            <span className="hidden sm:inline ml-1">Enable</span>
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          disabled={u.id === me?.id}
-                          onClick={() => {
-                            confirm({
-                              title: 'Delete this user?',
-                              description: `${u.fullName} (${u.email}) will be permanently removed. This cannot be undone.`,
-                              confirmText: 'Delete',
-                              tone: 'danger',
-                              onConfirm: () => removeMutation.mutate(u.id),
-                            });
-                          }}
-                          className="btn btn-sm text-rose-700 border border-rose-200 hover:bg-rose-50 disabled:opacity-50"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          <span className="hidden sm:inline ml-1">Delete</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {(() => {
+                  if (role !== 'DEPARTMENT_HEAD') {
+                    return filtered.map((u) => renderRow(u, false));
+                  }
+                  // Group: primary heads (no createdById) with their sub-heads nested
+                  const primaries = filtered.filter((u) => !u.createdById);
+                  const subsByParent = {};
+                  for (const u of filtered) {
+                    if (u.createdById) {
+                      if (!subsByParent[u.createdById]) subsByParent[u.createdById] = [];
+                      subsByParent[u.createdById].push(u);
+                    }
+                  }
+                  const rows = [];
+                  for (const primary of primaries) {
+                    rows.push(renderRow(primary, false));
+                    const subs = subsByParent[primary.id] || [];
+                    for (const sub of subs) {
+                      rows.push(renderRow(sub, true));
+                    }
+                  }
+                  // Also show subs whose parent isn't in the current filtered set
+                  const primaryIds = new Set(primaries.map((p) => p.id));
+                  const orphanSubs = filtered.filter((u) => u.createdById && !primaryIds.has(u.createdById));
+                  for (const sub of orphanSubs) {
+                    rows.push(renderRow(sub, true));
+                  }
+                  return rows;
+                })()}
               </tbody>
             </table>
           </div>

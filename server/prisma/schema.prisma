@@ -64,6 +64,10 @@ model User {
   approvedAt    DateTime?
   approvedById  String?
 
+  createdById   String?
+  createdBy     User?     @relation("UserCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdUsers  User[]    @relation("UserCreator")
+
   courseSubmissions Course[] @relation("CourseCreator")
   courseApprovals   Course[] @relation("CourseApprover")
 

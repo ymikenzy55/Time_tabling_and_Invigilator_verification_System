@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
-import { SkeletonCardGrid } from '@/components/ui/Skeleton';
+import { SkeletonCardGrid, Skeleton } from '@/components/ui/Skeleton';
 import { examinationSessionsApi } from '@/features/examinations/examinationSessionsApi';
 import { venuesApi } from '@/features/venues/venuesApi';
 import { usersApi } from '@/features/users/usersApi';
@@ -63,7 +63,7 @@ export const InvigilatorAssignmentsPage = () => {
   const scansQuery = useQuery({
     queryKey: ['venueScans', { examinationSessionId: selectedSession }],
     queryFn: () => attendanceApi.listVenueScans({ examinationSessionId: selectedSession }),
-    enabled: !!selectedSession && activeTab === 'checkins',
+    enabled: !!selectedSession,
     staleTime: 30_000,
     placeholderData: (prev) => prev,
   });
@@ -302,6 +302,32 @@ export const InvigilatorAssignmentsPage = () => {
       {/* Check-ins tab */}
       {selectedSession && activeTab === 'checkins' && (
         <>
+          {/* Summary stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            <div className="panel p-4 text-center">
+              <div className="text-2xl font-bold text-ink-900">{assignments.length}</div>
+              <div className="text-xs text-ink-500 mt-0.5">Total Assigned</div>
+            </div>
+            <div className="panel p-4 text-center">
+              <div className="text-2xl font-bold text-emerald-600">
+                {scans.filter((s) => s.result === 'RECORDED').length}
+              </div>
+              <div className="text-xs text-ink-500 mt-0.5">Checked In</div>
+            </div>
+            <div className="panel p-4 text-center">
+              <div className="text-2xl font-bold text-amber-600">
+                {Math.max(0, assignments.length - scans.filter((s) => s.result === 'RECORDED').length)}
+              </div>
+              <div className="text-xs text-ink-500 mt-0.5">Pending</div>
+            </div>
+            <div className="panel p-4 text-center">
+              <div className="text-2xl font-bold text-rose-600">
+                {scans.filter((s) => s.result !== 'RECORDED').length}
+              </div>
+              <div className="text-xs text-ink-500 mt-0.5">Rejected</div>
+            </div>
+          </div>
+
           {scansQuery.isLoading ? (
             <SkeletonCardGrid count={4} lines={3} />
           ) : scans.length === 0 ? (
@@ -315,6 +341,7 @@ export const InvigilatorAssignmentsPage = () => {
               {scanDates.map((dateKey) => {
                 const dayScans = scansGrouped[dateKey];
                 const isToday = new Date().toDateString() === dateKey;
+                const recordedCount = dayScans.filter((s) => s.result === 'RECORDED').length;
 
                 return (
                   <div key={dateKey}>
@@ -324,7 +351,7 @@ export const InvigilatorAssignmentsPage = () => {
                         {isToday ? 'Today' : formatDate(dateKey)}
                       </h3>
                       <span className="text-xs text-ink-400">
-                        {dayScans.filter((s) => s.result === 'RECORDED').length} checked in
+                        {recordedCount} checked in
                       </span>
                     </div>
 
@@ -335,16 +362,29 @@ export const InvigilatorAssignmentsPage = () => {
                             <th className="px-4 py-2.5 text-left text-xs font-bold text-ink-600">Invigilator</th>
                             <th className="px-4 py-2.5 text-left text-xs font-bold text-ink-600">Staff ID</th>
                             <th className="px-4 py-2.5 text-left text-xs font-bold text-ink-600">Venue</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-bold text-ink-600">Time Slot</th>
                             <th className="px-4 py-2.5 text-left text-xs font-bold text-ink-600">Check-in Time</th>
                             <th className="px-4 py-2.5 text-left text-xs font-bold text-ink-600">Status</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-surface-divider bg-white">
                           {dayScans.map((s) => (
-                            <tr key={s.id} className="hover:bg-surface-subtle/30">
-                              <td className="px-4 py-3 text-sm font-medium text-ink-900">{s.user?.fullName}</td>
+                            <tr key={s.id} className={`hover:bg-surface-subtle/30 ${s.result === 'RECORDED' ? 'bg-emerald-50/30' : 'bg-rose-50/20'}`}>
+                              <td className="px-4 py-3 text-sm font-medium text-ink-900">
+                                <div className="flex items-center gap-2">
+                                  {s.result === 'RECORDED' ? (
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                                  ) : (
+                                    <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                                  )}
+                                  {s.user?.fullName}
+                                </div>
+                              </td>
                               <td className="px-4 py-3 text-sm text-ink-500">{s.user?.staffId || '—'}</td>
                               <td className="px-4 py-3 text-sm text-ink-700">{s.venue?.name}</td>
+                              <td className="px-4 py-3 text-sm text-ink-500">
+                                {s.slotAt ? getTimeSlot(s.slotAt) : '—'}
+                              </td>
                               <td className="px-4 py-3 text-sm text-ink-500">
                                 {new Date(s.scannedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                               </td>
@@ -367,13 +407,26 @@ export const InvigilatorAssignmentsPage = () => {
                         <div key={s.id} className={`card p-3 ${s.result === 'RECORDED' ? 'border-emerald-200' : 'border-rose-200'}`}>
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
-                              <div className="text-sm font-bold text-ink-900 truncate">{s.user?.fullName}</div>
+                              <div className="flex items-center gap-1.5">
+                                {s.result === 'RECORDED' ? (
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                                ) : (
+                                  <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                                )}
+                                <span className="text-sm font-bold text-ink-900 truncate">{s.user?.fullName}</span>
+                              </div>
                               <div className="flex items-center gap-1 text-xs text-ink-500 mt-1">
                                 <Building className="w-3 h-3" />
                                 {s.venue?.name}
                               </div>
-                              <div className="flex items-center gap-1 text-xs text-ink-400 mt-1">
-                                <Clock className="w-3 h-3" />
+                              {s.slotAt && (
+                                <div className="flex items-center gap-1 text-xs text-ink-400 mt-0.5">
+                                  <Clock className="w-3 h-3" />
+                                  {getTimeSlot(s.slotAt)}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1 text-xs text-ink-400 mt-0.5">
+                                <CheckCircle2 className="w-3 h-3" />
                                 {new Date(s.scannedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                               </div>
                             </div>
@@ -448,6 +501,8 @@ export const InvigilatorAssignmentsPage = () => {
         session={selectedSession}
         venues={venuesQuery.data || []}
         invigilators={invigilatorsQuery.data || []}
+        venuesLoading={venuesQuery.isLoading}
+        invigilatorsLoading={invigilatorsQuery.isLoading}
         onAssign={(payload) => manualAssignMutation.mutate(payload)}
         loading={manualAssignMutation.isPending}
       />
@@ -484,7 +539,7 @@ export const InvigilatorAssignmentsPage = () => {
   );
 };
 
-const ManualAssignModal = ({ open, onClose, session, venues, invigilators, onAssign, loading }) => {
+const ManualAssignModal = ({ open, onClose, session, venues, invigilators, venuesLoading, invigilatorsLoading, onAssign, loading }) => {
   const [venueId, setVenueId] = useState('');
   const [invigilatorId, setInvigilatorId] = useState('');
   const [date, setDate] = useState('');
@@ -516,21 +571,35 @@ const ManualAssignModal = ({ open, onClose, session, venues, invigilators, onAss
       <div className="space-y-3">
         <div>
           <label className="label">Invigilator</label>
-          <select className="input" value={invigilatorId} onChange={(e) => setInvigilatorId(e.target.value)}>
-            <option value="">Select invigilator…</option>
-            {invigilators.map((u) => (
-              <option key={u.id} value={u.id}>{u.fullName} {u.staffId ? `(${u.staffId})` : ''}</option>
-            ))}
-          </select>
+          {invigilatorsLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-9 w-full" />
+            </div>
+          ) : (
+            <select className="input" value={invigilatorId} onChange={(e) => setInvigilatorId(e.target.value)}>
+              <option value="">Select invigilator…</option>
+              {invigilators.map((u) => (
+                <option key={u.id} value={u.id}>{u.fullName} {u.staffId ? `(${u.staffId})` : ''}</option>
+              ))}
+            </select>
+          )}
         </div>
         <div>
           <label className="label">Venue</label>
-          <select className="input" value={venueId} onChange={(e) => setVenueId(e.target.value)}>
-            <option value="">Select venue…</option>
-            {venues.map((v) => (
-              <option key={v.id} value={v.id}>{v.name} (cap: {v.capacity})</option>
-            ))}
-          </select>
+          {venuesLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-9 w-full" />
+            </div>
+          ) : (
+            <select className="input" value={venueId} onChange={(e) => setVenueId(e.target.value)}>
+              <option value="">Select venue…</option>
+              {venues.map((v) => (
+                <option key={v.id} value={v.id}>{v.name} (cap: {v.capacity})</option>
+              ))}
+            </select>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>

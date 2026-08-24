@@ -9,6 +9,7 @@ import { usersApi } from '@/features/users/usersApi';
 import { coursesApi } from '@/features/courses/coursesApi';
 import { courseLevelsApi } from '@/features/courses/courseLevelsApi';
 import { semestersApi } from '@/features/academics/semestersApi';
+import { venueAssignmentsApi } from '@/features/venueAssignments/venueAssignmentsApi';
 
 const ROLE_LABELS = {
   SUPER_ADMIN: 'Exam Officer',
@@ -66,6 +67,19 @@ export const Sidebar = ({ open = true }) => {
     keepPreviousData: true,
   });
 
+  const todayCountQuery = useQuery({
+    queryKey: ['venue-assignments', 'today-count'],
+    queryFn: venueAssignmentsApi.todayCount,
+    enabled: user?.role === 'INVIGILATOR',
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  });
+  const todayDutyCount = todayCountQuery.data || 0;
+  const lastSeenDate = typeof window !== 'undefined' ? localStorage.getItem('invigilator-last-seen-duties') : null;
+  const today = new Date().toDateString();
+  const showDutyBadge = todayDutyCount > 0 && lastSeenDate !== today;
+
   return (
     <aside
       className={cn(
@@ -94,6 +108,7 @@ export const Sidebar = ({ open = true }) => {
               courseLevels={courseLevelsQuery.data || []}
               courseLevelsLoading={courseLevelsQuery.isLoading}
               semesters={semestersQuery.data || []}
+              showDutyBadge={showDutyBadge}
               expanded={open}
             />
           )
@@ -242,11 +257,12 @@ const SidebarItem = ({ entry, expanded = true }) => {
   );
 };
 
-const SidebarGroup = ({ entry, pendingCount = 0, pendingCourseCount = 0, courseLevels = [], courseLevelsLoading = false, semesters = [], expanded = true }) => {
+const SidebarGroup = ({ entry, pendingCount = 0, pendingCourseCount = 0, courseLevels = [], courseLevelsLoading = false, semesters = [], showDutyBadge = false, expanded = true }) => {
   const location = useLocation();
   const hasActiveChild = entry.items.some((i) => location.pathname.startsWith(i.to));
   const [open, setOpen] = useState(hasActiveChild);
   const Icon = entry.icon;
+  const hasDutiesToday = showDutyBadge && entry.items?.some((i) => i.to === '/my-assignments');
 
   return (
     <div className="mb-0.5">
@@ -266,6 +282,9 @@ const SidebarGroup = ({ entry, pendingCount = 0, pendingCourseCount = 0, courseL
             )}
             {entry.items?.some((i) => i.to === '/course-approvals') && pendingCourseCount > 0 && (
               <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500" />
+            )}
+            {hasDutiesToday && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-primary-600 animate-pulse" />
             )}
           </div>
         )}
@@ -293,8 +312,10 @@ const SidebarGroup = ({ entry, pendingCount = 0, pendingCourseCount = 0, courseL
             }
             const isApprovals = child.to === '/approvals';
             const isCourseApprovals = child.to === '/course-approvals';
+            const isDuties = child.to === '/my-assignments';
             const count = isCourseApprovals ? pendingCourseCount : pendingCount;
             const showBadge = (isApprovals || isCourseApprovals) && count > 0;
+            const showDutyBadgeOnItem = isDuties && showDutyBadge;
             return (
               <NavLink
                 key={child.to}
@@ -313,6 +334,11 @@ const SidebarGroup = ({ entry, pendingCount = 0, pendingCourseCount = 0, courseL
                 {showBadge && (
                   <span className="ml-auto inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[10px] font-bold bg-rose-600 text-white rounded-full">
                     {count > 99 ? '99+' : count}
+                  </span>
+                )}
+                {showDutyBadgeOnItem && (
+                  <span className="ml-auto inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[10px] font-bold bg-primary-600 text-white rounded-full">
+                    Today
                   </span>
                 )}
               </NavLink>

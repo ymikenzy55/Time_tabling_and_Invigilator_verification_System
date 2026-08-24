@@ -43,6 +43,11 @@ export const usersController = {
     return ApiResponse.created(res, { user });
   }),
 
+  createDelegate: asyncHandler(async (req, res) => {
+    const user = await usersService.createDelegate(req.body, req.user);
+    return ApiResponse.created(res, { user });
+  }),
+
   listPendingApprovals: asyncHandler(async (req, res) => {
     const users = await usersService.listPendingApprovals();
     return ApiResponse.ok(res, { users });

@@ -3,6 +3,7 @@ import { ApiError } from '../../utils/ApiError.js';
 import { courseLevelsService } from '../courseLevels/courseLevels.service.js';
 import { logAudit } from '../../utils/auditLog.js';
 import { normalizeDepartmentName, linkDepartmentToUser } from './departmentAutoLink.js';
+import { cache } from '../../utils/cache.js';
 
 const publicSelect = {
   id: true,
@@ -36,24 +37,29 @@ const syncDepartmentHeadsByName = async (department) => {
 
 export const departmentsService = {
   async listNames() {
-    return prisma.department.findMany({
-      orderBy: { name: 'asc' },
-      select: { id: true, name: true, code: true },
-    });
+    return cache.remember('departments:names', 60_000, async () =>
+      prisma.department.findMany({
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true, code: true },
+      })
+    );
   },
 
   async list({ facultyId, q } = {}) {
-    return prisma.department.findMany({
-      where: {
-        ...(facultyId ? { facultyId } : {}),
-        ...(q ? { OR: [
-          { name: { contains: q, mode: 'insensitive' } },
-          { code: { contains: q, mode: 'insensitive' } },
-        ]} : {}),
-      },
-      orderBy: { name: 'asc' },
-      select: publicSelect,
-    });
+    const cacheKey = `departments:list:${facultyId || 'all'}:${q || 'all'}`;
+    return cache.remember(cacheKey, 30_000, async () =>
+      prisma.department.findMany({
+        where: {
+          ...(facultyId ? { facultyId } : {}),
+          ...(q ? { OR: [
+            { name: { contains: q, mode: 'insensitive' } },
+            { code: { contains: q, mode: 'insensitive' } },
+          ]} : {}),
+        },
+        orderBy: { name: 'asc' },
+        select: publicSelect,
+      })
+    );
   },
 
   async getById(id) {
@@ -132,6 +138,7 @@ export const departmentsService = {
     });
 
     await syncDepartmentHeadsByName(department);
+    cache.clear('departments:names');
 
     logAudit({
       actorId: actor.id,
@@ -170,6 +177,7 @@ export const departmentsService = {
       data: { name, code, facultyId },
       select: publicSelect,
     });
+    cache.clear('departments:names');
 
     logAudit({
       actorId: actor.id,
@@ -198,6 +206,7 @@ export const departmentsService = {
       if (err.code === 'P2025') throw ApiError.notFound('Department not found.');
       throw err;
     }
+    cache.clear('departments:names');
 
     logAudit({
       actorId: actor.id,

@@ -1,4 +1,5 @@
 import { notificationsService } from './notifications.service.js';
+import { asyncHandler } from '../../utils/asyncHandler.js';
 
 export const notificationsController = {
   list: async (req, res) => {
@@ -29,4 +30,17 @@ export const notificationsController = {
     await notificationsService.markByType(req.user.id, req.body.type);
     res.json({ ok: true });
   },
+
+  delegateMessage: asyncHandler(async (req, res) => {
+    const { reason, delegateName, delegateEmail, originalInvigilator, originalInvigilatorStaffId } = req.body;
+    await notificationsService.sendDelegateMessage({
+      reason,
+      delegateName,
+      delegateEmail,
+      originalInvigilator,
+      originalInvigilatorStaffId,
+      senderId: req.user.id,
+    });
+    res.json({ ok: true });
+  }),
 };

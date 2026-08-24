@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,7 +12,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Badge } from '@/components/ui/Badge';
-import { SkeletonCard } from '@/components/ui/Skeleton';
+import { SkeletonCard, SkeletonTable } from '@/components/ui/Skeleton';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { examinationSessionsApi } from '@/features/examinations/examinationSessionsApi';
 import { invigilationsApi } from '@/features/examinations/invigilationsApi';
@@ -229,10 +229,10 @@ export const ExaminationsPage = () => {
     <>
       <PageHeader
         title="Examination Sessions"
-        description="Create sessions and assign invigilators to approved courses."
+        description="Create exam sessions and manage invigilator assignments."
         actions={
           <button className="btn-primary" onClick={openSessionCreate}>
-            <Plus className="w-4 h-4" /> Add session
+            <Plus className="w-4 h-4" /> Create Exam Session
           </button>
         }
       />
@@ -254,7 +254,7 @@ export const ExaminationsPage = () => {
             </div>
           ) : sessions.length === 0 ? (
             <div className="p-6">
-              <EmptyState icon={Calendar} title="No sessions yet" description="Create an examination session to assign invigilators." />
+              <EmptyState icon={Calendar} title="No sessions yet" description="Create an exam session to get started." />
             </div>
           ) : (
             <div className="divide-y divide-surface-divider max-h-[600px] overflow-y-auto">
@@ -316,16 +316,18 @@ export const ExaminationsPage = () => {
 
               <div className="px-4 py-3 border-b border-surface-border flex items-center justify-between">
                 <div className="text-sm font-medium text-ink-700">Invigilations</div>
-                <button className="btn-primary btn-sm" onClick={openInvigilationCreate}>
-                  <Plus className="w-4 h-4" /> Assign invigilator
-                </button>
+                <Link className="btn-primary btn-sm" to="/invigilator-assignments">
+                  <ClipboardList className="w-4 h-4" /> Manage Invigilators
+                </Link>
               </div>
 
               {invigilationsQuery.isLoading ? (
-                <div className="p-10 grid place-items-center text-ink-500"><Loader2 className="w-5 h-5 animate-spin" /></div>
+                <div className="p-4">
+                  <SkeletonTable rows={4} cols={4} />
+                </div>
               ) : invigilations.length === 0 ? (
                 <div className="p-10">
-                  <EmptyState icon={ClipboardList} title="No invigilations yet" description="Assign an invigilator to a course in this session." />
+                  <EmptyState icon={ClipboardList} title="No invigilations yet" description="Use the Invigilator Assignments page to assign invigilators to courses in this session." />
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -412,7 +414,7 @@ export const ExaminationsPage = () => {
       <Modal
         open={sessionModal.open}
         onClose={closeSessionModal}
-        title={sessionModal.session ? 'Edit session' : 'Add session'}
+        title={sessionModal.session ? 'Edit Exam Session' : 'Create Exam Session'}
       >
         <form onSubmit={sessionForm.handleSubmit((v) => sessionModal.session ? updateSession.mutate({ id: sessionModal.session.id, payload: v }) : createSession.mutate(v))} className="space-y-4">
           <div>

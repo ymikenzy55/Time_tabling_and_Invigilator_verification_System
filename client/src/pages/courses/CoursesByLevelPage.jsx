@@ -415,10 +415,11 @@ export const CoursesByLevelPage = () => {
       <Modal
         open={modalOpen}
         onClose={closeModal}
+        size="lg"
         title={selected ? 'Edit course' : `Add course — ${semesterLabel}, Level ${level}`}
         description={selected ? 'Update course details.' : `Create a new course for ${semesterLabel.toLowerCase()}, Level ${level}.`}
       >
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Code</label>
@@ -430,19 +431,21 @@ export const CoursesByLevelPage = () => {
               <input className="input bg-surface-subtle" value={`Level ${level}`} disabled />
             </div>
           </div>
-          <div>
-            <label className="label">Title</label>
-            <input className="input" {...register('title')} />
-            {errors.title && <p className="field-error">{errors.title.message}</p>}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Title</label>
+              <input className="input" {...register('title')} />
+              {errors.title && <p className="field-error">{errors.title.message}</p>}
+            </div>
+            <div>
+              <label className="label">Instructor</label>
+              <input className="input" {...register('instructorName')} />
+              {errors.instructorName && <p className="field-error">{errors.instructorName.message}</p>}
+            </div>
           </div>
           <div>
             <label className="label">Semester</label>
             <input className="input bg-surface-subtle" value={semesterLabel} disabled />
-          </div>
-          <div>
-            <label className="label">Instructor</label>
-            <input className="input" {...register('instructorName')} />
-            {errors.instructorName && <p className="field-error">{errors.instructorName.message}</p>}
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
@@ -459,19 +462,21 @@ export const CoursesByLevelPage = () => {
               <input className="input" type="number" {...register('examDurationMinutes')} />
             </div>
           </div>
-          <div>
-            <label className="label">Special requirements</label>
-            <textarea className="input min-h-[80px]" {...register('specialRequirements')} />
+          <div className="grid grid-cols-2 gap-3 items-start">
+            <div>
+              <label className="label">Special requirements</label>
+              <textarea className="input min-h-[44px]" {...register('specialRequirements')} />
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer select-none mt-7">
+              <input
+                type="checkbox"
+                {...register('isPractical')}
+                className="w-4 h-4 rounded border-surface-border text-primary-600 focus:ring-primary-500"
+              />
+              <span className="text-sm text-ink-700">This is a practical course</span>
+            </label>
           </div>
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              {...register('isPractical')}
-              className="w-4 h-4 rounded border-surface-border text-primary-600 focus:ring-primary-500"
-            />
-            <span className="text-sm text-ink-700">This is a practical course</span>
-          </label>
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex justify-end gap-2 pt-1">
             <button type="button" className="btn-secondary" onClick={closeModal}>Cancel</button>
             <button type="submit" className="btn-primary" disabled={isSubmitting}>
               {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}

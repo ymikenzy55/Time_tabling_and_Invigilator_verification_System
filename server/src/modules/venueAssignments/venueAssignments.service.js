@@ -44,6 +44,7 @@ export const venueAssignmentsService = {
 
     const invigilators = await prisma.user.findMany({
       where: { role: 'INVIGILATOR', status: 'ACTIVE' },
+      select: { id: true, fullName: true, email: true, staffId: true, departmentId: true },
       orderBy: { fullName: 'asc' },
     });
 
@@ -54,7 +55,7 @@ export const venueAssignmentsService = {
     const entries = await prisma.invigilation.findMany({
       where: { examinationSessionId },
       include: {
-        course: { select: { id: true, code: true, title: true, studentCount: true } },
+        course: { select: { id: true, code: true, title: true, studentCount: true, departmentId: true } },
         venue: { select: { id: true, name: true, capacity: true } },
       },
       orderBy: { scheduledAt: 'asc' },
@@ -79,9 +80,11 @@ export const venueAssignmentsService = {
       if (!entry.venueId) continue;
       const key = `${entry.venueId}_${entry.scheduledAt.getTime()}`;
       if (!venueSlotGroups.has(key)) {
-        venueSlotGroups.set(key, { venueId: entry.venueId, slotAt: entry.scheduledAt, students: 0 });
+        venueSlotGroups.set(key, { venueId: entry.venueId, slotAt: entry.scheduledAt, students: 0, deptIds: new Set() });
       }
-      venueSlotGroups.get(key).students += entry.course?.studentCount || 0;
+      const group = venueSlotGroups.get(key);
+      group.students += entry.course?.studentCount || 0;
+      if (entry.course?.departmentId) group.deptIds.add(entry.course.departmentId);
     }
 
     let invigilatorCursor = 0;
@@ -90,6 +93,7 @@ export const venueAssignmentsService = {
 
       for (let i = 0; i < count; i++) {
         // Find an invigilator who doesn't have a conflict at this time slot
+        // and is not from the same department as the courses being examined
         let attempts = 0;
         let invigilator = null;
 
@@ -99,19 +103,22 @@ export const venueAssignmentsService = {
           attempts++;
 
           const existingSlots = invigilatorSlots.get(candidate.id) || [];
-          const hasConflict = existingSlots.some((s) => isSameTimeSlot(s.slotAt, group.slotAt));
+          const hasConflict = existingSlots.some((s) =>
+            isSameTimeSlot(s.slotAt, group.slotAt)
+          );
+          const sameDepartment = candidate.departmentId && group.deptIds.has(candidate.departmentId);
 
-          if (!hasConflict) {
+          if (!hasConflict && !sameDepartment) {
             invigilator = candidate;
             break;
           }
         }
 
-        // If no invigilator found without conflict, allow the assignment anyway
-        // (the constraint is best-effort with limited invigilators)
+        // If no invigilator found without conflict, skip this slot
+        // (do NOT assign with a conflict — better to leave unassigned than double-book)
         if (!invigilator) {
-          invigilator = invigilators[invigilatorCursor % invigilators.length];
-          invigilatorCursor++;
+          console.warn(`No invigilator available for venue ${group.venueId} at ${group.slotAt} without conflict. Skipping.`);
+          continue;
         }
 
         const slots = invigilatorSlots.get(invigilator.id) || [];
@@ -142,8 +149,8 @@ export const venueAssignmentsService = {
       await createNotification({
         userId: row.invigilatorId,
         type: 'INVIGILATION_ASSIGNED',
-        title: 'Venue invigilation assignment',
-        message: 'You have been assigned to invigilate exam venues. Check your assignments for details.',
+        title: 'Examination Invigilation Duty',
+        message: 'You have been assigned invigilation duties for upcoming examinations. Review your duty schedule for venue and time details.',
         link: '/my-assignments',
         data: { examinationSessionId },
       }).catch(() => {});
@@ -169,6 +176,31 @@ export const venueAssignmentsService = {
   async manualAssign({ examinationSessionId, venueId, invigilatorId, slotAt }, actor) {
     if (actor.role !== 'SUPER_ADMIN') {
       throw ApiError.forbidden('Only exam officers can assign invigilators.');
+    }
+
+    // Constraint: invigilator must not be from the same department as the courses being examined
+    const invigilator = await prisma.user.findUnique({
+      where: { id: invigilatorId },
+      select: { id: true, departmentId: true, role: true },
+    });
+    if (!invigilator || invigilator.role !== 'INVIGILATOR') {
+      throw ApiError.badRequest('Assigned user must be an invigilator.');
+    }
+
+    if (invigilator.departmentId) {
+      const sameDeptEntries = await prisma.invigilation.findFirst({
+        where: {
+          examinationSessionId,
+          venueId,
+          scheduledAt: new Date(slotAt),
+          course: { departmentId: invigilator.departmentId },
+        },
+      });
+      if (sameDeptEntries) {
+        throw ApiError.badRequest(
+          'This invigilator belongs to the same department as the course being examined. Assign an invigilator from a different department.'
+        );
+      }
     }
 
     // Check: invigilator must not be assigned to a different venue at the same time slot
@@ -233,8 +265,8 @@ export const venueAssignmentsService = {
     await createNotification({
       userId: invigilatorId,
       type: 'INVIGILATION_ASSIGNED',
-      title: 'Venue invigilation assignment',
-      message: `You have been assigned to ${assignment.venue.name} on ${new Date(slotAt).toLocaleDateString()}.`,
+      title: 'Examination Invigilation Duty',
+      message: `You have been assigned to ${assignment.venue.name} on ${new Date(slotAt).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}. Review your duty schedule for details.`,
       link: '/my-assignments',
       data: { examinationSessionId, venueId },
     }).catch(() => {});
@@ -285,24 +317,98 @@ export const venueAssignmentsService = {
       where.invigilatorId = actor.id;
     }
 
-    return prisma.venueAssignment.findMany({
+    const assignments = await prisma.venueAssignment.findMany({
       where,
       orderBy: [{ slotAt: 'asc' }, { venueId: 'asc' }],
       select: publicSelect,
     });
+
+    if (assignments.length === 0 || !examinationSessionId) return assignments;
+
+    const invigilations = await prisma.invigilation.findMany({
+      where: { examinationSessionId },
+      select: {
+        venueId: true,
+        scheduledAt: true,
+        course: { select: { id: true, code: true, title: true } },
+      },
+    });
+
+    const courseByVenueSlot = new Map();
+    for (const inv of invigilations) {
+      const slotHour = getTimeSlotHour(inv.scheduledAt);
+      const dateStr = new Date(inv.scheduledAt).toDateString();
+      const key = `${inv.venueId}_${dateStr}_${slotHour}`;
+      if (!courseByVenueSlot.has(key)) courseByVenueSlot.set(key, []);
+      const existing = courseByVenueSlot.get(key);
+      if (!existing.some((c) => c.id === inv.course.id)) {
+        existing.push(inv.course);
+      }
+    }
+
+    return assignments.map((a) => {
+      const slotHour = getTimeSlotHour(a.slotAt);
+      const dateStr = new Date(a.slotAt).toDateString();
+      const key = `${a.venue?.id}_${dateStr}_${slotHour}`;
+      return { ...a, courses: courseByVenueSlot.get(key) || [] };
+    });
   },
 
   async myAssignments(actor) {
-    return prisma.venueAssignment.findMany({
+    const assignments = await prisma.venueAssignment.findMany({
       where: { invigilatorId: actor.id },
       orderBy: [{ slotAt: 'asc' }],
       select: publicSelect,
+    });
+
+    if (assignments.length === 0) return assignments;
+
+    const sessionIds = [...new Set(assignments.map((a) => a.examinationSession.id))];
+    const invigilations = await prisma.invigilation.findMany({
+      where: { examinationSessionId: { in: sessionIds } },
+      select: {
+        examinationSessionId: true,
+        venueId: true,
+        scheduledAt: true,
+        course: { select: { id: true, code: true, title: true } },
+      },
+    });
+
+    const courseByVenueSlot = new Map();
+    for (const inv of invigilations) {
+      const slotHour = getTimeSlotHour(inv.scheduledAt);
+      const dateStr = new Date(inv.scheduledAt).toDateString();
+      const key = `${inv.venueId}_${inv.examinationSessionId}_${dateStr}_${slotHour}`;
+      if (!courseByVenueSlot.has(key)) courseByVenueSlot.set(key, []);
+      const existing = courseByVenueSlot.get(key);
+      if (!existing.some((c) => c.id === inv.course.id)) {
+        existing.push(inv.course);
+      }
+    }
+
+    return assignments.map((a) => {
+      const slotHour = getTimeSlotHour(a.slotAt);
+      const dateStr = new Date(a.slotAt).toDateString();
+      const key = `${a.venue.id}_${a.examinationSession.id}_${dateStr}_${slotHour}`;
+      return { ...a, courses: courseByVenueSlot.get(key) || [] };
     });
   },
 
   async invigilatorCount() {
     return prisma.user.count({
       where: { role: 'INVIGILATOR', status: 'ACTIVE' },
+    });
+  },
+
+  async todayCount(invigilatorId) {
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    return prisma.venueAssignment.count({
+      where: {
+        invigilatorId,
+        slotAt: { gte: startOfDay, lte: endOfDay },
+      },
     });
   },
 };

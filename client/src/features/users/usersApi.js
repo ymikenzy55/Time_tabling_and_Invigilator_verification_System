@@ -12,4 +12,5 @@ export const usersApi = {
   setStatus: (id, payload) => api.patch(`/users/${id}/status`, payload).then((r) => r.data.user),
   listPeerDepartmentHeads: () => api.get('/users/department-heads/peers').then((r) => r.data.users),
   createPeerDepartmentHead: (payload) => api.post('/users/department-heads', payload).then((r) => r.data.user),
+  createDelegate: (payload) => api.post('/users/delegate', payload).then((r) => r.data.user),
 };

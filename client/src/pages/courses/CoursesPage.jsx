@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import {
-  Plus, Loader2, Search, Pencil, Trash2, Send, CheckCircle2, BookOpen, CheckSquare, Square, Clock, AlertCircle, CalendarDays, Wand2,
+  Plus, Loader2, Search, Pencil, Trash2, Send, CheckCircle2, BookOpen, CheckSquare, Square, Clock, AlertCircle, CalendarDays,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -58,7 +57,6 @@ const statusBadge = {
 export const CoursesPage = () => {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const navigate = useNavigate();
   const confirm = useConfirm();
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
@@ -445,14 +443,6 @@ export const CoursesPage = () => {
                 {user.departmentName}
               </span>
             ) : null}
-            {isAdmin && (
-              <button
-                className="btn-primary"
-                onClick={() => navigate('/timetable', { state: { generate: true } })}
-              >
-                <Wand2 className="w-4 h-4" /> Generate Timetable
-              </button>
-            )}
             {selectedDrafts.length > 0 && (
               <button
                 className="btn-primary"
@@ -465,7 +455,7 @@ export const CoursesPage = () => {
             )}
             {allowCreate ? (
               <button className="btn-secondary" onClick={openCreate}>
-                <Plus className="w-4 h-4" /> Add course
+                <Plus className="w-4 h-4" /> Add New Course
               </button>
             ) : null}
           </div>
@@ -545,7 +535,7 @@ export const CoursesPage = () => {
               description={allowCreate ? 'Create a course to start planning examinations.' : 'Courses will appear here once your department is linked and ready.'}
               action={allowCreate ? (
                 <button className="btn-primary" onClick={openCreate}>
-                  <Plus className="w-4 h-4" /> Add course
+                  <Plus className="w-4 h-4" /> Add New Course
                 </button>
               ) : null}
             />
@@ -646,7 +636,7 @@ export const CoursesPage = () => {
       <Modal
         open={modalOpen}
         onClose={closeModal}
-        title={selected ? 'Edit course' : 'Add course'}
+        title={selected ? 'Edit Course' : 'Add New Course'}
         description={selected ? 'Update course details.' : 'Create a new course.'}
       >
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

@@ -33,4 +33,10 @@ export const cache = {
       store.clear();
     }
   },
+
+  clearPrefix(prefix) {
+    for (const key of store.keys()) {
+      if (key.startsWith(prefix)) store.delete(key);
+    }
+  },
 };

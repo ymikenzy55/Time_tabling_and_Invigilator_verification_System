@@ -6,4 +6,5 @@ export const notificationsApi = {
   markRead: (id) => api.post(`/notifications/${id}/read`),
   markAllRead: () => api.post('/notifications/read-all'),
   markReadByType: (type) => api.post('/notifications/read-by-type', { type }),
+  sendDelegateMessage: (payload) => api.post('/notifications/delegate-message', payload),
 };

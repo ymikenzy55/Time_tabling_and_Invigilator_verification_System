@@ -55,7 +55,7 @@ export const AuthLayout = () => {
 
             {/* White card overlapping the header */}
             <div className="relative z-10 -mt-12 px-4 sm:px-6 pb-8">
-              <div className="rounded-lg bg-white px-6 py-7 sm:px-8 text-ink-900 border border-surface-border">
+              <div className="rounded-lg bg-white px-6 py-7 sm:px-8 text-ink-900 border border-surface-border min-h-[420px]">
                 <Outlet />
               </div>
             </div>

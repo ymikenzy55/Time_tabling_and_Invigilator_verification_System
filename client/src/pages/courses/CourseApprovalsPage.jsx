@@ -274,7 +274,7 @@ export const CourseApprovalsPage = () => {
               className="btn-secondary btn-sm"
               onClick={() => { setSelectedDeptId(null); setSelectedLevel(null); }}
             >
-              <ArrowLeft className="w-4 h-4" /> All departments
+              <ArrowLeft className="w-4 h-4" /> Back to departments
             </button>
             <div className="font-bold text-ink-900">{selectedDept.name}</div>
             <span className="inline-flex items-center gap-1 text-xs font-medium bg-amber-100 text-amber-800 rounded-full px-2.5 py-1">
@@ -286,7 +286,7 @@ export const CourseApprovalsPage = () => {
               disabled={approveAllMutation.isPending || visibleCourses.length === 0}
             >
               {approveAllMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
-              Approve all ({visibleCourses.length})
+              Approve all in department ({visibleCourses.length})
             </button>
           </div>
 

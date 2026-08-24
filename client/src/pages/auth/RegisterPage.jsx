@@ -10,6 +10,7 @@ import {
   ArrowLeft, ArrowRight, Check,
 } from 'lucide-react';
 import { registrationApi } from '@/features/registration/registrationApi';
+import { departmentsApi } from '@/features/academics/departmentsApi';
 import { strongPassword } from '@/lib/passwordRules';
 import { PasswordChecklist, MatchIndicator } from '@/features/users/PasswordChecklist';
 
@@ -64,6 +65,31 @@ const formatDate = (d) =>
     year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   }) : '';
 
+const SuccessScreen = ({ onDone }) => {
+  useEffect(() => {
+    const timer = setTimeout(onDone, 3500);
+    return () => clearTimeout(timer);
+  }, [onDone]);
+
+  return (
+    <div className="panel p-8 text-center">
+      <div className="w-12 h-12 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 grid place-items-center mx-auto mb-4">
+        <CheckCircle2 className="w-6 h-6" />
+      </div>
+      <h2 className="text-xl font-bold text-ink-900">Application submitted</h2>
+      <p className="mt-2 text-sm text-ink-500">
+        Your account is under review. Once a Super Admin approves it, you can sign in.
+      </p>
+      <p className="mt-3 text-xs text-ink-400">
+        Redirecting to sign in…
+      </p>
+      <button className="btn-primary mt-4" onClick={onDone}>
+        Back to sign in
+      </button>
+    </div>
+  );
+};
+
 export const RegisterPage = () => {
   const navigate = useNavigate();
   const [role, setRole] = useState('');
@@ -73,6 +99,12 @@ export const RegisterPage = () => {
     queryKey: ['registration', 'status'],
     queryFn: () => registrationApi.status(),
     refetchInterval: 60000,
+  });
+
+  const departmentsQuery = useQuery({
+    queryKey: ['departments', 'public'],
+    queryFn: () => departmentsApi.listNames(),
+    staleTime: 5 * 60_000,
   });
 
   const schema = useMemo(() => buildSchema(role), [role]);
@@ -148,20 +180,7 @@ export const RegisterPage = () => {
   const nextOpen = roles.find((r) => !r.open && r.opensAt && new Date(r.opensAt) > new Date());
 
   if (submitMutation.isSuccess) {
-    return (
-      <div className="panel p-8 text-center">
-        <div className="w-12 h-12 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 grid place-items-center mx-auto mb-4">
-          <CheckCircle2 className="w-6 h-6" />
-        </div>
-        <h2 className="text-xl font-bold text-ink-900">Application submitted</h2>
-        <p className="mt-2 text-sm text-ink-500">
-          Your account is under review. Once a Super Admin approves it, you can sign in.
-        </p>
-        <button className="btn-primary mt-6" onClick={() => navigate('/login', { replace: true })}>
-          Back to sign in
-        </button>
-      </div>
-    );
+    return <SuccessScreen onDone={() => navigate('/login', { replace: true })} />;
   }
 
   if (!openRoles.length) {
@@ -296,7 +315,7 @@ export const RegisterPage = () => {
             <div className="space-y-4">
               <div>
                 <label className="label">Full name</label>
-                <input className="input" placeholder="Jane Doe" {...rf('fullName')} />
+                <input className="input" placeholder="Enter your name" {...rf('fullName')} />
                 {errors.fullName && <p className="field-error">{errors.fullName.message}</p>}
               </div>
 
@@ -338,15 +357,29 @@ export const RegisterPage = () => {
                 <label className="label">
                   {role === 'DEPARTMENT_HEAD' ? 'Department you are heading' : 'Your department'}
                 </label>
-                <input
+                <select
                   className="input"
-                  placeholder="e.g. Computer Science"
                   {...rf('departmentName')}
-                />
+                  defaultValue=""
+                >
+                  <option value="" disabled>Select a department</option>
+                  {departmentsQuery.data?.map((dept) => (
+                    <option key={dept.id} value={dept.name}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
                 {errors.departmentName && <p className="field-error">{errors.departmentName.message}</p>}
-                <p className="text-xs text-ink-500 mt-1">
-                  Enter the full department name. If it already exists, you'll be linked to it; otherwise it will be created.
-                </p>
+                {departmentsQuery.isLoading && (
+                  <p className="text-xs text-ink-500 mt-1 flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Loading departments…
+                  </p>
+                )}
+                {departmentsQuery.data?.length === 0 && !departmentsQuery.isLoading && (
+                  <p className="text-xs text-ink-500 mt-1">
+                    No departments available yet. Please contact the Examination Office.
+                  </p>
+                )}
               </div>
             </div>
           )}

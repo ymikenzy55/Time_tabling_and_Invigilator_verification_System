@@ -37,6 +37,10 @@ const validateAssignment = async ({ examinationSessionId, courseId, invigilatorI
   const invigilator = await prisma.user.findUnique({ where: { id: invigilatorId } });
   if (!invigilator || invigilator.role !== 'INVIGILATOR') throw ApiError.badRequest('Assigned user must be an invigilator.');
 
+  if (invigilator.departmentId && course.departmentId === invigilator.departmentId) {
+    throw ApiError.badRequest('An invigilator cannot be assigned to a course from their own department. Assign an invigilator from a different department.');
+  }
+
   const duplicate = await prisma.invigilation.findFirst({
     where: {
       ...(id ? { id: { not: id } } : {}),
@@ -126,8 +130,8 @@ export const invigilationsService = {
     await createNotification({
       userId: invigilatorId,
       type: 'INVIGILATION_ASSIGNED',
-      title: 'New invigilation assignment',
-      message: `You have been assigned to invigilate ${courseLabel} on ${new Date(scheduledAt).toLocaleString()}.`,
+      title: 'Examination Invigilation Duty',
+      message: `You have been assigned to invigilate ${courseLabel} on ${new Date(scheduledAt).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} at ${new Date(scheduledAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}.`,
       link: '/my-assignments',
       data: { invigilationId: invigilation.id },
     });
@@ -205,8 +209,8 @@ export const invigilationsService = {
     await createNotification({
       userId: replacementId,
       type: 'INVIGILATION_REPLACEMENT',
-      title: 'You are a replacement invigilator',
-      message: 'You have been designated as a replacement for an invigilation. Check your assignments.',
+      title: 'Replacement Invigilation Duty',
+      message: 'You have been designated as a replacement invigilator for an upcoming examination. Review your duty schedule for details.',
       link: '/my-assignments',
       data: { invigilationId: id },
     });

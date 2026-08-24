@@ -74,4 +74,15 @@ export const notificationsService = {
       data: { isRead: true },
     });
   },
+
+  async sendDelegateMessage({ reason, delegateName, delegateEmail, originalInvigilator, originalInvigilatorStaffId, senderId }) {
+    const message = `${originalInvigilator} (Staff ID: ${originalInvigilatorStaffId || 'N/A'}) has created a delegate invigilator: ${delegateName} (${delegateEmail}). Reason: ${reason}`;
+    return notifyRole('SUPER_ADMIN', {
+      type: 'DELEGATE_INVIGILATOR',
+      title: 'Delegate Invigilator Created',
+      message,
+      link: '/invigilator-assignments',
+      data: { reason, delegateName, delegateEmail, originalInvigilator, senderId },
+    });
+  },
 };

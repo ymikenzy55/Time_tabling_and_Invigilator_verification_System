@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 @layer base {
-  html { font-family: 'Urbanist', ui-sans-serif, system-ui, sans-serif; }
-  body { @apply bg-surface-muted text-ink-700; }
+  html { font-family: 'Urbanist', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
+  body { @apply bg-surface-muted text-ink-700; font-family: 'Urbanist', ui-sans-serif, system-ui, sans-serif; }
 
   /* Green focus ring everywhere — replaces the neutral slate ring. */
   *:focus-visible { @apply outline-none ring-2 ring-primary-600 ring-offset-2 ring-offset-white; }
@@ -122,4 +122,111 @@
 @keyframes slide-up {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
+}
+
+/* ---------- Print styles for PDF export ---------- */
+.print-only { display: none; }
+
+@media print {
+  /* Hide everything on screen */
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+
+  /* Reset page */
+  body { background: white !important; color: black !important; }
+  @page { margin: 1.5cm; }
+
+  /* Print container */
+  .print-container {
+    color: #000;
+    font-family: 'Urbanist', Arial, sans-serif;
+    font-size: 12px;
+  }
+
+  /* Header with logo + university name */
+  .print-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 3px solid #000;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+  }
+  .print-logo {
+    width: 60px;
+    height: 60px;
+    object-fit: contain;
+  }
+  .print-header-text h1 {
+    font-size: 18px;
+    font-weight: bold;
+    margin: 0;
+    color: #000;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .print-header-text h2 {
+    font-size: 14px;
+    font-weight: normal;
+    margin: 4px 0 0 0;
+    color: #333;
+  }
+
+  /* Invigilator info */
+  .print-info {
+    display: flex;
+    gap: 32px;
+    margin-bottom: 12px;
+    font-size: 11px;
+    color: #333;
+  }
+  .print-info strong { color: #000; }
+
+  .print-divider {
+    border: none;
+    border-top: 1px solid #999;
+    margin: 12px 0;
+  }
+
+  /* Timetable table — B/W with clean lines */
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    color: #000;
+  }
+  .print-table thead th {
+    border: 1px solid #000;
+    background: #f0f0f0;
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: bold;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .print-table tbody td {
+    border: 1px solid #999;
+    padding: 8px 10px;
+    vertical-align: top;
+  }
+  .print-table tbody tr:nth-child(even) td {
+    background: #fafafa;
+  }
+  .print-date-cell {
+    font-weight: bold;
+    background: #f5f5f5 !important;
+    vertical-align: middle;
+  }
+
+  /* Footer */
+  .print-footer {
+    margin-top: 24px;
+    border-top: 1px solid #999;
+    padding-top: 8px;
+    text-align: center;
+    font-size: 10px;
+    color: #666;
+  }
+  .print-footer p { margin: 2px 0; }
 }

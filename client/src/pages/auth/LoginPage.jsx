@@ -105,7 +105,9 @@ export const LoginPage = () => {
             placeholder="you@university.edu"
             {...register('email')}
           />
-          {errors.email && <p className="field-error">{errors.email.message}</p>}
+          <div className="min-h-[20px]">
+            {errors.email && <p className="field-error">{errors.email.message}</p>}
+          </div>
         </div>
 
         <div>
@@ -130,7 +132,9 @@ export const LoginPage = () => {
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
-          {errors.password && <p className="field-error">{errors.password.message}</p>}
+          <div className="min-h-[20px]">
+            {errors.password && <p className="field-error">{errors.password.message}</p>}
+          </div>
         </div>
 
         <div className="flex justify-end">

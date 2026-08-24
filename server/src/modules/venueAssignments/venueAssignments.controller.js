@@ -36,4 +36,9 @@ export const venueAssignmentsController = {
     const count = await venueAssignmentsService.invigilatorCount();
     return ApiResponse.ok(res, { count });
   }),
+
+  todayCount: asyncHandler(async (req, res) => {
+    const count = await venueAssignmentsService.todayCount(req.user.id);
+    return ApiResponse.ok(res, { count });
+  }),
 };

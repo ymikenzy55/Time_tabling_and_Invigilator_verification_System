@@ -87,7 +87,7 @@ export const AppRoutes = () => (
 
       {/* Venues + Timetable */}
       <Route path="/venues" element={<ProtectedRoute roles={SUPER_ADMIN}><VenuesPage /></ProtectedRoute>} />
-      <Route path="/timetable" element={<ProtectedRoute roles={['SUPER_ADMIN', 'DEPARTMENT_HEAD', 'INVIGILATOR']}><TimetablePage /></ProtectedRoute>} />
+      <Route path="/timetable" element={<ProtectedRoute roles={['SUPER_ADMIN', 'DEPARTMENT_HEAD']}><TimetablePage /></ProtectedRoute>} />
 
       {/* Examinations */}
       <Route path="/examinations" element={<ProtectedRoute roles={SUPER_ADMIN}><ExaminationsPage /></ProtectedRoute>} />

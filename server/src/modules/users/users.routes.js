@@ -8,6 +8,7 @@ import {
   rejectUserSchema,
   setStatusSchema,
   createPeerDepartmentHeadSchema,
+  createDelegateSchema,
 } from './users.validators.js';
 import { validate } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
@@ -36,6 +37,14 @@ router.post(
   requireRole('DEPARTMENT_HEAD'),
   validate(createPeerDepartmentHeadSchema),
   usersController.createPeerDepartmentHead,
+);
+
+// Invigilator delegate creation
+router.post(
+  '/delegate',
+  requireRole('INVIGILATOR'),
+  validate(createDelegateSchema),
+  usersController.createDelegate,
 );
 
 // Everything below this line is Super Admin only

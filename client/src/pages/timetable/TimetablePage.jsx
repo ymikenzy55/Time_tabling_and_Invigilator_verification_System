@@ -40,6 +40,7 @@ const generateSchema = z.object({
   startDate: z.string().min(1, 'Start date is required.'),
   durationWeeks: z.coerce.number().int().min(1, 'At least 1 week required.').max(10, 'Maximum 10 weeks.'),
   skipWeekends: z.boolean().default(true),
+  assignVenues: z.boolean().default(true),
   assignInvigilators: z.boolean().default(false),
 });
 
@@ -181,7 +182,8 @@ export const TimetablePage = () => {
   const generateMutation = useMutation({
     mutationFn: timetableApi.generate,
     onSuccess: (data) => {
-      toast.success(`Timetable generated: ${data.created}/${data.total} courses scheduled.`);
+      const venueMsg = data.venuesAssigned ? ' with venues' : ' without venues';
+      toast.success(`Timetable generated${venueMsg}: ${data.created}/${data.total} courses scheduled.`);
       qc.invalidateQueries({ queryKey: ['timetable'] });
       qc.invalidateQueries({ queryKey: ['invigilations'] });
       setResult(data);
@@ -270,7 +272,7 @@ export const TimetablePage = () => {
     formState: { errors: genErrors },
   } = useForm({
     resolver: zodResolver(generateSchema),
-    defaultValues: { semesterId: '', startDate: '', durationWeeks: 3, skipWeekends: true, assignInvigilators: false },
+    defaultValues: { semesterId: '', startDate: '', durationWeeks: 3, skipWeekends: true, assignVenues: true, assignInvigilators: false },
   });
 
   const watchSemesterId = watchGen('semesterId');
@@ -309,6 +311,7 @@ export const TimetablePage = () => {
       startDate: '',
       durationWeeks: 3,
       skipWeekends: true,
+      assignVenues: true,
       assignInvigilators: false,
     });
     setGenerateOpen(true);
@@ -376,12 +379,12 @@ export const TimetablePage = () => {
   };
 
   const onGenerate = (values) => {
-    const { assignInvigilators: assignNow, durationWeeks, ...rest } = values;
+    const { assignInvigilators: assignNow, assignVenues, durationWeeks, ...rest } = values;
     // Compute endDate from startDate + durationWeeks
     const start = new Date(rest.startDate);
     const end = new Date(start);
     end.setDate(end.getDate() + (durationWeeks * 7) - 1);
-    const options = { ...rest, endDate: dateKey(end) };
+    const options = { ...rest, endDate: dateKey(end), assignVenues };
     setGenerateAssignInvigilators(assignNow);
     generateMutation.mutate({ examinationSessionId: sessionId, options });
   };
@@ -1146,19 +1149,37 @@ export const TimetablePage = () => {
             Skip weekends
           </label>
           <p className="text-xs text-ink-500">Weekends are skipped when the option above is checked, so the period may extend across more calendar days.</p>
-          {hasInvigilators && (
-            <div className="rounded-lg border border-primary-200 bg-primary-50 px-3 py-2.5 space-y-2">
+
+          {/* Generation options: venue + invigilator assignment */}
+          <div className="space-y-3 rounded-lg border border-surface-border bg-surface-subtle px-4 py-3">
+            <div className="text-sm font-bold text-ink-900">Generation Options</div>
+
+            {/* Venue assignment */}
+            <div className="space-y-1.5">
               <label className="flex items-center gap-2 text-sm text-ink-700 cursor-pointer">
-                <input type="checkbox" {...registerGen('assignInvigilators')} />
-                Assign invigilators to venues now
+                <input type="checkbox" {...registerGen('assignVenues')} />
+                Assign venues to exams
               </label>
-              <p className="text-xs text-ink-500">
+              <p className="text-xs text-ink-500 pl-6">
+                {(venuesQuery.data || []).length > 0
+                  ? `${(venuesQuery.data || []).length} active venue${(venuesQuery.data || []).length === 1 ? '' : 's'} available. Venues will be auto-assigned based on capacity and student count.`
+                  : 'No venues found. Add venues first, or uncheck to generate without venue assignments.'}
+              </p>
+            </div>
+
+            {/* Invigilator assignment */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-2 text-sm text-ink-700 cursor-pointer">
+                <input type="checkbox" {...registerGen('assignInvigilators')} disabled={!hasInvigilators} />
+                Assign invigilators to venues
+              </label>
+              <p className="text-xs text-ink-500 pl-6">
                 {hasInvigilators
-                  ? 'Invigilators are registered. Check to auto-assign them during generation, or leave unchecked to assign later.'
+                  ? `${invigilatorCountQuery.data} active invigilator${invigilatorCountQuery.data === 1 ? '' : 's'} registered. Check to auto-assign them after timetable generation. Invigilators will not be assigned to their own department's exams.`
                   : 'No invigilators registered. You can assign them later after registration.'}
               </p>
             </div>
-          )}
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" className="btn-secondary" onClick={() => setGenerateOpen(false)}>Cancel</button>
             <button type="submit" className="btn-primary" disabled={generateMutation.isPending}>

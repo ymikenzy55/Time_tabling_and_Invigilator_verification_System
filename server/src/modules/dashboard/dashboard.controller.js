@@ -19,17 +19,31 @@ export const dashboardController = {
     }
 
     if (role === 'SUPER_ADMIN') {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+
       const [
-        totalUsers, pendingApprovals, openWindows,
-        coursesSubmitted, coursesApproved, upcomingSessions,
+        totalVenues, totalInvigilators, coursesSubmitted,
+        upcomingSessions, todaySessions, activeSessions,
         recentAudits,
       ] = await Promise.all([
-        prisma.user.count({ where: { status: 'ACTIVE' } }),
-        prisma.user.count({ where: { status: 'PENDING_APPROVAL' } }),
-        prisma.registrationWindow.count({ where: { opensAt: { lte: now }, closesAt: { gte: now } } }),
+        prisma.venue.count(),
+        prisma.user.count({ where: { role: 'INVIGILATOR', status: 'ACTIVE' } }),
         prisma.course.count({ where: { status: 'SUBMITTED' } }),
-        prisma.course.count({ where: { status: 'APPROVED' } }),
         prisma.examinationSession.count({ where: { startDate: { gt: now } } }),
+        prisma.venueAssignment.count({
+          where: {
+            slotAt: { gte: todayStart, lte: todayEnd },
+          },
+        }),
+        prisma.examinationSession.count({
+          where: {
+            startDate: { lte: now },
+            endDate: { gte: now },
+          },
+        }),
         prisma.auditLog.findMany({
           orderBy: { createdAt: 'desc' },
           take: 8,
@@ -42,12 +56,12 @@ export const dashboardController = {
 
       const data = {
         stats: [
-          { key: 'users',    label: 'Active Users',        value: totalUsers,       link: '/department-heads' },
-          { key: 'approvals',label: 'Pending Approvals',   value: pendingApprovals, link: '/approvals' },
-          { key: 'windows',  label: 'Open Registration Windows', value: openWindows, link: '/registration-windows' },
+          { key: 'venues',    label: 'Total Venues',        value: totalVenues,       link: '/examinations' },
+          { key: 'invigilators', label: 'Invigilators',     value: totalInvigilators, link: '/invigilators' },
           { key: 'submitted',label: 'Courses To Approve',  value: coursesSubmitted, link: '/course-approvals' },
-          { key: 'approved', label: 'Approved Courses',    value: coursesApproved,  link: '/courses' },
-          { key: 'exams',    label: 'Upcoming Exam Sessions', value: upcomingSessions, link: '/examinations' },
+          { key: 'upcoming', label: 'Upcoming Sessions',   value: upcomingSessions, link: '/examinations' },
+          { key: 'today',    label: "Today's Exams",       value: todaySessions,     link: '/timetable' },
+          { key: 'active',   label: 'Active Sessions',     value: activeSessions,    link: '/examinations' },
         ],
         recentActivity: recentAudits,
       };
@@ -93,18 +107,18 @@ export const dashboardController = {
     if (role === 'INVIGILATOR') {
       const soon = daysFromNow(7);
       const [total, upcoming, thisWeek, recent] = await Promise.all([
-        prisma.invigilation.count({ where: { invigilatorId: userId } }),
-        prisma.invigilation.count({ where: { invigilatorId: userId, scheduledAt: { gt: now } } }),
-        prisma.invigilation.count({
-          where: { invigilatorId: userId, scheduledAt: { gt: now, lte: soon } },
+        prisma.venueAssignment.count({ where: { invigilatorId: userId } }),
+        prisma.venueAssignment.count({ where: { invigilatorId: userId, slotAt: { gt: now } } }),
+        prisma.venueAssignment.count({
+          where: { invigilatorId: userId, slotAt: { gt: now, lte: soon } },
         }),
-        prisma.invigilation.findMany({
+        prisma.venueAssignment.findMany({
           where: { invigilatorId: userId },
-          orderBy: { scheduledAt: 'desc' },
+          orderBy: { slotAt: 'desc' },
           take: 6,
           select: {
-            id: true, scheduledAt: true,
-            course: { select: { code: true, title: true } },
+            id: true, slotAt: true,
+            venue: { select: { name: true, location: true } },
             examinationSession: { select: { name: true } },
           },
         }),
@@ -116,13 +130,13 @@ export const dashboardController = {
           { key: 'upcoming', label: 'Upcoming',            value: upcoming, link: '/my-assignments' },
           { key: 'week',     label: 'Within 7 Days',       value: thisWeek, link: '/my-assignments' },
         ],
-        recentActivity: recent.map((i) => ({
-          id: i.id,
+        recentActivity: recent.map((a) => ({
+          id: a.id,
           action: 'INVIGILATION.SCHEDULED',
-          createdAt: i.scheduledAt,
-          targetType: 'Invigilation',
-          targetId: i.id,
-          label: `${i.course?.code || ''} — ${i.course?.title || ''} (${i.examinationSession?.name || ''})`,
+          createdAt: a.slotAt,
+          targetType: 'VenueAssignment',
+          targetId: a.id,
+          label: `${a.venue?.name || ''} — ${a.examinationSession?.name || ''}`,
         })),
       };
       cache.set(cacheKey, data, 15_000);

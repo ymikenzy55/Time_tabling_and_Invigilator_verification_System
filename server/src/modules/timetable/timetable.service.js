@@ -122,6 +122,7 @@ const scheduleCourses = (courses, slots, venues) => {
     return groupStudents(b) - groupStudents(a);
   });
 
+  const hasVenues = venues.length > 0;
   // Sort venues by capacity ascending — first fit = best-fit (smallest that works).
   const sortedVenues = [...venues].sort((a, b) => a.capacity - b.capacity);
   const largestCapacity = sortedVenues[sortedVenues.length - 1]?.capacity || 0;
@@ -169,6 +170,19 @@ const scheduleCourses = (courses, slots, venues) => {
           if (diffDays === 3 && Math.random() < 0.10) return false;
         }
       }
+    }
+
+    // No-venue mode: skip venue allocation, just place into time slot.
+    if (!hasVenues) {
+      if (!deptLevelBusy.has(slot.key)) deptLevelBusy.set(slot.key, new Set());
+      if (!deptLevelDayBusy.has(dk)) deptLevelDayBusy.set(dk, new Set());
+      for (const k of deptLevelKeys) {
+        deptLevelBusy.get(slot.key).add(k);
+        deptLevelDayBusy.get(dk).add(k);
+        deptLevelLastDate.set(k, dk);
+      }
+      for (const course of group) placements.push({ course, slot, venue: null });
+      return true;
     }
 
     let remaining = venueRemaining.get(slot.key);
@@ -228,6 +242,16 @@ const scheduleCourses = (courses, slots, venues) => {
     const deptLevelKeys = group.map((c) => `${c.departmentId}:${c.level}`);
     for (const k of deptLevelKeys) {
       if (busy && busy.has(k)) return false;
+    }
+
+    // No-venue mode: skip venue allocation.
+    if (!hasVenues) {
+      if (!deptLevelBusy.has(slot.key)) deptLevelBusy.set(slot.key, new Set());
+      for (const k of deptLevelKeys) {
+        deptLevelBusy.get(slot.key).add(k);
+      }
+      for (const course of group) placements.push({ course, slot, venue: null });
+      return true;
     }
 
     let remaining = venueRemaining.get(slot.key);
@@ -297,11 +321,11 @@ const scheduleCourses = (courses, slots, venues) => {
           code: course.code,
           title: course.title,
           studentCount: course.studentCount || 0,
-          reason: (course.studentCount || 0) > largestCapacity
+          reason: hasVenues && (course.studentCount || 0) > largestCapacity
             ? 'Student count exceeds every venue capacity.'
             : group.length > 1
               ? 'This course is shared across departments and no single slot had enough venue capacity for all sections together.'
-              : 'No conflict-free slot with enough venue capacity in the selected period.',
+              : 'No conflict-free slot available in the selected period.',
         });
       }
     }
@@ -450,6 +474,7 @@ export const timetableService = {
       endDate,
       skipWeekends = true,
       clearExisting = true,
+      assignVenues = true,
     } = options;
 
     // Resolve the exam period: officer sets a start date and either an end
@@ -484,10 +509,12 @@ export const timetableService = {
 
     // Fetch venues, courses, and clear existing entries in parallel.
     const [venues, courses] = await Promise.all([
-      prisma.venue.findMany({
-        where: { isActive: true },
-        orderBy: { capacity: 'desc' },
-      }),
+      assignVenues
+        ? prisma.venue.findMany({
+            where: { isActive: true },
+            orderBy: { capacity: 'desc' },
+          })
+        : Promise.resolve([]),
       prisma.course.findMany({
         where: { status: 'APPROVED', semesterId: session.semesterId },
         orderBy: [{ isPractical: 'desc' }, { level: 'asc' }, { code: 'asc' }],
@@ -499,9 +526,9 @@ export const timetableService = {
         : Promise.resolve(),
     ]);
 
-    if (venues.length < MIN_VENUES) {
+    if (assignVenues && venues.length < MIN_VENUES) {
       throw ApiError.badRequest(
-        `At least ${MIN_VENUES} active venues are required before generating a timetable. Currently: ${venues.length}. Add venues first.`
+        `At least ${MIN_VENUES} active venues are required before generating a timetable. Currently: ${venues.length}. Add venues first or uncheck "Assign venues to exams".`
       );
     }
 
@@ -518,7 +545,7 @@ export const timetableService = {
       return {
         examinationSessionId,
         courseId: course.id,
-        venueId: venue.id,
+        venueId: venue?.id || null,
         scheduledAt,
         windowOpensAt: scheduledAt,
         windowClosesAt: new Date(slot.timestamp + SLOT_MINUTES * 60 * 1000 + 30 * 60 * 1000),
@@ -548,6 +575,7 @@ export const timetableService = {
       created: rows.length,
       total: courses.length,
       unscheduled,
+      venuesAssigned: assignVenues,
       period: { start: periodStart, end: periodEnd },
     };
   },

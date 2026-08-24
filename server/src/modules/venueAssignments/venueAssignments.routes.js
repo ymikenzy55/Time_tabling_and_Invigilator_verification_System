@@ -15,5 +15,6 @@ router.delete('/:id', requireRole('SUPER_ADMIN'), venueAssignmentsController.rem
 router.get('/', venueAssignmentsController.list);
 router.get('/my', requireRole('INVIGILATOR'), venueAssignmentsController.myAssignments);
 router.get('/invigilator-count', venueAssignmentsController.invigilatorCount);
+router.get('/today-count', requireRole('INVIGILATOR'), venueAssignmentsController.todayCount);
 
 export default router;

@@ -6,33 +6,39 @@ import { courseLevelsService } from '../courseLevels/courseLevels.service.js';
 import { normalizeDepartmentName, ensureDepartmentForName, linkDepartmentToUser } from '../departments/departmentAutoLink.js';
 import { invalidateAuthCache } from '../../middleware/auth.js';
 import { logAudit } from '../../utils/auditLog.js';
+import { cache } from '../../utils/cache.js';
 
 const publicSelect = {
   id: true, email: true, fullName: true, staffId: true, phone: true,
   role: true, status: true, departmentId: true, departmentName: true,
-  createdAt: true, updatedAt: true, approvedAt: true,
+  createdAt: true, updatedAt: true, approvedAt: true, approvedById: true,
+  createdById: true,
   department: { select: { id: true, name: true, code: true } },
+  createdBy: { select: { id: true, fullName: true, email: true } },
 };
 
 export const usersService = {
   async list({ role, status, q } = {}) {
-    return prisma.user.findMany({
-      where: {
-        ...(role ? { role } : {}),
-        ...(status ? { status } : {}),
-        ...(q
-          ? {
-              OR: [
-                { email:    { contains: q, mode: 'insensitive' } },
-                { fullName: { contains: q, mode: 'insensitive' } },
-                { staffId:  { contains: q, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
-      },
-      orderBy: { createdAt: 'desc' },
-      select: publicSelect,
-    });
+    const cacheKey = `users:list:${role || 'all'}:${status || 'all'}:${q || 'all'}`;
+    return cache.remember(cacheKey, 15_000, async () =>
+      prisma.user.findMany({
+        where: {
+          ...(role ? { role } : {}),
+          ...(status ? { status } : {}),
+          ...(q
+            ? {
+                OR: [
+                  { email:    { contains: q, mode: 'insensitive' } },
+                  { fullName: { contains: q, mode: 'insensitive' } },
+                  { staffId:  { contains: q, mode: 'insensitive' } },
+                ],
+              }
+            : {}),
+        },
+        orderBy: { createdAt: 'desc' },
+        select: publicSelect,
+      })
+    );
   },
 
   async getById(id) {
@@ -75,6 +81,7 @@ export const usersService = {
         status: 'ACTIVE',
         approvedAt: new Date(),
         approvedById: actor.id,
+        createdById: input.createdById || null,
         departmentId,
         departmentName,
       },
@@ -139,14 +146,14 @@ export const usersService = {
     }
 
     const result = await prisma.$transaction([
-      prisma.invigilation.deleteMany({
-        where: { OR: [{ invigilatorId: id }, { replacementId: id }] },
+      prisma.venueAssignment.deleteMany({
+        where: { invigilatorId: id },
       }),
       prisma.user.delete({ where: { id } }),
     ]);
     invalidateAuthCache(id);
 
-    const removedInvigilations = result[0]?.count ?? 0;
+    const removedAssignments = result[0]?.count ?? 0;
 
     logAudit({
       actorId: actor.id,
@@ -157,11 +164,11 @@ export const usersService = {
       metadata: {
         email: existing.email,
         role: existing.role,
-        removedInvigilations,
+        removedAssignments,
       },
     });
 
-    return { id, removedInvigilations };
+    return { id, removedAssignments };
   },
 
   async changePassword(userId, { currentPassword, newPassword }) {
@@ -292,6 +299,19 @@ export const usersService = {
       role: 'DEPARTMENT_HEAD',
       departmentId: actor.departmentId,
       departmentName: actor.departmentName,
+      createdById: actor.id,
+    }, actor);
+  },
+
+  async createDelegate(input, actor) {
+    if (actor.role !== 'INVIGILATOR') {
+      throw ApiError.forbidden('Only invigilators can create delegate invigilators.');
+    }
+
+    return usersService.create({
+      ...input,
+      role: 'INVIGILATOR',
+      createdById: actor.id,
     }, actor);
   },
 

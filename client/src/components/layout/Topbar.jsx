@@ -88,7 +88,7 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
 
     const handlePendingAccount = (data) => {
       if (data?.fullName) {
-        toast.success(`${data.fullName} registered and is awaiting approval.`, { duration: Infinity });
+        toast.success(`${data.fullName} registered and is awaiting approval.`, { duration: 3500 });
       }
       qc.invalidateQueries({ queryKey: ['notifications'] });
       qc.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
@@ -96,7 +96,7 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
     };
 
     const handleCourseSubmitted = () => {
-      toast.success('A course has been submitted for approval.', { duration: Infinity });
+      toast.success('A course has been submitted for approval.', { duration: 3500 });
       qc.invalidateQueries({ queryKey: ['courses', 'pending-approval'] });
       qc.invalidateQueries({ queryKey: ['courses'] });
       qc.invalidateQueries({ queryKey: ['notifications'] });
@@ -109,7 +109,7 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
     };
 
     const handleCourseApproved = () => {
-      toast.success('Course approved.', { duration: Infinity });
+      toast.success('Course approved.', { duration: 3500 });
       qc.invalidateQueries({ queryKey: ['courses', 'pending-approval'] });
       qc.invalidateQueries({ queryKey: ['courses'] });
       qc.invalidateQueries({ queryKey: ['notifications'] });
@@ -117,7 +117,7 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
     };
 
     const handleCourseRejected = () => {
-      toast.success('Course rejected.', { duration: Infinity });
+      toast.success('Course rejected.', { duration: 3500 });
       qc.invalidateQueries({ queryKey: ['courses', 'pending-approval'] });
       qc.invalidateQueries({ queryKey: ['courses'] });
       qc.invalidateQueries({ queryKey: ['notifications'] });
@@ -130,9 +130,12 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
       const time = data?.scannedAt
         ? new Date(data.scannedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         : '';
-      toast.success(`${name} checked in at ${venueName}${time ? ` — ${time}` : ''}.`, { duration: Infinity });
+      toast.success(`${name} checked in at ${venueName}${time ? ` — ${time}` : ''}.`, { duration: 3500, icon: '✓' });
       qc.invalidateQueries({ queryKey: ['venue-scans'] });
+      qc.invalidateQueries({ queryKey: ['myVenueScans'] });
+      qc.invalidateQueries({ queryKey: ['myVenueAssignments'] });
       qc.invalidateQueries({ queryKey: ['attendance'] });
+      qc.invalidateQueries({ queryKey: ['venueScans'] });
       qc.invalidateQueries({ queryKey: ['notifications'] });
       qc.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
     };
@@ -254,9 +257,9 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
                       <button
                         key={n.id}
                         type="button"
-                        onClick={async () => {
-                          if (!n.isRead) await markReadMutation.mutateAsync(n.id);
+                        onClick={() => {
                           if (n.link) navigate(n.link);
+                          if (!n.isRead) markReadMutation.mutate(n.id);
                           setNotifOpen(false);
                         }}
                         className={`w-full text-left px-4 py-3 border-b border-surface-divider hover:bg-surface-subtle transition-colors ${
