@@ -1,13 +1,16 @@
 import { Server } from 'socket.io';
 import { verifyAccessToken } from './jwt.js';
 import { prisma } from './prisma.js';
-import { env } from '../config/env.js';
+import { clientOrigins } from '../config/env.js';
 
 let io = null;
 
 export const initSocket = (server) => {
   io = new Server(server, {
-    cors: { origin: env.CLIENT_ORIGIN, credentials: true },
+    cors: { origin: clientOrigins, credentials: true },
+    // Keep long-polling available: platforms that spin down idle services
+    // reject the initial WebSocket upgrade while waking up.
+    transports: ['websocket', 'polling'],
   });
 
   io.use(async (socket, next) => {

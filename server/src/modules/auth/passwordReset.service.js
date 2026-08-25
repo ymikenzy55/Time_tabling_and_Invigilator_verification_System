@@ -3,7 +3,7 @@ import { prisma } from '../../utils/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { hashPassword } from '../../utils/password.js';
 import { sendEmail, isEmailConfigured } from '../../utils/email.js';
-import { env } from '../../config/env.js';
+import { primaryClientOrigin } from '../../config/env.js';
 import { logAudit } from '../../utils/auditLog.js';
 
 const RESET_TOKEN_BYTES = 32;
@@ -11,7 +11,7 @@ const RESET_EXPIRY_HOURS = 1;
 
 const generateToken = () => crypto.randomBytes(RESET_TOKEN_BYTES).toString('hex');
 
-const buildResetLink = (token) => `${env.CLIENT_ORIGIN}/reset-password?token=${token}`;
+const buildResetLink = (token) => `${primaryClientOrigin}/reset-password?token=${token}`;
 
 export const passwordResetService = {
   async requestReset({ email }) {

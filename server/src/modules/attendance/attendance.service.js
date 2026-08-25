@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { prisma } from '../../utils/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
-import { env } from '../../config/env.js';
+import { env, primaryClientOrigin } from '../../config/env.js';
 import { createNotification, notifyRole } from '../notifications/notifications.service.js';
 import { broadcast } from '../../utils/broadcast.js';
 
@@ -75,7 +75,7 @@ export const attendanceService = {
     const token = signQrToken(invigilationId);
     return {
       token,
-      link: `${env.CLIENT_ORIGIN}/scan?token=${encodeURIComponent(token)}`,
+      link: `${primaryClientOrigin}/scan?token=${encodeURIComponent(token)}`,
       invigilation,
     };
   },
@@ -189,7 +189,7 @@ export const attendanceService = {
           venueId: venue.id,
           venue,
           token,
-          link: `${env.CLIENT_ORIGIN}/scan?token=${encodeURIComponent(token)}`,
+          link: `${primaryClientOrigin}/scan?token=${encodeURIComponent(token)}`,
         };
       }),
     };
@@ -222,7 +222,7 @@ export const attendanceService = {
     const token = signVenueQrToken(venueId, examinationSessionId, session.endDate);
     return {
       token,
-      link: `${env.CLIENT_ORIGIN}/scan?token=${encodeURIComponent(token)}`,
+      link: `${primaryClientOrigin}/scan?token=${encodeURIComponent(token)}`,
       venue,
       session,
     };

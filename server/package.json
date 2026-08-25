@@ -5,10 +5,15 @@
   "type": "module",
   "description": "Backend for the University Examination Management System",
   "main": "src/index.js",
+  "engines": {
+    "node": ">=20 <23"
+  },
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
+    "build": "prisma generate",
     "seed": "node prisma/seed.js",
+    "deploy:migrate": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"

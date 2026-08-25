@@ -1,6 +1,21 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
+const splitOrigins = (value) =>
+  String(value ?? '')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+
+const isHttpUrl = (value) => {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -11,7 +26,15 @@ const schema = z.object({
   JWT_EXPIRES_IN: z.string().default('1d'),
   BCRYPT_ROUNDS: z.coerce.number().int().min(8).max(15).default(10),
 
-  CLIENT_ORIGIN: z.string().url().default('http://localhost:5173'),
+  // One origin, or several separated by commas (e.g. the Render URL plus a
+  // custom domain). Every entry must be a full URL including the scheme.
+  CLIENT_ORIGIN: z
+    .string()
+    .default('http://localhost:5173')
+    .refine(
+      (value) => splitOrigins(value).length > 0 && splitOrigins(value).every(isHttpUrl),
+      'CLIENT_ORIGIN must be a comma-separated list of absolute URLs (e.g. https://app.example.com)'
+    ),
 
 
   SUPER_ADMIN_EMAIL: z.string().email().optional(),
@@ -40,3 +63,13 @@ if (!parsed.success) {
 
 export const env = parsed.data;
 export const isProd = env.NODE_ENV === 'production';
+
+/** Allowed browser origins for CORS (HTTP and Socket.IO). */
+export const clientOrigins = splitOrigins(env.CLIENT_ORIGIN);
+
+/**
+ * Canonical public URL of the frontend — the first entry in CLIENT_ORIGIN.
+ * Use this (never env.CLIENT_ORIGIN) when building links for QR codes and
+ * emails, since CLIENT_ORIGIN may contain several comma-separated origins.
+ */
+export const primaryClientOrigin = clientOrigins[0];

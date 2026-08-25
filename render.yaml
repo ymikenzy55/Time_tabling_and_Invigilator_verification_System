@@ -1,13 +1,10 @@
 # Render Blueprint — University Examination Management System
 # Deploy via: Dashboard → New → Blueprint → select this repo
 # or via CLI: render blueprint deploy
-
-databases:
-  - name: exam-management-db
-    databaseName: exam_management
-    user: exam_app
-    plan: free
-    ipAllowList: []  # allow all (Render services connect internally)
+#
+# The database is NOT managed by Render — it lives on Neon (https://neon.tech).
+# Set DATABASE_URL manually in the Render dashboard using the Neon pooled
+# connection string. See DEPLOYMENT.md for the full walkthrough.
 
 services:
   # ── Backend: Express + Socket.IO API ──────────────────────────
@@ -25,9 +22,7 @@ services:
       - key: PORT
         value: 4000
       - key: DATABASE_URL
-        fromDatabase:
-          name: exam-management-db
-          property: connectionString
+        sync: false  # Neon pooled connection string (must include ?sslmode=require)
       - key: JWT_SECRET
         sync: false  # set manually in Render dashboard (min 16 chars)
       - key: JWT_EXPIRES_IN

@@ -3,7 +3,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import morgan from 'morgan';
 import compression from 'compression';
-import { env, isProd } from './config/env.js';
+import { clientOrigins, isProd } from './config/env.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { notFound } from './middleware/notFound.js';
 import { generalLimiter } from './middleware/rateLimit.js';
@@ -16,7 +16,7 @@ export const createApp = () => {
   app.set('trust proxy', 1);
 
   app.use(helmet());
-  app.use(cors({ origin: env.CLIENT_ORIGIN, credentials: true }));
+  app.use(cors({ origin: clientOrigins, credentials: true }));
   app.use(compression());
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true }));
