@@ -76,3 +76,88 @@ Use the Super Admin email/password you set in `server/.env` before running `npm 
 - [x] Phase 6 — QR attendance + attendance window + replacements
 - [x] Phase 7 — Audit logs UI + reports
 - [ ] Phase 8 — Timetable generation algorithm
+
+## Deployment
+
+This project is configured for deployment on multiple platforms:
+
+### 🚀 Fly.io (Recommended - No Spin-Down)
+
+**Quick Start**: See [`QUICK_START_FLY.md`](./QUICK_START_FLY.md) (10 steps, 30 minutes)
+
+**Full Guide**: See [`FLY_DEPLOYMENT.md`](./FLY_DEPLOYMENT.md)
+
+**Checklist**: See [`FLY_CHECKLIST.md`](./FLY_CHECKLIST.md)
+
+**Features**:
+- ✅ Always-on backend (no 15-min spin-down)
+- ✅ Perfect Socket.IO support
+- ✅ Free tier with better uptime
+- ✅ GitHub auto-deploy via Actions
+- ✅ Works with your existing Neon database
+
+**Files created**:
+- `server/fly.toml` - Backend configuration
+- `client/fly.toml` - Frontend configuration
+- `server/Dockerfile` - Backend Docker config
+- `client/Dockerfile` - Frontend Docker config
+- `.github/workflows/fly-deploy.yml` - Auto-deploy workflow
+- `generate-secrets.ps1` / `generate-secrets.sh` - Secret generators
+
+**Quick Deploy**:
+```bash
+# Generate secrets
+.\generate-secrets.ps1  # Windows
+# OR
+./generate-secrets.sh   # Mac/Linux
+
+# Install Fly CLI
+powershell -Command "iwr https://fly.io/install.ps1 -useb | iex"
+
+# Follow QUICK_START_FLY.md for step-by-step guide
+```
+
+---
+
+### 🎯 Render (Alternative - Easiest Setup)
+
+**Guide**: See [`DEPLOYMENT.md`](./DEPLOYMENT.md)
+
+**Features**:
+- ✅ Easiest setup (Blueprint deployment)
+- ✅ Nice dashboard UI
+- ✅ Works with Neon database
+- ⚠️ Free tier spins down after 15 min idle
+
+**Files included**:
+- `render.yaml` - Blueprint configuration (already configured)
+
+**Quick Deploy**:
+1. Go to [Render Dashboard](https://dashboard.render.com)
+2. New → Blueprint
+3. Connect this repository
+4. Set environment variables
+5. Deploy
+
+---
+
+### 📊 Comparison
+
+| Feature | Fly.io | Render |
+|---------|--------|--------|
+| **Setup Time** | 30 min | 15 min |
+| **Spin-Down** | No (configurable) | Yes (15 min) |
+| **Dashboard** | Basic | Excellent |
+| **Socket.IO** | Perfect | Works with fallback |
+| **Free Tier** | Forever | Forever |
+| **Best For** | Production | Quick testing |
+
+---
+
+### Database
+
+Both deployment options use **Neon PostgreSQL** (external managed database):
+- Free tier with no 90-day expiration
+- Auto-suspend when idle, wakes in ~1s
+- Connection pooling included
+- Get yours at [neon.tech](https://neon.tech)

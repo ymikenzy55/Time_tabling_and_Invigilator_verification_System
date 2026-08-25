@@ -38,3 +38,6 @@ screenshots/
 
 # Playwright test scripts
 playwright-test-responsive.js
+
+# Fly.io secrets file (contains sensitive data)
+fly-secrets.txt
