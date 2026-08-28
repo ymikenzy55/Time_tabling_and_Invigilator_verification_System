@@ -6,8 +6,8 @@ import { initSocket } from './utils/socket.js';
 
 const app = createApp();
 
-const server = app.listen(env.PORT, () => {
-  logger.info(`API listening on http://localhost:${env.PORT}`, { env: env.NODE_ENV });
+const server = app.listen(env.PORT, '0.0.0.0', () => {
+  logger.info(`API listening on http://0.0.0.0:${env.PORT}`, { env: env.NODE_ENV });
 });
 
 initSocket(server);
