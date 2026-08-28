@@ -160,8 +160,36 @@ export const EntityPage = ({
         </div>
 
         {isLoading ? (
-          <div className="p-10 grid place-items-center text-ink-500">
-            <Loader2 className="w-5 h-5 animate-spin" />
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-subtle text-ink-500 text-xs uppercase">
+                <tr>
+                  {columns.map((col) => (
+                    <th key={col.key} className={cn('text-left font-bold px-4 py-3', col.className)}>
+                      {col.label}
+                    </th>
+                  ))}
+                  <th className="text-right font-bold px-4 py-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-surface-divider">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i}>
+                    {columns.map((col) => (
+                      <td key={col.key} className={cn('px-4 py-3', col.className)}>
+                        <div className="h-4 rounded bg-surface-border animate-pulse" style={{ width: `${60 + ((i * 13) % 30)}%` }} />
+                      </td>
+                    ))}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="h-7 w-16 rounded bg-surface-border animate-pulse" />
+                        <div className="h-7 w-16 rounded bg-surface-border animate-pulse" />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : items.length === 0 ? (
           <div className="p-10">

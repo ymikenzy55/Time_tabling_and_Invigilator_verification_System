@@ -5,6 +5,7 @@ import { queryClient } from '@/lib/queryClient';
 import { AuthProvider } from '@/context/AuthContext';
 import { AppRoutes } from '@/routes/AppRoutes';
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
+import { InstallPrompt } from '@/components/InstallPrompt';
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -12,6 +13,7 @@ const App = () => (
       <AuthProvider>
         <ConfirmProvider>
           <AppRoutes />
+          <InstallPrompt />
           <Toaster
             position="top-right"
             toastOptions={{

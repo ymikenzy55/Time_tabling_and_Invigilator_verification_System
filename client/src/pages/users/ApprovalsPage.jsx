@@ -31,6 +31,8 @@ export const ApprovalsPage = () => {
   const qc = useQueryClient();
   const confirm = useConfirm();
   const [rejecting, setRejecting] = useState(null);
+  // Which user is currently being approved, so only that card shows progress.
+  const [approvingId, setApprovingId] = useState(null);
 
   const listQuery = useQuery({
     queryKey: ['approvals', 'pending'],
@@ -41,12 +43,19 @@ export const ApprovalsPage = () => {
 
   const approveMutation = useMutation({
     mutationFn: (id) => usersApi.approveUser(id),
-    onSuccess: () => {
-      toast.success('Account approved.');
+    onMutate: (id) => {
+      setApprovingId(id);
+      toast.loading('Approving account…', { id: `approve-${id}` });
+    },
+    onSuccess: (_data, id) => {
+      toast.success('Account approved.', { id: `approve-${id}` });
       qc.invalidateQueries({ queryKey: ['approvals', 'pending'] });
       qc.invalidateQueries({ queryKey: ['users'] });
     },
-    onError: (err) => toast.error(err.message || 'Could not approve account.'),
+    onError: (err, id) => {
+      toast.error(err.message || 'Could not approve account.', { id: `approve-${id}` });
+    },
+    onSettled: () => setApprovingId(null),
   });
 
   const rejectMutation = useMutation({
@@ -82,8 +91,10 @@ export const ApprovalsPage = () => {
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {users.map((u) => (
-            <div key={u.id} className="panel p-5">
+          {users.map((u) => {
+            const isApproving = approvingId === u.id;
+            return (
+            <div key={u.id} className={`panel p-5 transition-opacity ${isApproving ? 'opacity-70' : ''}`}>
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-full bg-primary-600 text-white grid place-items-center text-sm font-bold">
                   {(u.fullName || '?').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
@@ -130,17 +141,22 @@ export const ApprovalsPage = () => {
                   }}
                   disabled={approveMutation.isPending}
                 >
-                  <CheckCircle2 className="w-4 h-4" /> Approve
+                  {isApproving
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : <CheckCircle2 className="w-4 h-4" />}
+                  {isApproving ? 'Approving…' : 'Approve'}
                 </button>
                 <button
                   className="btn btn-md flex-1 text-rose-700 border border-rose-200 hover:bg-rose-50"
                   onClick={() => { setRejecting(u); reset(); }}
+                  disabled={approveMutation.isPending}
                 >
                   <XCircle className="w-4 h-4" /> Reject
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

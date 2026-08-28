@@ -39,6 +39,123 @@ export const verifyQrToken = (token) => {
   }
 };
 
+/**
+ * Run every venue-QR check without touching the database for writes.
+ *
+ * Shared by `previewVenueScan` (read-only) and `scanVenue` (which persists the
+ * outcome), so both always agree on the verdict.
+ */
+const evaluateVenueScan = async (token, actor) => {
+  const payload = verifyQrToken(token);
+  if (!payload || payload.type !== 'VENUE_QR' || !payload.venueId || !payload.examinationSessionId) {
+    return { result: 'REJECTED_INVALID_QR', payload: null, message: 'This QR code is not a valid venue check-in code.' };
+  }
+
+  if (actor.role !== 'INVIGILATOR') {
+    return {
+      result: 'REJECTED_UNASSIGNED',
+      payload: null,
+      message: 'Only invigilators can check in with a venue QR code.',
+    };
+  }
+
+  const invigilator = await prisma.user.findUnique({
+    where: { id: actor.id },
+    select: { id: true, role: true, status: true, fullName: true, email: true, staffId: true },
+  });
+
+  if (!invigilator || invigilator.role !== 'INVIGILATOR' || invigilator.status !== 'ACTIVE') {
+    return {
+      result: 'REJECTED_UNASSIGNED',
+      payload,
+      message: 'Your account is not an active invigilator account.',
+    };
+  }
+
+  const venue = await prisma.venue.findUnique({
+    where: { id: payload.venueId },
+    select: { id: true, name: true, location: true },
+  });
+  if (!venue) {
+    return { result: 'REJECTED_INVALID_QR', payload: null, message: 'The venue on this QR code no longer exists.' };
+  }
+
+  // Verify the invigilator is assigned to THIS venue on THIS day.
+  const now = new Date();
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+
+  const assignment = await prisma.venueAssignment.findFirst({
+    where: {
+      invigilatorId: actor.id,
+      venueId: payload.venueId,
+      examinationSessionId: payload.examinationSessionId,
+      slotAt: { gte: dayStart, lt: dayEnd },
+    },
+  });
+
+  if (!assignment) {
+    // Find where the invigilator IS assigned today so we can point them there.
+    const todayAssignment = await prisma.venueAssignment.findFirst({
+      where: {
+        invigilatorId: actor.id,
+        examinationSessionId: payload.examinationSessionId,
+        slotAt: { gte: dayStart, lt: dayEnd },
+      },
+      orderBy: { slotAt: 'asc' },
+      select: {
+        slotAt: true,
+        venue: { select: { id: true, name: true, location: true } },
+      },
+    });
+
+    let message;
+    if (todayAssignment) {
+      const slotTime = new Date(todayAssignment.slotAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const loc = todayAssignment.venue.location ? ` (${todayAssignment.venue.location})` : '';
+      message = `This QR code is for ${venue.name}, but today you are assigned to ${todayAssignment.venue.name}${loc} at ${slotTime}. Please proceed to your assigned venue and scan the QR code there.`;
+    } else {
+      message = `This QR code is for ${venue.name}, but you have no venue assignment for today in this examination session. Please check your assignments or contact the exam officer.`;
+    }
+
+    return {
+      result: 'REJECTED_VENUE_MISMATCH',
+      payload,
+      venue,
+      invigilator,
+      assignedVenue: todayAssignment
+        ? { ...todayAssignment.venue, slotAt: todayAssignment.slotAt }
+        : null,
+      message,
+    };
+  }
+
+  // Duplicate check is scoped to today — the same venue QR is valid for the
+  // whole exam window, so the invigilator checks in once per day.
+  const existing = await prisma.venueScan.findFirst({
+    where: {
+      venueId: payload.venueId,
+      examinationSessionId: payload.examinationSessionId,
+      userId: actor.id,
+      result: 'RECORDED',
+      scannedAt: { gte: dayStart, lt: dayEnd },
+    },
+  });
+  if (existing) {
+    const at = new Date(existing.scannedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return {
+      result: 'REJECTED_DUPLICATE',
+      payload,
+      venue,
+      invigilator,
+      assignment,
+      message: `You already checked in at ${venue.name} today at ${at}.`,
+    };
+  }
+
+  return { result: 'RECORDED', payload, venue, invigilator, assignment };
+};
+
 const assertQrAccess = (invigilation, actor) => {
   if (actor.role === 'SUPER_ADMIN') return;
   const isAssigned = invigilation.invigilatorId === actor.id || invigilation.replacementId === actor.id;
@@ -228,125 +345,38 @@ export const attendanceService = {
     };
   },
 
+  /**
+   * Validate a venue QR **without recording anything**.
+   *
+   * Lets the invigilator find out whether they are at the right venue before
+   * committing to a check-in. `result` mirrors what `scanVenue` would return,
+   * so the client can render the same messaging.
+   */
+  async previewVenueScan({ token }, actor) {
+    const evaluation = await evaluateVenueScan(token, actor);
+    const { result, venue, assignedVenue, message, assignment } = evaluation;
+
+    return {
+      result,
+      ok: result === 'RECORDED',
+      venue: venue || null,
+      assignedVenue: assignedVenue || null,
+      slotAt: assignment?.slotAt || null,
+      message: message || null,
+    };
+  },
+
   async scanVenue({ token, ipAddress, userAgent }, actor) {
-    const payload = verifyQrToken(token);
-    if (!payload || payload.type !== 'VENUE_QR' || !payload.venueId || !payload.examinationSessionId) {
-      return { result: 'REJECTED_INVALID_QR' };
+    const evaluation = await evaluateVenueScan(token, actor);
+    const { result, payload, venue, invigilator, assignedVenue, message } = evaluation;
+
+    // An unreadable QR or unknown venue has no valid venue/session to attach a
+    // scan row to, so nothing is persisted for those.
+    if (result === 'REJECTED_INVALID_QR') {
+      return { result, message: message || null };
     }
-
-    if (actor.role !== 'INVIGILATOR') {
-      return { result: 'REJECTED_UNASSIGNED' };
-    }
-
-    const invigilator = await prisma.user.findUnique({
-      where: { id: actor.id },
-      select: { id: true, role: true, status: true, fullName: true, email: true, staffId: true },
-    });
-
-    if (!invigilator || invigilator.role !== 'INVIGILATOR' || invigilator.status !== 'ACTIVE') {
-      const scan = await prisma.venueScan.create({
-        data: {
-          venueId: payload.venueId,
-          examinationSessionId: payload.examinationSessionId,
-          userId: actor.id,
-          result: 'REJECTED_UNASSIGNED',
-          ipAddress,
-          userAgent,
-        },
-      });
-      return { result: 'REJECTED_UNASSIGNED', scan };
-    }
-
-    const venue = await prisma.venue.findUnique({
-      where: { id: payload.venueId },
-      select: { id: true, name: true, location: true },
-    });
-    if (!venue) {
-      return { result: 'REJECTED_INVALID_QR' };
-    }
-
-    // Verify the invigilator is assigned to THIS venue on THIS day.
-    const now = new Date();
-    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-
-    const assignment = await prisma.venueAssignment.findFirst({
-      where: {
-        invigilatorId: actor.id,
-        venueId: payload.venueId,
-        examinationSessionId: payload.examinationSessionId,
-        slotAt: { gte: dayStart, lt: dayEnd },
-      },
-    });
-    if (!assignment) {
-      // Find where the invigilator IS assigned today so we can point them there.
-      const todayAssignment = await prisma.venueAssignment.findFirst({
-        where: {
-          invigilatorId: actor.id,
-          examinationSessionId: payload.examinationSessionId,
-          slotAt: { gte: dayStart, lt: dayEnd },
-        },
-        orderBy: { slotAt: 'asc' },
-        select: {
-          slotAt: true,
-          venue: { select: { id: true, name: true, location: true } },
-        },
-      });
-
-      const scan = await prisma.venueScan.create({
-        data: {
-          venueId: payload.venueId,
-          examinationSessionId: payload.examinationSessionId,
-          userId: actor.id,
-          result: 'REJECTED_VENUE_MISMATCH',
-          ipAddress,
-          userAgent,
-        },
-      });
-
-      let message;
-      if (todayAssignment) {
-        const slotTime = new Date(todayAssignment.slotAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const loc = todayAssignment.venue.location ? ` (${todayAssignment.venue.location})` : '';
-        message = `This QR code is for ${venue.name}, but today you are assigned to ${todayAssignment.venue.name}${loc} at ${slotTime}. Please proceed to your assigned venue and scan the QR code there.`;
-      } else {
-        message = `This QR code is for ${venue.name}, but you have no venue assignment for today in this examination session. Please check your assignments or contact the exam officer.`;
-      }
-
-      return {
-        result: 'REJECTED_VENUE_MISMATCH',
-        scan,
-        venue,
-        assignedVenue: todayAssignment
-          ? { ...todayAssignment.venue, slotAt: todayAssignment.slotAt }
-          : null,
-        message,
-      };
-    }
-
-    // Duplicate check is scoped to today — the same venue QR is valid for the
-    // whole exam window, so the invigilator checks in once per day.
-    const existing = await prisma.venueScan.findFirst({
-      where: {
-        venueId: payload.venueId,
-        examinationSessionId: payload.examinationSessionId,
-        userId: actor.id,
-        result: 'RECORDED',
-        scannedAt: { gte: dayStart, lt: dayEnd },
-      },
-    });
-    if (existing) {
-      const scan = await prisma.venueScan.create({
-        data: {
-          venueId: payload.venueId,
-          examinationSessionId: payload.examinationSessionId,
-          userId: actor.id,
-          result: 'REJECTED_DUPLICATE',
-          ipAddress,
-          userAgent,
-        },
-      });
-      return { result: 'REJECTED_DUPLICATE', scan };
+    if (result === 'REJECTED_UNASSIGNED' && !payload) {
+      return { result, message: message || null };
     }
 
     const scan = await prisma.venueScan.create({
@@ -354,11 +384,21 @@ export const attendanceService = {
         venueId: payload.venueId,
         examinationSessionId: payload.examinationSessionId,
         userId: actor.id,
-        result: 'RECORDED',
+        result,
         ipAddress,
         userAgent,
       },
     });
+
+    if (result !== 'RECORDED') {
+      return {
+        result,
+        scan,
+        venue: venue || null,
+        assignedVenue: assignedVenue || null,
+        message: message || null,
+      };
+    }
 
     // Notify all exam officers about the check-in (fire-and-forget) and
     // broadcast instantly via Socket.IO so the admin page updates live.

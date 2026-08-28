@@ -26,6 +26,9 @@ export const ScanPage = () => {
   const [result, setResult] = useState(null);
   const [manualToken, setManualToken] = useState(searchParams.get('token') || '');
   const [pendingToken, setPendingToken] = useState(null);
+  // Read-only verdict from the server describing which venue this QR belongs to
+  // and whether the invigilator is assigned there. Nothing is recorded yet.
+  const [verification, setVerification] = useState(null);
   const [cameraError, setCameraError] = useState(null);
   const [cameraStarting, setCameraStarting] = useState(false);
   const scannerRef = useRef(null);
@@ -63,14 +66,57 @@ export const ScanPage = () => {
     return `${hours}h ${mins}m`;
   })() : null;
 
+  const allowRescan = () => {
+    scannedRef.current = false;
+  };
+
+  // Stage 1 — ask the server which venue this QR is for and whether the
+  // invigilator is assigned there. This records nothing.
+  const verifyMutation = useMutation({
+    mutationFn: (token) => attendanceApi.previewVenueScan(token),
+    onSuccess: (data, token) => {
+      if (data.ok) {
+        // Correct venue: hold the token and ask for confirmation.
+        setPendingToken(token);
+        setVerification(data);
+        return;
+      }
+
+      // Not a venue QR — it may still be a per-invigilation QR, which the
+      // preview endpoint cannot evaluate. Ask for confirmation and let the
+      // legacy endpoint decide.
+      if (data.result === 'REJECTED_INVALID_QR') {
+        setPendingToken(token);
+        setVerification({ ok: false, unverified: true });
+        return;
+      }
+
+      // Wrong venue (or any other rejection): tell the invigilator right away
+      // and never reach the confirmation step.
+      const label = RESULT_LABELS[data.result] || data.result;
+      toast.error(`${label}${data.message ? ': ' + data.message : ''}`);
+      setResult({ ...data, previewOnly: true });
+      setPendingToken(null);
+      setVerification(null);
+      allowRescan();
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Could not verify this QR code.');
+      setResult({ error: err.message });
+      allowRescan();
+    },
+  });
+
+  // Stage 2 — actually record the attendance, only after an explicit Yes.
   const scanMutation = useMutation({
     mutationFn: async (token) => {
       try {
         const data = await attendanceApi.scanVenue(token);
         if (data.result === 'RECORDED' || data.result?.startsWith('REJECTED')) return data;
       } catch (err) {
-        if (err?.response?.status !== 400 && err?.response?.status !== 404) throw err;
+        if (err?.status !== 400 && err?.status !== 404) throw err;
       }
+      // Fall back to the per-invigilation QR endpoint.
       return attendanceApi.scan(token);
     },
     onSuccess: (data) => {
@@ -80,33 +126,42 @@ export const ScanPage = () => {
       } else {
         const label = RESULT_LABELS[data.result] || data.result;
         toast.error(`${label}${data.message ? ': ' + data.message : ''}`);
+        allowRescan();
       }
       setResult(data);
     },
     onError: (err) => {
-      toast.error(err.message || 'Failed to scan.');
+      toast.error(err.message || 'Failed to record attendance.');
       setResult({ error: err.message });
+      allowRescan();
     },
   });
 
-  const executeScan = (token) => {
-    scanMutation.mutate(token);
-  };
+  const isBusy = verifyMutation.isPending || scanMutation.isPending;
 
   const submitToken = (token) => {
-    if (!token || scanMutation.isPending) return;
+    if (!token || isBusy) return;
     if (!isScanAvailable && fromAssignment) {
       toast.error('Scan window is not open. Scanning opens 30 minutes before the exam and closes when the exam ends.');
+      allowRescan();
       return;
     }
-    // Show confirmation prompt before submitting
-    setPendingToken(token);
+    setResult(null);
+    verifyMutation.mutate(token);
   };
 
   const confirmSubmit = () => {
     if (!pendingToken) return;
-    executeScan(pendingToken);
+    const token = pendingToken;
     setPendingToken(null);
+    setVerification(null);
+    scanMutation.mutate(token);
+  };
+
+  const cancelSubmit = () => {
+    setPendingToken(null);
+    setVerification(null);
+    allowRescan();
   };
 
   useEffect(() => {
@@ -315,14 +370,21 @@ export const ScanPage = () => {
               />
               <button
                 className="btn-primary w-full"
-                disabled={!manualToken || scanMutation.isPending}
+                disabled={!manualToken || isBusy}
                 onClick={() => submitToken(manualToken)}
               >
-                {scanMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
-                Submit token
+                {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
+                {verifyMutation.isPending ? 'Checking venue…' : scanMutation.isPending ? 'Recording…' : 'Submit token'}
               </button>
             </div>
           </>
+        )}
+
+        {verifyMutation.isPending && (
+          <div className="panel p-4 flex items-center justify-center gap-2 text-sm text-ink-600">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Checking whether you are at the right venue…
+          </div>
         )}
 
         {result && (
@@ -383,38 +445,70 @@ export const ScanPage = () => {
               </div>
             )}
             {result.error && <div className="text-sm text-rose-700 mt-1">{result.error}</div>}
+            {result.previewOnly && (
+              <div className="text-xs text-ink-500 mt-3">
+                No attendance was recorded. Scan the QR code at your assigned venue.
+              </div>
+            )}
+            {result.result !== 'RECORDED' && (
+              <button
+                className="btn-secondary btn-sm mt-3"
+                onClick={() => {
+                  setResult(null);
+                  allowRescan();
+                  startCamera();
+                }}
+              >
+                <ScanLine className="w-3.5 h-3.5" /> Scan again
+              </button>
+            )}
           </div>
         )}
       </div>
 
-      {/* Confirmation modal before submitting attendance */}
+      {/* Shown only once the venue has been verified as correct. */}
       <Modal
         open={!!pendingToken}
-        onClose={() => setPendingToken(null)}
-        title="Confirm Attendance Submission"
+        onClose={cancelSubmit}
+        title={verification?.unverified ? 'Confirm Attendance Submission' : 'You are at the correct venue'}
         size="sm"
       >
         <div className="space-y-4">
-          <div className="flex items-start gap-2 text-sm text-ink-700">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
-            <span>
-              You are about to submit your attendance by scanning this QR code.
-              Your check-in will be sent to the exam officer with a timestamp.
-              Make sure you are scanning the QR code for your assigned venue.
-            </span>
-          </div>
-          {fromAssignment && (
-            <div className="rounded-lg bg-surface-subtle p-3 text-sm">
-              <div className="font-medium text-ink-900">{fromAssignment.venue?.name}</div>
-              <div className="text-xs text-ink-500 mt-0.5">
-                {new Date(fromAssignment.slotAt).toLocaleDateString()} ·{' '}
-                {new Date(fromAssignment.slotAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          {verification?.unverified ? (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                This is not a venue QR code, so the venue could not be verified in
+                advance. Make sure you are scanning the code for your assigned venue.
+              </span>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+              <div className="flex items-center gap-2 text-sm font-bold text-emerald-800">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                Venue verified
               </div>
+              <div className="mt-2 text-base font-bold text-ink-900">
+                {verification?.venue?.name || fromAssignment?.venue?.name}
+              </div>
+              {verification?.venue?.location && (
+                <div className="text-sm text-ink-600">{verification.venue.location}</div>
+              )}
+              {verification?.slotAt && (
+                <div className="text-xs text-ink-500 mt-1">
+                  Slot: {new Date(verification.slotAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+              )}
             </div>
           )}
+
+          <p className="text-sm text-ink-700">
+            Send your attendance to the exam officer now?
+          </p>
+
           <div className="flex justify-end gap-2">
-            <button className="btn-secondary" onClick={() => setPendingToken(null)}>
-              Cancel
+            <button className="btn-secondary" onClick={cancelSubmit} disabled={scanMutation.isPending}>
+              No, cancel
             </button>
             <button
               className="btn-primary"
@@ -425,7 +519,7 @@ export const ScanPage = () => {
                 ? <Loader2 className="w-4 h-4 animate-spin" />
                 : <CheckCircle2 className="w-4 h-4" />
               }
-              Confirm & Submit
+              Yes, send attendance
             </button>
           </div>
         </div>

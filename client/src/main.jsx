@@ -23,3 +23,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
 if (document.readyState === 'complete') hidePreloader();
 else window.addEventListener('load', hidePreloader);
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}

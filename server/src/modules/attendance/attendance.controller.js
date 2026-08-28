@@ -29,6 +29,11 @@ export const attendanceController = {
     return ApiResponse.ok(res, result);
   }),
 
+  previewVenueScan: asyncHandler(async (req, res) => {
+    const result = await attendanceService.previewVenueScan({ token: req.body.token }, req.user);
+    return ApiResponse.ok(res, result);
+  }),
+
   scanVenue: asyncHandler(async (req, res) => {
     const result = await attendanceService.scanVenue({
       token: req.body.token,
