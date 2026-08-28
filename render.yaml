@@ -10,8 +10,8 @@ services:
   # ── Backend: Express + Socket.IO API ──────────────────────────
   - type: web
     name: exam-management-server
-    root: server
-    runtime: node
+    env: node
+    rootDir: server
     plan: free
     buildCommand: npm install && npx prisma generate
     startCommand: npx prisma migrate deploy && npm start
@@ -53,8 +53,8 @@ services:
   # ── Frontend: React (Vite) static site ────────────────────────
   - type: web
     name: exam-management-client
-    root: client
-    runtime: static
+    env: static
+    rootDir: client
     plan: free
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
