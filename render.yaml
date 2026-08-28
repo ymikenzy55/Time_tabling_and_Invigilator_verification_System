@@ -12,7 +12,6 @@ services:
     name: exam-management-server
     env: node
     rootDir: server
-    plan: free
     buildCommand: npm install && npx prisma generate
     startCommand: npx prisma migrate deploy && npm start
     healthCheckPath: /api/v1/health
@@ -51,11 +50,9 @@ services:
         sync: false
 
   # ── Frontend: React (Vite) static site ────────────────────────
-  - type: web
+  - type: static
     name: exam-management-client
-    env: static
     rootDir: client
-    plan: free
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     pullRequestPreviewsEnabled: false
