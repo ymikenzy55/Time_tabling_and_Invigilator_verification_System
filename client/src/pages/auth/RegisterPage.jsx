@@ -72,7 +72,7 @@ const SuccessScreen = ({ onDone }) => {
   }, [onDone]);
 
   return (
-    <div className="panel p-8 text-center">
+    <div className="text-center">
       <div className="w-12 h-12 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 grid place-items-center mx-auto mb-4">
         <CheckCircle2 className="w-6 h-6" />
       </div>
@@ -83,7 +83,7 @@ const SuccessScreen = ({ onDone }) => {
       <p className="mt-3 text-xs text-ink-400">
         Redirecting to sign in…
       </p>
-      <button className="btn-primary mt-4" onClick={onDone}>
+      <button className="btn-primary mt-4 w-full" onClick={onDone}>
         Back to sign in
       </button>
     </div>
@@ -149,7 +149,7 @@ export const RegisterPage = () => {
 
   if (statusQuery.isLoading) {
     return (
-      <div className="panel p-8 flex flex-col items-center text-ink-500">
+      <div className="py-10 flex flex-col items-center text-ink-500">
         <Loader2 className="w-6 h-6 animate-spin" />
         <p className="mt-3 text-sm">Checking registration availability…</p>
       </div>
@@ -170,7 +170,7 @@ export const RegisterPage = () => {
             </p>
           </div>
         </div>
-        <Link to="/login" className="btn-secondary mt-4 inline-flex">Back to sign in</Link>
+        <Link to="/login" className="btn-secondary mt-4 inline-flex w-full justify-center">Back to sign in</Link>
       </div>
     );
   }
@@ -196,7 +196,7 @@ export const RegisterPage = () => {
           </div>
         </div>
         {nextOpen && (
-          <div className="panel p-4 text-sm text-ink-700 flex items-start gap-3">
+          <div className="rounded-lg border border-surface-border bg-surface-subtle p-4 text-sm text-ink-700 flex items-start gap-3">
             <Calendar className="w-4 h-4 mt-0.5 text-ink-500" />
             <div>
               Registration for <strong>{roleLabels[nextOpen.role]}</strong> opens on{' '}
@@ -204,7 +204,7 @@ export const RegisterPage = () => {
             </div>
           </div>
         )}
-        <Link to="/login" className="btn-secondary mt-6 inline-flex">Back to sign in</Link>
+        <Link to="/login" className="btn-secondary mt-6 inline-flex w-full justify-center">Back to sign in</Link>
       </div>
     );
   }

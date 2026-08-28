@@ -75,43 +75,39 @@ export const ResetPasswordPage = () => {
 
   if (!token) {
     return (
-      <div className="w-full max-w-md mx-auto">
-        <div className="panel p-8 text-center">
-          <div className="w-12 h-12 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 grid place-items-center mx-auto mb-4">
-            <AlertTriangle className="w-6 h-6" />
-          </div>
-          <h2 className="text-lg font-bold text-ink-900 mb-2">Invalid reset link</h2>
-          <p className="text-sm text-ink-500 mb-6">
-            This page requires a valid reset token. Please use the link from your password reset email.
-          </p>
-          <Link to="/login" className="btn-primary w-full">Back to sign in</Link>
+      <div className="text-center">
+        <div className="w-12 h-12 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 grid place-items-center mx-auto mb-4">
+          <AlertTriangle className="w-6 h-6" />
         </div>
+        <h2 className="text-lg font-bold text-ink-900 mb-2">Invalid reset link</h2>
+        <p className="text-sm text-ink-500 mb-6">
+          This page requires a valid reset token. Please use the link from your password reset email.
+        </p>
+        <Link to="/login" className="btn-primary w-full">Back to sign in</Link>
       </div>
     );
   }
 
   if (success) {
     return (
-      <div className="w-full max-w-md mx-auto">
-        <div className="panel p-8 text-center">
-          <div className="w-12 h-12 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 grid place-items-center mx-auto mb-4">
-            <CheckCircle2 className="w-6 h-6" />
-          </div>
-          <h2 className="text-lg font-bold text-ink-900 mb-2">Password reset complete</h2>
-          <p className="text-sm text-ink-500 mb-6">
-            Your password has been updated. You can now sign in with your new password.
-          </p>
-          <button className="btn-primary w-full" onClick={() => navigate('/login')}>
-            Continue to sign in
-          </button>
+      <div className="text-center">
+        <div className="w-12 h-12 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 grid place-items-center mx-auto mb-4">
+          <CheckCircle2 className="w-6 h-6" />
         </div>
+        <h2 className="text-lg font-bold text-ink-900 mb-2">Password reset complete</h2>
+        <p className="text-sm text-ink-500 mb-6">
+          Your password has been updated. You can now sign in with your new password.
+        </p>
+        <button className="btn-primary w-full" onClick={() => navigate('/login')}>
+          Continue to sign in
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-md mx-auto">
-      <div className="mb-8 text-center">
+    <div>
+      <div className="mb-6 text-center">
         <div className="w-14 h-14 rounded-lg bg-primary-50 text-primary-600 border border-primary-100 grid place-items-center mx-auto mb-4">
           <KeyRound className="w-7 h-7" />
         </div>
@@ -121,39 +117,37 @@ export const ResetPasswordPage = () => {
         </p>
       </div>
 
-      <div className="panel p-5">
-        <form onSubmit={handleSubmit((v) => mutation.mutate(v))} className="space-y-4" noValidate>
-          <div>
-            <PwdInput
-              id="newPassword"
-              label="New password"
-              register={register('newPassword')}
-              error={undefined}
-              autoComplete="new-password"
-            />
-            <PasswordChecklist value={newPassword} />
-          </div>
-          <div>
-            <PwdInput
-              id="confirm"
-              label="Confirm new password"
-              register={register('confirm')}
-              error={errors.confirm}
-              autoComplete="new-password"
-            />
-            <MatchIndicator password={newPassword} confirm={confirm} />
-          </div>
+      <form onSubmit={handleSubmit((v) => mutation.mutate(v))} className="space-y-4" noValidate>
+        <div>
+          <PwdInput
+            id="newPassword"
+            label="New password"
+            register={register('newPassword')}
+            error={undefined}
+            autoComplete="new-password"
+          />
+          <PasswordChecklist value={newPassword} />
+        </div>
+        <div>
+          <PwdInput
+            id="confirm"
+            label="Confirm new password"
+            register={register('confirm')}
+            error={errors.confirm}
+            autoComplete="new-password"
+          />
+          <MatchIndicator password={newPassword} confirm={confirm} />
+        </div>
 
-          <button
-            type="submit"
-            className="btn-primary w-full"
-            disabled={mutation.isPending}
-          >
-            {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
-            Reset password
-          </button>
-        </form>
-      </div>
+        <button
+          type="submit"
+          className="btn-primary w-full"
+          disabled={mutation.isPending}
+        >
+          {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+          Reset password
+        </button>
+      </form>
 
       <p className="mt-6 text-center text-sm text-ink-500">
         Remember your password?{' '}

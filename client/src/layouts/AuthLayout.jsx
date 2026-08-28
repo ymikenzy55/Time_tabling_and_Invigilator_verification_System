@@ -10,37 +10,12 @@ export const AuthLayout = () => {
         <img
           src={BACKGROUND_IMAGE}
           alt="Examination hall"
-          className="h-full w-full object-cover"
+          className="h-full w-full object-cover object-center"
         />
         <div className="absolute inset-0 bg-ink-900/60 backdrop-blur-sm" />
       </div>
 
       <div className="relative z-10 min-h-screen font-sans">
-        {/* Brand — top left (desktop only) */}
-        <div className="hidden lg:flex absolute top-10 left-12 items-center gap-4 text-white/90">
-          <div className="h-12 w-12 rounded-lg bg-white/15 grid place-items-center border border-white/30 backdrop-blur">
-            <img src={LOGO_IMAGE} alt="UENR" className="h-9 w-9 object-contain" />
-          </div>
-          <div>
-            <div className="text-lg font-bold leading-tight tracking-wide">Examination Manager</div>
-            <div className="text-sm text-white/70 leading-tight">University of Energy and Natural Resources</div>
-          </div>
-        </div>
-
-        {/* Tagline + copyright — bottom left (desktop only) */}
-        <div className="hidden lg:block absolute bottom-10 left-12 max-w-md">
-          <h1 className="text-3xl font-bold leading-tight text-white tracking-tight">
-            Run examinations with confidence.
-          </h1>
-          <p className="mt-3 text-sm text-white/80 leading-relaxed">
-            A unified workspace for course approvals, invigilator assignments, QR-based attendance,
-            and timetable planning across the university.
-          </p>
-          <div className="mt-6 text-xs text-white/60 tracking-wide">
-            &copy; {new Date().getFullYear()} UENR Examination Office
-          </div>
-        </div>
-
         {/* Form — centered in the viewport */}
         <div className="flex min-h-screen items-center justify-center px-4 py-8 sm:px-10">
           <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-[0_8px_30px_rgba(15,23,42,0.25)] border border-surface-border">
