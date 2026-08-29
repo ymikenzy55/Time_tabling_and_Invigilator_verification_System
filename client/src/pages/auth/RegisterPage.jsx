@@ -78,7 +78,7 @@ const SuccessScreen = ({ onDone }) => {
       </div>
       <h2 className="text-xl font-bold text-ink-900">Application submitted</h2>
       <p className="mt-2 text-sm text-ink-500">
-        Your account is under review. Once a Super Admin approves it, you can sign in.
+        Your account is under review. Once an Exam Officer approves it, you can sign in.
       </p>
       <p className="mt-3 text-xs text-ink-400">
         Redirecting to sign in…
@@ -141,7 +141,7 @@ export const RegisterPage = () => {
       departmentName: values.departmentName,
     }),
     onSuccess: () => {
-      toast.success('Account submitted. Awaiting Super Admin approval.');
+      toast.success('Account submitted. Awaiting Exam Officer approval.');
       reset();
     },
     onError: (err) => toast.error(err.message || 'Registration failed.'),

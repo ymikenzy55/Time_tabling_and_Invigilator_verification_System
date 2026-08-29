@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/cn';
 import { useAuth } from '@/context/AuthContext';
 import { filterNavForRole } from '@/config/nav';
@@ -10,6 +10,7 @@ import { coursesApi } from '@/features/courses/coursesApi';
 import { courseLevelsApi } from '@/features/courses/courseLevelsApi';
 import { semestersApi } from '@/features/academics/semestersApi';
 import { venueAssignmentsApi } from '@/features/venueAssignments/venueAssignmentsApi';
+import { notificationsApi } from '@/features/notifications/notificationsApi';
 
 const ROLE_LABELS = {
   SUPER_ADMIN: 'Exam Officer',
@@ -25,6 +26,7 @@ const ROLE_LABELS = {
  */
 export const Sidebar = ({ open = true }) => {
   const { user } = useAuth();
+  const qc = useQueryClient();
   const nav = filterNavForRole(user?.role);
 
   const pendingQuery = useQuery({
@@ -79,6 +81,32 @@ export const Sidebar = ({ open = true }) => {
   const lastSeenDate = typeof window !== 'undefined' ? localStorage.getItem('invigilator-last-seen-duties') : null;
   const today = new Date().toDateString();
   const showDutyBadge = todayDutyCount > 0 && lastSeenDate !== today;
+
+  const location = useLocation();
+
+  const markReadByTypeMutation = useMutation({
+    mutationFn: (type) => notificationsApi.markReadByType(type),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+      qc.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+    },
+  });
+
+  useEffect(() => {
+    const path = location.pathname;
+    const typeMap = {
+      '/approvals': 'PENDING_ACCOUNT',
+      '/course-approvals': 'COURSE_SUBMITTED',
+      '/invigilator-assignments': 'INVIGILATOR_CHECKIN',
+    };
+    const type = typeMap[path];
+    if (type) {
+      markReadByTypeMutation.mutate(type);
+    }
+    if (path === '/my-assignments') {
+      localStorage.setItem('invigilator-last-seen-duties', new Date().toDateString());
+    }
+  }, [location.pathname]);
 
   return (
     <aside

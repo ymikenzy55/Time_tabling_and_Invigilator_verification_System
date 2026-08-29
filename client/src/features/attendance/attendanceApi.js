@@ -6,7 +6,7 @@ export const attendanceApi = {
   generateVenueQrBatch: (examinationSessionId) => api.get(`/attendance/venue-qr-batch/${examinationSessionId}`).then((r) => r.data),
   scan: (token) => api.post('/attendance/scan', { token }).then((r) => r.data),
   previewVenueScan: (token) => api.post('/attendance/scan-venue/preview', { token }).then((r) => r.data),
-  scanVenue: (token) => api.post('/attendance/scan-venue', { token }).then((r) => r.data),
+  scanVenue: (token, location) => api.post('/attendance/scan-venue', { token, ...location }).then((r) => r.data),
   list: (params) => api.get('/attendance', { params }).then((r) => r.data.records),
   listVenueScans: (params) => api.get('/attendance/venue-scans', { params }).then((r) => r.data.records),
 };

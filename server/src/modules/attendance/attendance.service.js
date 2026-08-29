@@ -40,6 +40,30 @@ export const verifyQrToken = (token) => {
 };
 
 /**
+ * Exam time slots: 8–11 AM, 11 AM–2 PM, 2–5 PM.
+ * Each slot resets daily, so an invigilator can scan once per slot per day.
+ */
+const EXAM_TIME_SLOTS = [
+  { startHour: 8, endHour: 11, label: '8:00 AM – 11:00 AM' },
+  { startHour: 11, endHour: 14, label: '11:00 AM – 2:00 PM' },
+  { startHour: 14, endHour: 17, label: '2:00 PM – 5:00 PM' },
+];
+
+const getCurrentTimeSlot = (date) => {
+  const hour = date.getHours();
+  return EXAM_TIME_SLOTS.find((s) => hour >= s.startHour && hour < s.endHour) || null;
+};
+
+const isWithinExamPeriod = (session, now) => {
+  if (!session) return false;
+  const start = new Date(session.startDate);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(session.endDate);
+  end.setHours(23, 59, 59, 999);
+  return now >= start && now <= end;
+};
+
+/**
  * Run every venue-QR check without touching the database for writes.
  *
  * Shared by `previewVenueScan` (read-only) and `scanVenue` (which persists the
@@ -80,8 +104,41 @@ const evaluateVenueScan = async (token, actor) => {
     return { result: 'REJECTED_INVALID_QR', payload: null, message: 'The venue on this QR code no longer exists.' };
   }
 
-  // Verify the invigilator is assigned to THIS venue on THIS day.
+  // Fetch the examination session to validate exam period and time window.
+  const session = await prisma.examinationSession.findUnique({
+    where: { id: payload.examinationSessionId },
+    select: { id: true, name: true, startDate: true, endDate: true },
+  });
+  if (!session) {
+    return { result: 'REJECTED_INVALID_QR', payload: null, message: 'The examination session for this QR code no longer exists.' };
+  }
+
   const now = new Date();
+
+  // Enforce exam period — QR only valid during the session date range.
+  if (!isWithinExamPeriod(session, now)) {
+    return {
+      result: 'REJECTED_WINDOW',
+      payload,
+      venue,
+      invigilator,
+      message: `This QR code is only valid during the exam period (${new Date(session.startDate).toLocaleDateString()} – ${new Date(session.endDate).toLocaleDateString()}). Scanning is not available outside this period.`,
+    };
+  }
+
+  // Enforce time slot — QR only valid during 8–11, 11–2, or 2–5.
+  const currentSlot = getCurrentTimeSlot(now);
+  if (!currentSlot) {
+    return {
+      result: 'REJECTED_WINDOW',
+      payload,
+      venue,
+      invigilator,
+      message: 'QR codes can only be scanned during exam time slots: 8:00–11:00 AM, 11:00 AM–2:00 PM, or 2:00–5:00 PM.',
+    };
+  }
+
+  // Verify the invigilator is assigned to THIS venue on THIS day.
   const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
 
@@ -96,7 +153,7 @@ const evaluateVenueScan = async (token, actor) => {
 
   if (!assignment) {
     // Find where the invigilator IS assigned today so we can point them there.
-    const todayAssignment = await prisma.venueAssignment.findFirst({
+    const todayAssignments = await prisma.venueAssignment.findMany({
       where: {
         invigilatorId: actor.id,
         examinationSessionId: payload.examinationSessionId,
@@ -110,12 +167,15 @@ const evaluateVenueScan = async (token, actor) => {
     });
 
     let message;
-    if (todayAssignment) {
-      const slotTime = new Date(todayAssignment.slotAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const loc = todayAssignment.venue.location ? ` (${todayAssignment.venue.location})` : '';
-      message = `This QR code is for ${venue.name}, but today you are assigned to ${todayAssignment.venue.name}${loc} at ${slotTime}. Please proceed to your assigned venue and scan the QR code there.`;
+    if (todayAssignments.length > 0) {
+      const assignmentList = todayAssignments.map((a) => {
+        const slotTime = new Date(a.slotAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const loc = a.venue.location ? ` (${a.venue.location})` : '';
+        return `${a.venue.name}${loc} at ${slotTime}`;
+      }).join(', ');
+      message = `You are not assigned to ${venue.name}. Today you are assigned to: ${assignmentList}. Please proceed to your assigned venue and scan the QR code there.`;
     } else {
-      message = `This QR code is for ${venue.name}, but you have no venue assignment for today in this examination session. Please check your assignments or contact the exam officer.`;
+      message = `You are not assigned to ${venue.name}, and you have no venue assignments for today in this examination session. Please check your assignments or contact the exam officer.`;
     }
 
     return {
@@ -123,37 +183,17 @@ const evaluateVenueScan = async (token, actor) => {
       payload,
       venue,
       invigilator,
-      assignedVenue: todayAssignment
-        ? { ...todayAssignment.venue, slotAt: todayAssignment.slotAt }
+      assignedVenue: todayAssignments[0]
+        ? { ...todayAssignments[0].venue, slotAt: todayAssignments[0].slotAt }
         : null,
+      allAssignedVenues: todayAssignments.map((a) => ({ ...a.venue, slotAt: a.slotAt })),
       message,
     };
   }
 
-  // Duplicate check is scoped to today — the same venue QR is valid for the
-  // whole exam window, so the invigilator checks in once per day.
-  const existing = await prisma.venueScan.findFirst({
-    where: {
-      venueId: payload.venueId,
-      examinationSessionId: payload.examinationSessionId,
-      userId: actor.id,
-      result: 'RECORDED',
-      scannedAt: { gte: dayStart, lt: dayEnd },
-    },
-  });
-  if (existing) {
-    const at = new Date(existing.scannedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return {
-      result: 'REJECTED_DUPLICATE',
-      payload,
-      venue,
-      invigilator,
-      assignment,
-      message: `You already checked in at ${venue.name} today at ${at}.`,
-    };
-  }
-
-  return { result: 'RECORDED', payload, venue, invigilator, assignment };
+  // No duplicate check — invigilators can scan multiple times per slot.
+  // Each scan is logged with timestamp and location for audit purposes.
+  return { result: 'RECORDED', payload, venue, invigilator, assignment, timeSlot: currentSlot.label };
 };
 
 const assertQrAccess = (invigilation, actor) => {
@@ -354,21 +394,23 @@ export const attendanceService = {
    */
   async previewVenueScan({ token }, actor) {
     const evaluation = await evaluateVenueScan(token, actor);
-    const { result, venue, assignedVenue, message, assignment } = evaluation;
+    const { result, venue, assignedVenue, allAssignedVenues, message, assignment, timeSlot } = evaluation;
 
     return {
       result,
       ok: result === 'RECORDED',
       venue: venue || null,
       assignedVenue: assignedVenue || null,
+      allAssignedVenues: allAssignedVenues || null,
       slotAt: assignment?.slotAt || null,
+      timeSlot: timeSlot || null,
       message: message || null,
     };
   },
 
-  async scanVenue({ token, ipAddress, userAgent }, actor) {
+  async scanVenue({ token, ipAddress, userAgent, latitude, longitude, locationAccuracy }, actor) {
     const evaluation = await evaluateVenueScan(token, actor);
-    const { result, payload, venue, invigilator, assignedVenue, message } = evaluation;
+    const { result, payload, venue, invigilator, assignedVenue, allAssignedVenues, message, timeSlot } = evaluation;
 
     // An unreadable QR or unknown venue has no valid venue/session to attach a
     // scan row to, so nothing is persisted for those.
@@ -387,6 +429,9 @@ export const attendanceService = {
         result,
         ipAddress,
         userAgent,
+        latitude: latitude || null,
+        longitude: longitude || null,
+        locationAccuracy: locationAccuracy || null,
       },
     });
 
@@ -396,6 +441,7 @@ export const attendanceService = {
         scan,
         venue: venue || null,
         assignedVenue: assignedVenue || null,
+        allAssignedVenues: allAssignedVenues || null,
         message: message || null,
       };
     }
@@ -403,12 +449,15 @@ export const attendanceService = {
     // Notify all exam officers about the check-in (fire-and-forget) and
     // broadcast instantly via Socket.IO so the admin page updates live.
     const checkInTime = new Date(scan.scannedAt || Date.now()).toLocaleString();
+    const locationStr = latitude != null && longitude != null
+      ? ` (Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)})`
+      : '';
     notifyRole('SUPER_ADMIN', {
       type: 'INVIGILATOR_CHECKIN',
       title: 'Invigilator checked in',
-      message: `${invigilator.fullName} checked in at ${venue.name} — ${checkInTime}.`,
+      message: `${invigilator.fullName} checked in at ${venue.name} — ${checkInTime}${locationStr}.`,
       link: '/invigilator-assignments',
-      data: { venueId: payload.venueId, examinationSessionId: payload.examinationSessionId, scanId: scan.id },
+      data: { venueId: payload.venueId, examinationSessionId: payload.examinationSessionId, scanId: scan.id, latitude, longitude },
     }).catch(() => {});
 
     broadcast.toRoles('SUPER_ADMIN', 'invigilator-checkin', {
@@ -422,22 +471,34 @@ export const attendanceService = {
         staffId: invigilator.staffId,
       },
       examinationSessionId: payload.examinationSessionId,
+      latitude: latitude || null,
+      longitude: longitude || null,
+      timeSlot: timeSlot || null,
     });
 
     return {
       result: 'RECORDED',
       scan,
       venue,
+      timeSlot: timeSlot || null,
       invigilator: { fullName: invigilator.fullName, email: invigilator.email, staffId: invigilator.staffId },
     };
   },
 
-  async listVenueScans({ examinationSessionId, venueId } = {}, actor) {
+  async listVenueScans({ examinationSessionId, venueId, date } = {}, actor) {
     const where = {
       ...(examinationSessionId ? { examinationSessionId } : {}),
       ...(venueId ? { venueId } : {}),
       ...(actor?.role === 'INVIGILATOR' ? { userId: actor.id } : {}),
     };
+
+    if (date) {
+      const dayStart = new Date(date);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+      where.scannedAt = { gte: dayStart, lt: dayEnd };
+    }
+
     return prisma.venueScan.findMany({
       where,
       orderBy: { scannedAt: 'desc' },

@@ -6,6 +6,7 @@ import { ProtectedRoute } from './ProtectedRoute';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { RegisterPage } from '@/pages/auth/RegisterPage';
 import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage';
+import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { PlaceholderPage } from '@/pages/PlaceholderPage';
@@ -46,6 +47,7 @@ export const AppRoutes = () => (
     <Route element={<AuthLayout />}>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
     </Route>
 
@@ -97,13 +99,14 @@ export const AppRoutes = () => (
       <Route path="/attendance/qr/:invigilationId" element={<ProtectedRoute roles={ADMIN_OR_INVIGILATOR}><QrCodePage /></ProtectedRoute>} />
       <Route path="/venue-qr-codes" element={<ProtectedRoute roles={SUPER_ADMIN}><VenueQrCodesPage /></ProtectedRoute>} />
       <Route path="/attendance/history" element={<ProtectedRoute roles={INVIGILATOR}><AttendanceHistoryPage /></ProtectedRoute>} />
-      <Route path="/scan" element={<ProtectedRoute roles={INVIGILATOR}><ScanPage /></ProtectedRoute>} />
+      <Route path="/scan" element={<ProtectedRoute roles={INVIGILATOR} redirect404><ScanPage /></ProtectedRoute>} />
 
       {/* Audit + Settings */}
       <Route path="/audit-logs" element={<ProtectedRoute roles={SUPER_ADMIN}><PlaceholderPage title="Audit Logs" phase="Phase 7" /></ProtectedRoute>} />
       <Route path="/settings" element={<SettingsPage />} />
     </Route>
 
+    <Route path="/404" element={<NotFoundPage />} />
     <Route path="*" element={<NotFoundPage />} />
   </Routes>
 );

@@ -39,6 +39,9 @@ export const attendanceController = {
       token: req.body.token,
       ipAddress: req.ip || req.socket?.remoteAddress || null,
       userAgent: req.headers['user-agent'] || null,
+      latitude: req.body.latitude || null,
+      longitude: req.body.longitude || null,
+      locationAccuracy: req.body.locationAccuracy || null,
     }, req.user);
     return ApiResponse.ok(res, result);
   }),

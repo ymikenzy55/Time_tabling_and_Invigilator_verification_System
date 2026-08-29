@@ -337,6 +337,9 @@ model VenueScan {
   scannedAt            DateTime @default(now())
   ipAddress            String?
   userAgent            String?
+  latitude             Float?
+  longitude            Float?
+  locationAccuracy     Float?
 
   @@index([examinationSessionId, venueId])
   @@index([userId, scannedAt])

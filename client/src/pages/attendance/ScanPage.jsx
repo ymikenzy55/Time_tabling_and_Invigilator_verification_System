@@ -3,7 +3,7 @@ import { useSearchParams, useLocation } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Html5Qrcode } from 'html5-qrcode';
 import toast from 'react-hot-toast';
-import { Loader2, QrCode, ScanLine, CheckCircle2, AlertCircle, AlertTriangle, MapPin, Clock } from 'lucide-react';
+import { Loader2, QrCode, ScanLine, CheckCircle2, AlertCircle, AlertTriangle, MapPin, Clock, Navigation } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Modal } from '@/components/ui/Modal';
 import { attendanceApi } from '@/features/attendance/attendanceApi';
@@ -17,7 +17,7 @@ const RESULT_LABELS = {
   REJECTED_UNASSIGNED: 'Not Authorized',
   REJECTED_VENUE_MISMATCH: 'Wrong Venue',
   REJECTED_DUPLICATE: 'Already Checked In',
-  REJECTED_WINDOW: 'Outside Time Window',
+  REJECTED_WINDOW: 'Outside Exam Time Window',
 };
 
 export const ScanPage = () => {
@@ -26,14 +26,22 @@ export const ScanPage = () => {
   const [result, setResult] = useState(null);
   const [manualToken, setManualToken] = useState(searchParams.get('token') || '');
   const [pendingToken, setPendingToken] = useState(null);
-  // Read-only verdict from the server describing which venue this QR belongs to
-  // and whether the invigilator is assigned there. Nothing is recorded yet.
   const [verification, setVerification] = useState(null);
   const [cameraError, setCameraError] = useState(null);
   const [cameraStarting, setCameraStarting] = useState(false);
+  const [locationData, setLocationData] = useState(null);
+  const [locationError, setLocationError] = useState(null);
+  const [locationLoading, setLocationLoading] = useState(false);
   const scannerRef = useRef(null);
   const scannedRef = useRef(false);
   const fromAssignment = location.state?.fromAssignment;
+
+  // Fetch the invigilator's own scan history so they can see past scans.
+  const scanHistoryQuery = useQuery({
+    queryKey: ['myVenueScans'],
+    queryFn: () => attendanceApi.listVenueScans(),
+    staleTime: 10_000,
+  });
 
   // Fetch assignments to check scan window
   const assignmentsQuery = useQuery({
@@ -69,6 +77,44 @@ export const ScanPage = () => {
   const allowRescan = () => {
     scannedRef.current = false;
   };
+
+  // Geolocation — must be obtained before scanning is allowed.
+  const requestLocation = () => {
+    setLocationError(null);
+    setLocationLoading(true);
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported by your browser. Please use a modern browser.');
+      setLocationLoading(false);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocationData({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          locationAccuracy: pos.coords.accuracy,
+        });
+        setLocationLoading(false);
+      },
+      (err) => {
+        let msg = 'Could not get your location.';
+        if (err.name === 'NotAllowedError') {
+          msg = 'Location permission denied. You must allow location access to scan QR codes. Please enable it in your browser settings and try again.';
+        } else if (err.name === 'PositionUnavailableError') {
+          msg = 'Your location is unavailable. Please check your GPS/network and try again.';
+        } else if (err.name === 'TimeoutError') {
+          msg = 'Location request timed out. Please try again.';
+        }
+        setLocationError(msg);
+        setLocationLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  };
+
+  useEffect(() => {
+    requestLocation();
+  }, []);
 
   // Stage 1 — ask the server which venue this QR is for and whether the
   // invigilator is assigned there. This records nothing.
@@ -111,7 +157,7 @@ export const ScanPage = () => {
   const scanMutation = useMutation({
     mutationFn: async (token) => {
       try {
-        const data = await attendanceApi.scanVenue(token);
+        const data = await attendanceApi.scanVenue(token, locationData || {});
         if (data.result === 'RECORDED' || data.result?.startsWith('REJECTED')) return data;
       } catch (err) {
         if (err?.status !== 400 && err?.status !== 404) throw err;
@@ -123,6 +169,7 @@ export const ScanPage = () => {
       const isRecorded = data.result === 'RECORDED';
       if (isRecorded) {
         toast.success('Attendance recorded successfully!');
+        scanHistoryQuery.refetch();
       } else {
         const label = RESULT_LABELS[data.result] || data.result;
         toast.error(`${label}${data.message ? ': ' + data.message : ''}`);
@@ -141,9 +188,8 @@ export const ScanPage = () => {
 
   const submitToken = (token) => {
     if (!token || isBusy) return;
-    if (!isScanAvailable && fromAssignment) {
-      toast.error('Scan window is not open. Scanning opens 30 minutes before the exam and closes when the exam ends.');
-      allowRescan();
+    if (!locationData) {
+      toast.error('Location access is required to scan. Please allow location access and try again.');
       return;
     }
     setResult(null);
@@ -304,6 +350,41 @@ export const ScanPage = () => {
         </div>
       )}
 
+      {/* Location status banner */}
+      <div className={`panel p-3 mb-4 ${
+        locationData
+          ? 'bg-emerald-50 border-emerald-200'
+          : locationError
+          ? 'bg-rose-50 border-rose-200'
+          : 'bg-amber-50 border-amber-200'
+      }`}>
+        <div className="flex items-center gap-2 text-sm">
+          {locationData ? (
+            <>
+              <Navigation className="w-4 h-4 shrink-0 text-emerald-600" />
+              <span className="text-emerald-800">
+                Location acquired — Lat: {locationData.latitude.toFixed(6)}, Lng: {locationData.longitude.toFixed(6)}
+                {locationData.locationAccuracy ? ` (±${Math.round(locationData.locationAccuracy)}m)` : ''}
+              </span>
+            </>
+          ) : locationError ? (
+            <>
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+              <span className="text-rose-800 flex-1">{locationError}</span>
+              <button className="btn-secondary btn-sm" onClick={requestLocation} disabled={locationLoading}>
+                {locationLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Navigation className="w-3.5 h-3.5" />}
+                Retry
+              </button>
+            </>
+          ) : (
+            <>
+              <Loader2 className="w-4 h-4 shrink-0 text-amber-600 animate-spin" />
+              <span className="text-amber-800">Getting your location…</span>
+            </>
+          )}
+        </div>
+      </div>
+
       <div className="max-w-md mx-auto space-y-6">
         {!isScanAvailable && fromAssignment ? (
           <div className="panel p-6 text-center">
@@ -408,7 +489,30 @@ export const ScanPage = () => {
                 <span>{result.message}</span>
               </div>
             )}
-            {result.result === 'REJECTED_VENUE_MISMATCH' && result.assignedVenue && (
+            {result.result === 'REJECTED_VENUE_MISMATCH' && result.allAssignedVenues && result.allAssignedVenues.length > 0 && (
+              <div className="mt-3 rounded-lg border border-primary-200 bg-primary-50 p-3 text-left">
+                <div className="flex items-center gap-2 text-xs font-bold text-primary-800 uppercase tracking-wide">
+                  <MapPin className="w-3.5 h-3.5" /> Your assigned venues today
+                </div>
+                <div className="mt-2 space-y-1.5">
+                  {result.allAssignedVenues.map((v, i) => (
+                    <div key={i} className="text-sm">
+                      <span className="font-bold text-ink-900">{v.name}</span>
+                      {v.location && <span className="text-ink-600"> · {v.location}</span>}
+                      {v.slotAt && (
+                        <span className="text-xs text-ink-500 ml-1">
+                          at {new Date(v.slotAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="text-xs text-primary-700 mt-2">
+                  Please head to your assigned venue and scan the QR code there.
+                </div>
+              </div>
+            )}
+            {result.result === 'REJECTED_VENUE_MISMATCH' && result.assignedVenue && !result.allAssignedVenues && (
               <div className="mt-3 rounded-lg border border-primary-200 bg-primary-50 p-3 text-left">
                 <div className="flex items-center gap-2 text-xs font-bold text-primary-800 uppercase tracking-wide">
                   <MapPin className="w-3.5 h-3.5" /> Your assigned venue today
@@ -444,6 +548,11 @@ export const ScanPage = () => {
                 Scanned at: {new Date(result.scan.scannedAt).toLocaleString()}
               </div>
             )}
+            {result.result === 'RECORDED' && result.timeSlot && (
+              <div className="text-xs text-ink-500 mt-1">
+                Time slot: {result.timeSlot}
+              </div>
+            )}
             {result.error && <div className="text-sm text-rose-700 mt-1">{result.error}</div>}
             {result.previewOnly && (
               <div className="text-xs text-ink-500 mt-3">
@@ -462,6 +571,47 @@ export const ScanPage = () => {
                 <ScanLine className="w-3.5 h-3.5" /> Scan again
               </button>
             )}
+            {result.result === 'RECORDED' && (
+              <button
+                className="btn-secondary btn-sm mt-3"
+                onClick={() => {
+                  setResult(null);
+                  allowRescan();
+                  startCamera();
+                }}
+              >
+                <ScanLine className="w-3.5 h-3.5" /> Scan again
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Scan history */}
+        {scanHistoryQuery.data && scanHistoryQuery.data.length > 0 && (
+          <div className="panel p-4">
+            <h3 className="text-sm font-bold text-ink-900 mb-3">Your recent scans</h3>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {scanHistoryQuery.data.slice(0, 10).map((scan) => (
+                <div key={scan.id} className="flex items-center justify-between text-xs border-b border-surface-divider pb-2 last:border-0">
+                  <div>
+                    <span className="font-medium text-ink-900">{scan.venue?.name || 'Unknown venue'}</span>
+                    {scan.venue?.location && <span className="text-ink-500"> · {scan.venue.location}</span>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                      scan.result === 'RECORDED'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-rose-100 text-rose-700'
+                    }`}>
+                      {scan.result === 'RECORDED' ? 'Present' : scan.result.replace('REJECTED_', '')}
+                    </span>
+                    <span className="text-ink-400">
+                      {new Date(scan.scannedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
