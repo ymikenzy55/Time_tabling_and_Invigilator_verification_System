@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ClipboardList, Loader2, Trash2, UserPlus, Users, Building, Clock,
@@ -10,11 +10,14 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { SkeletonCardGrid, Skeleton } from '@/components/ui/Skeleton';
 import { examinationSessionsApi } from '@/features/examinations/examinationSessionsApi';
+import { semestersApi } from '@/features/academics/semestersApi';
 import { venuesApi } from '@/features/venues/venuesApi';
 import { usersApi } from '@/features/users/usersApi';
 import { venueAssignmentsApi } from '@/features/venueAssignments/venueAssignmentsApi';
 import { attendanceApi } from '@/features/attendance/attendanceApi';
 import toast from 'react-hot-toast';
+
+const SEMESTER_ORDER = ['First Semester', 'Second Semester'];
 
 const formatDate = (v) => {
   if (!v) return '—';
@@ -38,6 +41,7 @@ const TIME_SLOTS = [
 
 export const InvigilatorAssignmentsPage = () => {
   const qc = useQueryClient();
+  const [selectedSemester, setSelectedSemester] = useState('');
   const [selectedSession, setSelectedSession] = useState('');
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [maxPerVenue, setMaxPerVenue] = useState(4);
@@ -45,12 +49,49 @@ export const InvigilatorAssignmentsPage = () => {
   const [removeTarget, setRemoveTarget] = useState(null);
   const [activeTab, setActiveTab] = useState('assignments');
 
+  // Fetch semesters and filter to only First/Second, sorted with First first
+  const semestersQuery = useQuery({
+    queryKey: ['semesters'],
+    queryFn: () => semestersApi.list(),
+    staleTime: 5 * 60_000,
+  });
+
+  const filteredSemesters = useMemo(() => {
+    if (!semestersQuery.data) return [];
+    return semestersQuery.data
+      .filter((s) => SEMESTER_ORDER.includes(s.name))
+      .sort((a, b) => SEMESTER_ORDER.indexOf(a.name) - SEMESTER_ORDER.indexOf(b.name));
+  }, [semestersQuery.data]);
+
+  // Auto-select First Semester when semesters load
+  useEffect(() => {
+    if (!selectedSemester && filteredSemesters.length > 0) {
+      setSelectedSemester(filteredSemesters[0].id);
+    }
+  }, [filteredSemesters, selectedSemester]);
+
   // Queries
   const sessionsQuery = useQuery({
     queryKey: ['examinationSessions'],
     queryFn: examinationSessionsApi.list,
     staleTime: 5 * 60_000,
   });
+
+  // Filter sessions by selected semester
+  const filteredSessions = useMemo(() => {
+    if (!sessionsQuery.data) return [];
+    if (!selectedSemester) return sessionsQuery.data;
+    return sessionsQuery.data.filter((s) => s.semester?.id === selectedSemester);
+  }, [sessionsQuery.data, selectedSemester]);
+
+  // Auto-select first session when filtered sessions change
+  useEffect(() => {
+    if (filteredSessions.length > 0 && !filteredSessions.some((s) => s.id === selectedSession)) {
+      setSelectedSession(filteredSessions[0].id);
+    } else if (filteredSessions.length === 0) {
+      setSelectedSession('');
+    }
+  }, [filteredSessions, selectedSession]);
 
   const assignmentsQuery = useQuery({
     queryKey: ['venueAssignments', { examinationSessionId: selectedSession }],
@@ -139,9 +180,24 @@ export const InvigilatorAssignmentsPage = () => {
         description="Assign invigilators to venues, manage constraints, and view check-ins."
       />
 
-      {/* Session selector */}
+      {/* Semester + Session selector */}
       <div className="panel p-4 mb-4">
         <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+          <div className="flex-1">
+            <label className="label">Semester</label>
+            <select
+              className="input"
+              value={selectedSemester}
+              onChange={(e) => setSelectedSemester(e.target.value)}
+            >
+              <option value="">Select semester…</option>
+              {filteredSemesters.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}{s.academicYear ? ` — ${s.academicYear.name}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="flex-1">
             <label className="label">Examination Session</label>
             <select
@@ -150,7 +206,7 @@ export const InvigilatorAssignmentsPage = () => {
               onChange={(e) => setSelectedSession(e.target.value)}
             >
               <option value="">Select a session…</option>
-              {sessionsQuery.data?.map((s) => (
+              {filteredSessions.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>

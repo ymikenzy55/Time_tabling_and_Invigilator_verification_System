@@ -1,10 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { z } from 'zod';
 import { EntityPage } from '@/components/EntityPage';
 import { semestersApi } from '@/features/academics/semestersApi';
 import { academicYearsApi } from '@/features/academics/academicYearsApi';
 import { Badge } from '@/components/ui/Badge';
 import { useAuth } from '@/context/AuthContext';
+
+const computeAutoAcademicYearName = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  return month >= 8 ? `${year}/${year + 1}` : `${year - 1}/${year}`;
+};
 
 const semesterBaseSchema = z.object({
   name: z.string().trim().min(2, 'Name is required.'),
@@ -30,12 +38,21 @@ const formatDate = (v) => {
   return isNaN(d) ? v : d.toISOString().split('T')[0];
 };
 
-const SemesterFormFields = ({ register, errors }) => {
+const SemesterFormFields = ({ register, errors, setValue, getValues }) => {
   const { data: years = [] } = useQuery({
     queryKey: ['academicYears'],
     queryFn: () => academicYearsApi.list(),
     staleTime: 5 * 60_000,
   });
+
+  const autoYearName = computeAutoAcademicYearName();
+
+  useEffect(() => {
+    if (years.length > 0 && !getValues?.('academicYearId')) {
+      const match = years.find((y) => y.name === autoYearName);
+      if (match) setValue?.('academicYearId', match.id);
+    }
+  }, [years, autoYearName, setValue, getValues]);
 
   return (
     <>
@@ -44,7 +61,7 @@ const SemesterFormFields = ({ register, errors }) => {
         <select className="input" {...register('academicYearId')}>
           <option value="">Select an academic year</option>
           {years.map((y) => (
-            <option key={y.id} value={y.id}>{y.name}</option>
+            <option key={y.id} value={y.id}>{y.name}{y.isActive ? ' (Active)' : ''}</option>
           ))}
         </select>
         {errors.academicYearId && <p className="field-error">{errors.academicYearId.message}</p>}

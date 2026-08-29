@@ -7,7 +7,7 @@ import { dashboardApi } from '@/features/dashboard/dashboardApi';
 import { venueAssignmentsApi } from '@/features/venueAssignments/venueAssignmentsApi';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Activity, Clock, ClipboardList, ScanLine, Calendar, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
+import { Activity, Clock, ClipboardList, ScanLine, Calendar, CheckCircle2, AlertCircle, ArrowRight, BookOpen, Layers, Users } from 'lucide-react';
 
 const ROLE_LABEL = {
   SUPER_ADMIN: 'Super Admin',
@@ -112,7 +112,7 @@ export const DashboardPage = () => {
           assignmentsLoading={assignmentsQuery.isLoading}
         />
       ) : (
-        <AdminDashboard stats={stats} recentActivity={recentActivity} />
+        <AdminDashboard stats={stats} recentActivity={recentActivity} department={data?.department} isDeptHead={user?.role === 'DEPARTMENT_HEAD'} />
       )}
     </>
   );
@@ -310,8 +310,43 @@ const InvigilatorDashboard = ({ totalSlots, scannedCount, upcomingCount, todayCo
   );
 };
 
-const AdminDashboard = ({ stats, recentActivity }) => (
+const DeptOverviewCard = ({ icon: Icon, label, value }) => (
+  <div className="panel p-4 flex items-center gap-3">
+    <div className="w-10 h-10 rounded-lg bg-primary-50 text-primary-600 border border-primary-100 grid place-items-center shrink-0">
+      <Icon className="w-5 h-5" />
+    </div>
+    <div className="min-w-0">
+      <div className="text-xs uppercase tracking-wide text-ink-400">{label}</div>
+      <div className="text-xl font-bold text-ink-900">{value}</div>
+    </div>
+  </div>
+);
+
+const AdminDashboard = ({ stats, recentActivity, department, isDeptHead }) => (
   <div className="space-y-5">
+    {isDeptHead && department && (
+      <div className="panel p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-base font-bold text-ink-900">Department Overview</h3>
+            <p className="text-sm text-ink-500 mt-0.5">
+              {department.name}
+              {department.code && (
+                <span className="ml-2 uppercase tracking-wide text-xs bg-primary-50 text-primary-700 border border-primary-200 px-2 py-0.5 rounded-md">{department.code}</span>
+              )}
+            </p>
+          </div>
+          {department.faculty && (
+            <div className="text-sm text-ink-500">{department.faculty}</div>
+          )}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <DeptOverviewCard icon={Users} label="Department Heads" value={department.headCount} />
+          <DeptOverviewCard icon={BookOpen} label="Courses" value={department.courseCount} />
+          <DeptOverviewCard icon={Layers} label="Course Levels" value={department.courseLevelCount} />
+        </div>
+      </div>
+    )}
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
       {stats.map((s) => (
         <Link

@@ -37,17 +37,8 @@ export const navConfig = [
     roles: ['SUPER_ADMIN'],
     items: [
       { label: 'Departments', to: '/departments', icon: Building, roles: ['SUPER_ADMIN'] },
-      { label: 'Academic Years', to: '/academic-years', icon: CalendarDays, roles: ['SUPER_ADMIN'] },
       { label: 'Semesters', to: '/semesters', icon: CalendarRange, roles: ['SUPER_ADMIN'] },
     ],
-  },
-  {
-    kind: 'item',
-    label: 'My Department',
-    shortLabel: 'Dept',
-    to: '/my-department',
-    icon: GraduationCap,
-    roles: ['DEPARTMENT_HEAD'],
   },
   {
     kind: 'group',
@@ -150,7 +141,7 @@ export const flattenNav = (role) => {
 const BOTTOM_NAV_PRIMARY = {
   INVIGILATOR: ['/dashboard', '/my-assignments', '/scan', '/attendance/history', '/settings'],
   SUPER_ADMIN: ['/dashboard', '/examinations', '/courses', '/attendance'],
-  DEPARTMENT_HEAD: ['/dashboard', '/my-department', '/courses', '/timetable'],
+  DEPARTMENT_HEAD: ['/dashboard', '/my-department-heads', '/courses', '/timetable'],
 };
 
 /**

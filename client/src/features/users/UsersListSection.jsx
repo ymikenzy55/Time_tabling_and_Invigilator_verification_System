@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Search, Users as UsersIcon, CheckCircle2, Loader2, Trash2, Ban, CheckCircle,
+  Search, Users as UsersIcon, CheckCircle2, Loader2, Trash2, Ban, CheckCircle, Filter,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usersApi } from './usersApi';
+import { departmentsApi } from '@/features/academics/departmentsApi';
 import { StatusBadge } from './StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Badge } from '@/components/ui/Badge';
@@ -24,6 +25,7 @@ const formatDate = (v) => {
  */
 export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
   const [q, setQ] = useState('');
+  const [deptFilter, setDeptFilter] = useState('');
   const qc = useQueryClient();
   const confirm = useConfirm();
   const { user: me } = useAuth();
@@ -33,6 +35,13 @@ export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
     queryFn: () => usersApi.list({ role }),
     staleTime: 60_000,
     placeholderData: (prev) => prev,
+  });
+
+  const deptsQuery = useQuery({
+    queryKey: ['departments', 'names'],
+    queryFn: () => departmentsApi.listNames(),
+    staleTime: 5 * 60_000,
+    enabled: role === 'DEPARTMENT_HEAD',
   });
 
   const removeMutation = useMutation({
@@ -69,13 +78,17 @@ export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return users;
-    return users.filter((u) =>
-      [u.fullName, u.email, u.staffId, u.phone, u.departmentName, u.department?.name]
+    return users.filter((u) => {
+      if (deptFilter) {
+        const userDept = u.departmentName || u.department?.name || '';
+        if (userDept !== deptFilter) return false;
+      }
+      if (!s) return true;
+      return [u.fullName, u.email, u.staffId, u.phone, u.departmentName, u.department?.name]
         .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(s))
-    );
-  }, [users, q]);
+        .some((v) => String(v).toLowerCase().includes(s));
+    });
+  }, [users, q, deptFilter]);
 
   const renderRow = (u, isSub) => (
     <tr key={u.id} className={`hover:bg-surface-subtle/50 ${isSub ? 'bg-surface-subtle/30' : ''}`}>
@@ -172,6 +185,21 @@ export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
+        {role === 'DEPARTMENT_HEAD' && deptsQuery.data && (
+          <div className="relative">
+            <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+            <select
+              className="input pl-9 pr-8 appearance-none cursor-pointer"
+              value={deptFilter}
+              onChange={(e) => setDeptFilter(e.target.value)}
+            >
+              <option value="">All Departments</option>
+              {deptsQuery.data.map((d) => (
+                <option key={d.id} value={d.name}>{d.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <Badge variant="neutral">
             Total: {users.length}

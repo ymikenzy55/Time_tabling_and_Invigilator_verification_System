@@ -15,7 +15,7 @@ const App = () => (
           <AppRoutes />
           <InstallPrompt />
           <Toaster
-            position="top-right"
+            position="top-center"
             toastOptions={{
               style: { borderRadius: '10px', border: '1px solid #e5e7eb', fontSize: '14px' },
             }}

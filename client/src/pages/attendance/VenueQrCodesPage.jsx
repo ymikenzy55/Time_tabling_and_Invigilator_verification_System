@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import QRCode from 'qrcode';
-import { QrCode, Printer, FileDown, MapPin } from 'lucide-react';
+import { QrCode, Printer, FileDown } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonCardGrid } from '@/components/ui/Skeleton';
@@ -226,11 +226,6 @@ export const VenueQrCodesPage = () => {
                   >
                     <Printer className="w-3.5 h-3.5" />
                   </button>
-                </div>
-
-                <div className="flex items-center justify-center gap-1 text-xs text-ink-500 mt-1">
-                  <MapPin className="w-3 h-3" />
-                  {vs.venue?.location || 'No location'} · Cap: {vs.venue?.capacity}
                 </div>
 
                 <div className="flex justify-center mt-4">

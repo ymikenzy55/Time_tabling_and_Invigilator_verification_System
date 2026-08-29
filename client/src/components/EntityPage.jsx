@@ -87,7 +87,7 @@ export const EntityPage = ({
   });
 
   const {
-    register, handleSubmit, reset, formState: { errors },
+    register, handleSubmit, reset, setValue, getValues, formState: { errors },
   } = useForm({
     resolver: zodResolver(modalMode === 'create' ? createSchema : updateSchema),
     defaultValues: createDefaultValues,
@@ -273,7 +273,7 @@ export const EntityPage = ({
         description={modalMode === 'create' ? `Add a new ${title.toLowerCase()}.` : `Update ${title.toLowerCase()} details.`}
       >
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <FormFields register={register} errors={errors} isEdit={modalMode === 'edit'} />
+          <FormFields register={register} errors={errors} isEdit={modalMode === 'edit'} setValue={setValue} getValues={getValues} />
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" className="btn-secondary" onClick={closeModal}>
               Cancel

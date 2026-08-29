@@ -71,11 +71,7 @@ export const LoginPage = () => {
     try {
       const authenticatedUser = await login(values);
       const fromLocation = location.state?.from?.pathname;
-      const roleDefault = {
-        SUPER_ADMIN: '/dashboard',
-        DEPARTMENT_HEAD: '/courses',
-        INVIGILATOR: '/my-assignments',
-      }[authenticatedUser.role] || '/dashboard';
+      const roleDefault = '/dashboard';
 
       const redirectTo = fromLocation && fromLocation !== '/login'
         ? fromLocation
