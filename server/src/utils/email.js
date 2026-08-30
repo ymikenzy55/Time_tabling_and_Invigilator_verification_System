@@ -40,24 +40,29 @@ export const sendEmail = async ({ to, subject, html }) => {
   const resend = getResendClient();
   if (resend) {
     try {
-      await resend.emails.send({
+      console.log('[email] Attempting to send via Resend to:', to);
+      const result = await resend.emails.send({
         from: 'UENR Exam System <onboarding@resend.dev>',
         to,
         subject,
         html,
       });
+      console.log('[email] Resend success:', result);
       return { skipped: false, method: 'resend' };
     } catch (error) {
       // eslint-disable-next-line no-console
-      console.error('[email] Resend failed:', error.message);
+      console.error('[email] Resend failed:', error);
       // Fall through to try nodemailer
     }
+  } else {
+    console.log('[email] Resend not configured (no API key)');
   }
 
   // Fallback to nodemailer if available
   const transport = getNodemailerTransporter();
   if (transport) {
     try {
+      console.log('[email] Attempting to send via SMTP to:', to);
       const from = env.SMTP_FROM || env.SMTP_USER;
       await transport.sendMail({
         from,
@@ -65,11 +70,14 @@ export const sendEmail = async ({ to, subject, html }) => {
         subject,
         html,
       });
+      console.log('[email] SMTP success');
       return { skipped: false, method: 'smtp' };
     } catch (error) {
       // eslint-disable-next-line no-console
-      console.error('[email] SMTP failed:', error.message);
+      console.error('[email] SMTP failed:', error);
     }
+  } else {
+    console.log('[email] SMTP not configured');
   }
 
   // eslint-disable-next-line no-console
