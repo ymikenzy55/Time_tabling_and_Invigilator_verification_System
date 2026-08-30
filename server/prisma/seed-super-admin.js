@@ -3,14 +3,23 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-async function main() {
-  const email = 'yeboahmichael977@gmail.com';
-  const password = '!@Firatata45';
-  const fullName = 'System Administrator';
-  const staffId = 'SA-0001';
+const admins = [
+  {
+    email: 'yeboahmichael977@gmail.com',
+    password: '!@Firatata45',
+    fullName: 'System Administrator',
+    staffId: 'SA-0001',
+  },
+  {
+    email: 'demoadmin@uenr.edu.gh',
+    password: 'Demo@2026',
+    fullName: 'Demo Administrator',
+    staffId: 'DEMO-001',
+  },
+];
 
+async function upsertAdmin({ email, password, fullName, staffId }) {
   const passwordHash = await bcrypt.hash(password, 10);
-
   const existing = await prisma.user.findUnique({ where: { email } });
 
   if (existing) {
@@ -42,6 +51,12 @@ async function main() {
   });
 
   console.log(`[seed] Created Super Admin: ${email} (id: ${user.id})`);
+}
+
+async function main() {
+  for (const admin of admins) {
+    await upsertAdmin(admin);
+  }
 }
 
 main()

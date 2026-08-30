@@ -23,6 +23,7 @@ Built for the University of Energy and Natural Resources (UENR) Examination Offi
 
 ## Table of Contents
 
+- [Demo Login Credentials](#demo-login-credentials)
 - [Why This Project](#why-this-project)
 - [Feature Highlights](#feature-highlights)
 - [Tech Stack](#tech-stack)
@@ -42,6 +43,21 @@ Built for the University of Energy and Natural Resources (UENR) Examination Offi
 - [Deployment](#deployment)
 - [Engineering Highlights](#engineering-highlights)
 - [Roadmap](#roadmap)
+
+---
+
+## Demo Login Credentials
+
+The system is live at **[https://unertimetable.vercel.app](https://unertimetable.vercel.app)**.
+
+Use either of the Super Admin accounts below to explore all features:
+
+| Account | Email | Password |
+| --- | --- | --- |
+| **Primary Super Admin** | `yeboahmichael977@gmail.com` | `!@Firatata45` |
+| **Demo Super Admin** | `demoadmin@uenr.edu.gh` | `Demo@2026` |
+
+Both accounts have full Super Admin privileges — manage departments, approve courses, create exam sessions, generate QR codes, assign invigilators, and view attendance records.
 
 ---
 
@@ -73,7 +89,7 @@ This system solves that end-to-end:
 - Strong-password policy enforced on both client and server with a live requirement checklist.
 
 ### Academic Structure
-- Faculties → Departments → Academic Years → Semesters, fully CRUD-managed.
+- Departments → Academic Years → Semesters, fully CRUD-managed.
 - Per-department configurable course levels.
 - Skeleton-loader UX on every structure page for perceived performance.
 
@@ -216,7 +232,7 @@ graph LR
 | --- | :---: | :---: | :---: |
 | Self-register | ✗ (seed only) | ✓ (window) | ✓ (window) |
 | Approve accounts | ✓ | ✗ | ✗ |
-| Faculties / departments / years / semesters | ✓ | ✗ | ✗ |
+| Departments / years / semesters | ✓ | ✗ | ✗ |
 | Create & submit courses | ✗ | ✓ (own dept) | ✗ |
 | Approve / reject courses | ✓ | ✗ | ✗ |
 | Venues, sessions, timetable | ✓ | view | ✗ |
@@ -336,7 +352,6 @@ Login is blocked for any account not in `ACTIVE` status, so approval is a genuin
 
 ```mermaid
 erDiagram
-    Faculty ||--o{ Department : contains
     Department ||--o{ User : employs
     Department ||--o{ Course : owns
     Department ||--o{ CourseLevel : defines
@@ -368,7 +383,7 @@ erDiagram
 | Group | Models |
 | --- | --- |
 | Identity & access | `User`, `RegistrationWindow`, `PasswordReset` |
-| Academic structure | `Faculty`, `Department`, `AcademicYear`, `Semester`, `CourseLevel` |
+| Academic structure | `Department`, `AcademicYear`, `Semester`, `CourseLevel` |
 | Curriculum | `Course` |
 | Examinations | `ExaminationSession`, `Venue`, `Invigilation` |
 | Attendance | `VenueAssignment`, `VenueScan`, `Attendance` |
@@ -417,7 +432,7 @@ Time_Table_Web_App/
         ├── middleware/              # auth, RBAC, validate, rateLimit, errors
         ├── modules/                 # Feature modules (routes/controller/service)
         │   ├── auth/ registration/ users/
-        │   ├── faculties/ departments/ academicYears/ semesters/
+        │   ├── departments/ academicYears/ semesters/
         │   ├── courses/ courseLevels/
         │   ├── examinationSessions/ venues/ venueAssignments/
         │   ├── invigilations/ timetable/ attendance/
@@ -448,7 +463,7 @@ All endpoints are namespaced under `/api/v1`. Authenticated routes expect an `Au
 | Registration | `GET /registration/status` · `GET /registration/check-staff-id` · `POST /registration` |
 | Users | `GET /users` · `POST /users/:id/approve` · `POST /users/:id/reject` · `GET /users/pending` |
 | Registration windows | `GET /registration-windows` · `PUT /registration-windows/:role` |
-| Academic | `GET|POST|PATCH|DELETE /faculties` · `/departments` · `/academic-years` · `/semesters` |
+| Academic | `GET|POST|PATCH|DELETE /departments` · `/academic-years` · `/semesters` |
 | Courses | `GET|POST|PATCH|DELETE /courses` · `POST /courses/:id/submit` · `POST /courses/:id/approve` · `POST /courses/:id/reject` |
 | Course levels | `GET|POST|DELETE /course-levels` |
 | Venues | `GET|POST|PATCH|DELETE /venues` |
