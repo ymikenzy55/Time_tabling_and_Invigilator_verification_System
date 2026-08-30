@@ -4,7 +4,6 @@ import { departmentsApi } from '@/features/academics/departmentsApi';
 
 const createSchema = z.object({
   name: z.string().trim().min(2, 'Name is required.'),
-  code: z.string().trim().min(2, 'Code is required.'),
 });
 
 const updateSchema = createSchema.partial();
@@ -16,11 +15,6 @@ const DepartmentFormFields = ({ register, errors }) => {
         <label className="label">Name</label>
         <input className="input" {...register('name')} />
         {errors.name && <p className="field-error">{errors.name.message}</p>}
-      </div>
-      <div>
-        <label className="label">Code</label>
-        <input className="input" {...register('code')} />
-        {errors.code && <p className="field-error">{errors.code.message}</p>}
       </div>
     </>
   );
@@ -42,7 +36,7 @@ export const DepartmentsPage = () => (
     FormFields={DepartmentFormFields}
     createSchema={createSchema}
     updateSchema={updateSchema}
-    createDefaultValues={{ name: '', code: '' }}
+    createDefaultValues={{ name: '' }}
     searchPlaceholder="Search departments..."
     emptyTitle="No departments yet"
     emptyDescription="Add departments to group courses and staff."

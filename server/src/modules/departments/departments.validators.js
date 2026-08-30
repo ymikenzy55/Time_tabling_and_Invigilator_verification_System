@@ -5,7 +5,7 @@ const departmentName = z.string().trim().min(2).max(100);
 
 export const createDepartmentSchema = z.object({
   name: departmentName,
-  code: departmentCode,
+  code: departmentCode.optional(),
 });
 
 export const updateDepartmentSchema = z.object({

@@ -2,7 +2,7 @@ import { prisma } from '../../utils/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { courseLevelsService } from '../courseLevels/courseLevels.service.js';
 import { logAudit } from '../../utils/auditLog.js';
-import { normalizeDepartmentName, linkDepartmentToUser } from './departmentAutoLink.js';
+import { normalizeDepartmentName, linkDepartmentToUser, buildDepartmentCode } from './departmentAutoLink.js';
 import { cache } from '../../utils/cache.js';
 
 const publicSelect = {
@@ -117,15 +117,25 @@ export const departmentsService = {
 
   async create({ name, code }, actor) {
     const exists = await prisma.department.findFirst({
-      where: { OR: [
-        { code: { equals: code, mode: 'insensitive' } },
-        { name: { equals: name, mode: 'insensitive' } },
-      ]},
+      where: { name: { equals: name, mode: 'insensitive' } },
     });
-    if (exists) throw ApiError.conflict('A department with this name or code already exists.');
+    if (exists) throw ApiError.conflict('A department with this name already exists.');
+
+    let finalCode = code;
+    if (!finalCode) {
+      finalCode = buildDepartmentCode(name);
+      let attempt = 1;
+      while (await prisma.department.findUnique({ where: { code: finalCode } })) {
+        attempt += 1;
+        finalCode = `${buildDepartmentCode(name)}${attempt}`.slice(0, 10);
+      }
+    } else {
+      const codeExists = await prisma.department.findUnique({ where: { code: finalCode } });
+      if (codeExists) throw ApiError.conflict('A department with this code already exists.');
+    }
 
     const department = await prisma.department.create({
-      data: { name, code },
+      data: { name, code: finalCode },
       select: publicSelect,
     });
 
@@ -138,7 +148,7 @@ export const departmentsService = {
       targetType: 'Department',
       targetId: department.id,
       result: 'SUCCESS',
-      metadata: { name, code },
+      metadata: { name, code: finalCode },
     });
 
     return department;

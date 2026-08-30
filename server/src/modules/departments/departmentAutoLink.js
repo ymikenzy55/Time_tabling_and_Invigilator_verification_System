@@ -6,7 +6,7 @@ export const normalizeDepartmentName = (value) => {
   return trimmed.length ? trimmed : null;
 };
 
-const buildDepartmentCode = (name) => {
+export const buildDepartmentCode = (name) => {
   const cleaned = name
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, ' ')
