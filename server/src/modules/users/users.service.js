@@ -477,6 +477,7 @@ export const usersService = {
       metadata: { previousStatus: user.status, newStatus: status },
     });
 
+    // Send in-app notification
     await createNotification({
       userId: id,
       type: status === 'ACTIVE' ? 'ACCOUNT_APPROVED' : 'ACCOUNT_REJECTED',
@@ -485,6 +486,100 @@ export const usersService = {
         ? 'You can now sign in again.'
         : 'You cannot sign in until an administrator reactivates your account.',
     });
+
+    // Send email notification
+    if (status === 'SUSPENDED' || status === 'DISABLED') {
+      // Account suspended/disabled email
+      sendEmail({
+        to: updated.email,
+        subject: 'Account Status Update — UENR Examination System',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+              <h2 style="color: #991b1b; margin: 0;">Account ${status === 'SUSPENDED' ? 'Suspended' : 'Disabled'}</h2>
+            </div>
+            <p style="color: #475569; font-size: 15px;">
+              Hello <strong>${updated.fullName}</strong>,
+            </p>
+            <p style="color: #475569; font-size: 15px;">
+              Your account has been <strong>${status.toLowerCase()}</strong> by the examination office.
+            </p>
+            <div style="background: #f9fafb; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <p style="color: #374151; font-size: 14px; margin: 8px 0;">
+                <strong>Email:</strong> ${updated.email}
+              </p>
+              ${updated.staffId ? `<p style="color: #374151; font-size: 14px; margin: 8px 0;">
+                <strong>Staff ID:</strong> ${updated.staffId}
+              </p>` : ''}
+              <p style="color: #374151; font-size: 14px; margin: 8px 0;">
+                <strong>Status:</strong> <span style="color: #dc2626;">${status}</span>
+              </p>
+            </div>
+            <p style="color: #475569; font-size: 15px;">
+              You will not be able to sign in until an administrator reactivates your account.
+            </p>
+            <p style="color: #64748b; font-size: 13px; margin-top: 30px;">
+              If you believe this is an error, please contact the examination office immediately.
+            </p>
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
+            <p style="color: #94a3b8; font-size: 12px;">
+              University of Energy and Natural Resources<br>
+              Examination Management System
+            </p>
+          </div>
+        `,
+      }).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[users] Failed to send suspension email:', err);
+      });
+    } else if (status === 'ACTIVE' && user.status !== 'PENDING_APPROVAL') {
+      // Account reactivated email
+      sendEmail({
+        to: updated.email,
+        subject: 'Account Reactivated — UENR Examination System',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: #d1fae5; border-left: 4px solid #10b981; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+              <h2 style="color: #065f46; margin: 0;">✓ Account Reactivated</h2>
+            </div>
+            <p style="color: #475569; font-size: 15px;">
+              Hello <strong>${updated.fullName}</strong>,
+            </p>
+            <p style="color: #475569; font-size: 15px;">
+              Good news! Your account has been <strong>reactivated</strong> by the examination office.
+            </p>
+            <div style="background: #f9fafb; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <p style="color: #374151; font-size: 14px; margin: 8px 0;">
+                <strong>Email:</strong> ${updated.email}
+              </p>
+              ${updated.staffId ? `<p style="color: #374151; font-size: 14px; margin: 8px 0;">
+                <strong>Staff ID:</strong> ${updated.staffId}
+              </p>` : ''}
+              <p style="color: #374151; font-size: 14px; margin: 8px 0;">
+                <strong>Status:</strong> <span style="color: #059669;">ACTIVE</span>
+              </p>
+            </div>
+            <p style="color: #475569; font-size: 15px;">
+              You can now sign in and access the system again.
+            </p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${primaryClientOrigin}/login"
+                 style="background: #4f46e5; color: #fff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block; font-size: 16px;">
+                Sign In Now
+              </a>
+            </div>
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
+            <p style="color: #94a3b8; font-size: 12px;">
+              University of Energy and Natural Resources<br>
+              Examination Management System
+            </p>
+          </div>
+        `,
+      }).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[users] Failed to send reactivation email:', err);
+      });
+    }
 
     return updated;
   },
