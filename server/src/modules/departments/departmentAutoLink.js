@@ -1,10 +1,5 @@
 import { invalidateAuthCache } from '../../middleware/auth.js';
 
-const SELF_MANAGED_FACULTY = {
-  code: 'SELF',
-  name: 'Self-Managed Departments',
-};
-
 export const normalizeDepartmentName = (value) => {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim().replace(/\s+/g, ' ');
@@ -25,12 +20,6 @@ const buildDepartmentCode = (name) => {
   return `DEPT${Math.random().toString(36).toUpperCase().slice(-4)}`;
 };
 
-const ensureSelfManagedFaculty = async (tx) => tx.faculty.upsert({
-  where: { code: SELF_MANAGED_FACULTY.code },
-  update: { name: SELF_MANAGED_FACULTY.name },
-  create: { code: SELF_MANAGED_FACULTY.code, name: SELF_MANAGED_FACULTY.name },
-});
-
 export const ensureDepartmentForName = async (tx, normalizedName) => {
   const name = normalizeDepartmentName(normalizedName);
   if (!name) return null;
@@ -42,7 +31,6 @@ export const ensureDepartmentForName = async (tx, normalizedName) => {
 
   if (department) return department;
 
-  const faculty = await ensureSelfManagedFaculty(tx);
   const baseCode = buildDepartmentCode(name);
 
   let candidate = baseCode;
@@ -57,7 +45,6 @@ export const ensureDepartmentForName = async (tx, normalizedName) => {
       data: {
         name,
         code: candidate,
-        facultyId: faculty.id,
       },
       select: { id: true, name: true, code: true },
     });

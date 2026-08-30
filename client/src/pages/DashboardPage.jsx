@@ -336,9 +336,6 @@ const AdminDashboard = ({ stats, recentActivity, department, isDeptHead }) => (
               )}
             </p>
           </div>
-          {department.faculty && (
-            <div className="text-sm text-ink-500">{department.faculty}</div>
-          )}
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <DeptOverviewCard icon={Users} label="Department Heads" value={department.headCount} />

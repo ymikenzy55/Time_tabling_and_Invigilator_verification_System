@@ -30,15 +30,15 @@ const publicSelect = {
   updatedAt: true,
   submittedAt: true,
   approvedAt: true,
-  department: { select: { id: true, name: true, code: true, faculty: { select: { name: true } } } },
+  department: { select: { id: true, name: true, code: true } },
   semester: { select: { id: true, name: true, academicYear: { select: { name: true } } } },
   createdBy: { select: { id: true, fullName: true, email: true } },
   approvedBy: { select: { id: true, fullName: true } },
 };
 
 // Lightweight select for list endpoints — drops nested User relations and
-// sub-relations (faculty, academicYear) that the list table doesn't render.
-// This eliminates 4 extra Prisma queries per list call.
+// sub-relations (academicYear) that the list table doesn't render.
+// This eliminates extra Prisma queries per list call.
 const listSelect = {
   id: true,
   code: true,
@@ -204,7 +204,7 @@ export const coursesService = {
     });
     const deptMap = new Map(existingDepts.map((d) => [d.name.toLowerCase(), d]));
 
-    // For any missing departments, create them under the self-managed faculty
+    // For any missing departments, create them automatically
     const { ensureDepartmentForName } = await import('../departments/departmentAutoLink.js');
 
     // De-duplicate by code within the payload

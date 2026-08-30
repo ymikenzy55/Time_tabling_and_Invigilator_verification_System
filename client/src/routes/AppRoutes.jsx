@@ -14,7 +14,6 @@ import { DepartmentHeadsPage } from '@/pages/users/DepartmentHeadsPage';
 import { InvigilatorsPage } from '@/pages/users/InvigilatorsPage';
 import { RegistrationWindowsPage } from '@/pages/users/RegistrationWindowsPage';
 import { ApprovalsPage } from '@/pages/users/ApprovalsPage';
-import { FacultiesPage } from '@/pages/academic/FacultiesPage';
 import { DepartmentsPage } from '@/pages/academic/DepartmentsPage';
 import { SemestersPage } from '@/pages/academic/SemestersPage';
 import { CoursesPage } from '@/pages/courses/CoursesPage';
@@ -71,7 +70,6 @@ export const AppRoutes = () => (
       <Route path="/approvals" element={<ProtectedRoute roles={SUPER_ADMIN}><ApprovalsPage /></ProtectedRoute>} />
 
       {/* Super Admin — Academic */}
-      <Route path="/faculties" element={<ProtectedRoute roles={SUPER_ADMIN}><FacultiesPage /></ProtectedRoute>} />
       <Route path="/departments" element={<ProtectedRoute roles={SUPER_ADMIN}><DepartmentsPage /></ProtectedRoute>} />
       <Route path="/semesters" element={<ProtectedRoute roles={SUPER_ADMIN}><SemestersPage /></ProtectedRoute>} />
 

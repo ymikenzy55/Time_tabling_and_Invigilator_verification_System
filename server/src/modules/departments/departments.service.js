@@ -9,10 +9,8 @@ const publicSelect = {
   id: true,
   name: true,
   code: true,
-  facultyId: true,
   createdAt: true,
   updatedAt: true,
-  faculty: { select: { id: true, name: true, code: true } },
   _count: { select: { users: true, courses: true, courseLevels: true } },
 };
 
@@ -45,17 +43,14 @@ export const departmentsService = {
     );
   },
 
-  async list({ facultyId, q } = {}) {
-    const cacheKey = `departments:list:${facultyId || 'all'}:${q || 'all'}`;
+  async list({ q } = {}) {
+    const cacheKey = `departments:list:${q || 'all'}`;
     return cache.remember(cacheKey, 30_000, async () =>
       prisma.department.findMany({
-        where: {
-          ...(facultyId ? { facultyId } : {}),
-          ...(q ? { OR: [
-            { name: { contains: q, mode: 'insensitive' } },
-            { code: { contains: q, mode: 'insensitive' } },
-          ]} : {}),
-        },
+        where: q ? { OR: [
+          { name: { contains: q, mode: 'insensitive' } },
+          { code: { contains: q, mode: 'insensitive' } },
+        ]} : undefined,
         orderBy: { name: 'asc' },
         select: publicSelect,
       })
@@ -120,10 +115,7 @@ export const departmentsService = {
     return { department }; // meta omitted when fully linked
   },
 
-  async create({ name, code, facultyId }, actor) {
-    const faculty = await prisma.faculty.findUnique({ where: { id: facultyId } });
-    if (!faculty) throw ApiError.notFound('Faculty not found.');
-
+  async create({ name, code }, actor) {
     const exists = await prisma.department.findFirst({
       where: { OR: [
         { code: { equals: code, mode: 'insensitive' } },
@@ -133,7 +125,7 @@ export const departmentsService = {
     if (exists) throw ApiError.conflict('A department with this name or code already exists.');
 
     const department = await prisma.department.create({
-      data: { name, code, facultyId },
+      data: { name, code },
       select: publicSelect,
     });
 
@@ -146,20 +138,15 @@ export const departmentsService = {
       targetType: 'Department',
       targetId: department.id,
       result: 'SUCCESS',
-      metadata: { name, code, facultyId },
+      metadata: { name, code },
     });
 
     return department;
   },
 
-  async update(id, { name, code, facultyId }, actor) {
+  async update(id, { name, code }, actor) {
     const existing = await prisma.department.findUnique({ where: { id } });
     if (!existing) throw ApiError.notFound('Department not found.');
-
-    if (facultyId) {
-      const faculty = await prisma.faculty.findUnique({ where: { id: facultyId } });
-      if (!faculty) throw ApiError.notFound('Faculty not found.');
-    }
 
     const conflict = await prisma.department.findFirst({
       where: {
@@ -174,7 +161,7 @@ export const departmentsService = {
 
     const department = await prisma.department.update({
       where: { id },
-      data: { name, code, facultyId },
+      data: { name, code },
       select: publicSelect,
     });
     cache.clear('departments:names');
@@ -185,7 +172,7 @@ export const departmentsService = {
       targetType: 'Department',
       targetId: id,
       result: 'SUCCESS',
-      metadata: { name, code, facultyId },
+      metadata: { name, code },
     });
 
     return department;

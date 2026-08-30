@@ -74,11 +74,6 @@ export const MyDepartmentPage = () => {
               <StatCard key={stat.label} {...stat} />
             ))}
           </div>
-
-          <div className="panel p-5">
-            <h3 className="text-sm font-bold text-ink-900">Faculty</h3>
-            <p className="text-ink-700 text-sm mt-1">{department.faculty?.name || '—'}</p>
-          </div>
         </div>
       )}
     </div>

@@ -251,7 +251,7 @@ export const CourseApprovalsPage = () => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-ink-900 truncate">{dept.name}</div>
-                  <div className="text-xs text-ink-500 truncate">{dept.faculty?.name || dept.code || '\u2014'}</div>
+                  <div className="text-xs text-ink-500 truncate">{dept.code || '\u2014'}</div>
                 </div>
                 <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 text-xs font-bold bg-amber-100 text-amber-800 rounded-full shrink-0">
                   {dept.count}

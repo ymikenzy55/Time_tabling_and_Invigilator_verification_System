@@ -87,7 +87,7 @@ export const dashboardController = {
         deptId ? prisma.user.count({ where: { role: 'DEPARTMENT_HEAD', departmentId: deptId } }) : Promise.resolve(0),
         deptId ? prisma.course.count({ where: { departmentId: deptId } }) : Promise.resolve(0),
         deptId ? prisma.courseLevel.count({ where: { departmentId: deptId } }) : Promise.resolve(0),
-        deptId ? prisma.department.findUnique({ where: { id: deptId }, select: { id: true, name: true, code: true, faculty: { select: { name: true } } } }) : Promise.resolve(null),
+        deptId ? prisma.department.findUnique({ where: { id: deptId }, select: { id: true, name: true, code: true } }) : Promise.resolve(null),
       ]);
 
       const data = {
@@ -100,7 +100,6 @@ export const dashboardController = {
         department: department ? {
           name: department.name,
           code: department.code,
-          faculty: department.faculty?.name || null,
           headCount: deptHeadCount,
           courseCount: deptCourseCount,
           courseLevelCount: deptCourseLevelCount,

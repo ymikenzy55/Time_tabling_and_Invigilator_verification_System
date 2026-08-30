@@ -3,7 +3,6 @@ import authRoutes from '../modules/auth/auth.routes.js';
 import usersRoutes from '../modules/users/users.routes.js';
 import { placeholderRouter } from '../modules/_placeholder.js';
 import registrationRoutes from '../modules/registration/registration.routes.js';
-import facultiesRoutes from '../modules/faculties/faculties.routes.js';
 import departmentsRoutes from '../modules/departments/departments.routes.js';
 import academicYearsRoutes from '../modules/academicYears/academicYears.routes.js';
 import semestersRoutes from '../modules/semesters/semesters.routes.js';
@@ -29,7 +28,6 @@ router.use('/registration', registrationRoutes);
 router.use('/users', usersRoutes);
 
 // Phase 3+
-router.use('/faculties', facultiesRoutes);
 router.use('/departments', departmentsRoutes);
 router.use('/academic-years', academicYearsRoutes);
 router.use('/semesters', semestersRoutes);
