@@ -25,6 +25,7 @@ export const EntityPage = ({
   searchPlaceholder = 'Search...',
   emptyTitle = 'No records yet',
   emptyDescription = 'Create a record to get started.',
+  emptyIcon = undefined,
   createModalTitle = 'Create',
   editModalTitle = 'Edit',
   canEdit = true,
@@ -194,6 +195,7 @@ export const EntityPage = ({
         ) : items.length === 0 ? (
           <div className="p-10">
             <EmptyState
+              icon={emptyIcon}
               title={emptyTitle}
               description={emptyDescription}
               action={canCreate ? (

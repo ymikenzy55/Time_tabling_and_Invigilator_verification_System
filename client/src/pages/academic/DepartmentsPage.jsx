@@ -40,5 +40,6 @@ export const DepartmentsPage = () => (
     searchPlaceholder="Search departments..."
     emptyTitle="No departments yet"
     emptyDescription="Add departments to group courses and staff."
+    emptyIcon={null}
   />
 );

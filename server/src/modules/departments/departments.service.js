@@ -141,6 +141,7 @@ export const departmentsService = {
 
     await syncDepartmentHeadsByName(department);
     cache.clear('departments:names');
+    cache.clearPrefix('departments:list:');
 
     logAudit({
       actorId: actor.id,
@@ -175,6 +176,7 @@ export const departmentsService = {
       select: publicSelect,
     });
     cache.clear('departments:names');
+    cache.clearPrefix('departments:list:');
 
     logAudit({
       actorId: actor.id,
@@ -204,6 +206,7 @@ export const departmentsService = {
       throw err;
     }
     cache.clear('departments:names');
+    cache.clearPrefix('departments:list:');
 
     logAudit({
       actorId: actor.id,
