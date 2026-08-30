@@ -7,6 +7,8 @@ import { broadcast } from '../../utils/broadcast.js';
 import { cache } from '../../utils/cache.js';
 import { courseLevelsService } from '../courseLevels/courseLevels.service.js';
 import { normalizeDepartmentName, linkDepartmentToUser } from '../departments/departmentAutoLink.js';
+import { sendEmail } from '../../utils/email.js';
+import { primaryClientOrigin } from '../../config/env.js';
 
 const OPEN_ROLES = ['DEPARTMENT_HEAD', 'INVIGILATOR'];
 
@@ -210,6 +212,49 @@ export const registrationService = {
     }
 
     if (user.status === 'PENDING_APPROVAL') {
+      // Send confirmation email to the user
+      sendEmail({
+        to: user.email,
+        subject: 'Registration Received — UENR Examination System',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #1e293b;">Thank You for Registering!</h2>
+            <p style="color: #475569; font-size: 15px;">
+              Hello <strong>${user.fullName}</strong>,
+            </p>
+            <p style="color: #475569; font-size: 15px;">
+              We have received your registration as <strong>${user.role.replace('_', ' ')}</strong>.
+            </p>
+            <div style="background: #f1f5f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <p style="color: #334155; font-size: 14px; margin: 5px 0;">
+                <strong>Email:</strong> ${user.email}
+              </p>
+              ${user.staffId ? `<p style="color: #334155; font-size: 14px; margin: 5px 0;">
+                <strong>Staff ID:</strong> ${user.staffId}
+              </p>` : ''}
+              ${department ? `<p style="color: #334155; font-size: 14px; margin: 5px 0;">
+                <strong>Department:</strong> ${department.name}
+              </p>` : ''}
+            </div>
+            <p style="color: #475569; font-size: 15px;">
+              Your account is currently <strong style="color: #f59e0b;">pending approval</strong> by the examination office. 
+              You will receive another email once your account has been reviewed.
+            </p>
+            <p style="color: #64748b; font-size: 13px; margin-top: 30px;">
+              This typically takes 1-2 business days. Thank you for your patience!
+            </p>
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
+            <p style="color: #94a3b8; font-size: 12px;">
+              University of Energy and Natural Resources<br>
+              Examination Management System
+            </p>
+          </div>
+        `,
+      }).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[registration] Failed to send confirmation email:', err);
+      });
+
       notifyRole('SUPER_ADMIN', {
         type: 'APPROVAL_PENDING',
         title: 'New account awaits approval',

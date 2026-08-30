@@ -7,6 +7,8 @@ import { normalizeDepartmentName, ensureDepartmentForName, linkDepartmentToUser 
 import { invalidateAuthCache } from '../../middleware/auth.js';
 import { logAudit } from '../../utils/auditLog.js';
 import { cache } from '../../utils/cache.js';
+import { sendEmail } from '../../utils/email.js';
+import { primaryClientOrigin } from '../../config/env.js';
 
 const publicSelect = {
   id: true, email: true, fullName: true, staffId: true, phone: true,
@@ -257,12 +259,65 @@ export const usersService = {
       SUPER_ADMIN: 'You can now sign in and start managing the platform.',
     };
 
+    // Send in-app notification
     await createNotification({
       userId: id,
       type: 'ACCOUNT_APPROVED',
       title: 'Your account has been approved',
       message: roleMessages[approvedUser.role] || 'You can now sign in and start using the platform.',
       link: roleLinks[approvedUser.role] || '/dashboard',
+    });
+
+    // Send approval email
+    sendEmail({
+      to: approvedUser.email,
+      subject: 'Account Approved — UENR Examination System',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: #10b981; color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
+            <h2 style="margin: 0; font-size: 24px;">✓ Account Approved!</h2>
+          </div>
+          <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
+            <p style="color: #111827; font-size: 16px; margin-bottom: 15px;">
+              Hello <strong>${approvedUser.fullName}</strong>,
+            </p>
+            <p style="color: #374151; font-size: 15px; line-height: 1.6;">
+              Great news! Your account as <strong>${approvedUser.role.replace('_', ' ')}</strong> has been approved by the examination office.
+            </p>
+            <div style="background: white; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #10b981;">
+              <p style="color: #374151; font-size: 14px; margin: 8px 0;">
+                <strong>Email:</strong> ${approvedUser.email}
+              </p>
+              ${approvedUser.staffId ? `<p style="color: #374151; font-size: 14px; margin: 8px 0;">
+                <strong>Staff ID:</strong> ${approvedUser.staffId}
+              </p>` : ''}
+              <p style="color: #374151; font-size: 14px; margin: 8px 0;">
+                <strong>Role:</strong> ${approvedUser.role.replace('_', ' ')}
+              </p>
+            </div>
+            <p style="color: #374151; font-size: 15px; margin-bottom: 25px;">
+              ${roleMessages[approvedUser.role] || 'You can now sign in and start using the platform.'}
+            </p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${primaryClientOrigin}/login"
+                 style="background: #4f46e5; color: #fff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block; font-size: 16px;">
+                Sign In Now
+              </a>
+            </div>
+            <p style="color: #6b7280; font-size: 13px; line-height: 1.5; margin-top: 30px;">
+              If you have any questions or need assistance, please contact the examination office.
+            </p>
+          </div>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+          <p style="color: #9ca3af; font-size: 12px; text-align: center;">
+            University of Energy and Natural Resources<br>
+            Examination Management System
+          </p>
+        </div>
+      `,
+    }).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('[users] Failed to send approval email:', err);
     });
 
     return approvedUser;
@@ -338,11 +393,48 @@ export const usersService = {
       metadata: { reason },
     });
 
+    // Send in-app notification
     await createNotification({
       userId: id,
       type: 'ACCOUNT_REJECTED',
       title: 'Your account application was rejected',
       message: reason || 'Please contact the Examination Office for details.',
+    });
+
+    // Send rejection email
+    sendEmail({
+      to: updated.email,
+      subject: 'Account Application Status — UENR Examination System',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #1e293b;">Account Application Update</h2>
+          <p style="color: #475569; font-size: 15px;">
+            Hello <strong>${updated.fullName}</strong>,
+          </p>
+          <p style="color: #475569; font-size: 15px;">
+            We regret to inform you that your registration application as <strong>${updated.role.replace('_', ' ')}</strong> 
+            has not been approved at this time.
+          </p>
+          ${reason ? `
+          <div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 15px; border-radius: 4px; margin: 20px 0;">
+            <p style="color: #991b1b; font-size: 14px; margin: 0;">
+              <strong>Reason:</strong> ${reason}
+            </p>
+          </div>
+          ` : ''}
+          <p style="color: #475569; font-size: 15px;">
+            If you believe this is an error or have additional questions, please contact the examination office for further assistance.
+          </p>
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
+          <p style="color: #94a3b8; font-size: 12px;">
+            University of Energy and Natural Resources<br>
+            Examination Management System
+          </p>
+        </div>
+      `,
+    }).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('[users] Failed to send rejection email:', err);
     });
 
     return updated;
