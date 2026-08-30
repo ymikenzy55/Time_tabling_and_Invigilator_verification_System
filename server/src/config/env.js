@@ -44,13 +44,15 @@ const schema = z.object({
 
   QR_SIGNING_SECRET: z.string().min(16).optional(),
 
+  // Brevo (Sendinblue) API for emails
+  BREVO_API_KEY: z.string().optional(),
+  
+  // Legacy SMTP fallback
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().positive().default(587),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().optional(),
-
-  RESEND_API_KEY: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);

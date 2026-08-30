@@ -1,20 +1,24 @@
-import { Resend } from 'resend';
 import nodemailer from 'nodemailer';
 import { env } from '../config/env.js';
 
-let resendClient = null;
 let nodemailerTransporter = null;
 
-// Initialize Resend if API key is available
-const getResendClient = () => {
-  if (resendClient) return resendClient;
-  if (!env.RESEND_API_KEY) return null;
-  
-  resendClient = new Resend(env.RESEND_API_KEY);
-  return resendClient;
+// Brevo (Sendinblue) SMTP configuration
+const getBrevoTransporter = () => {
+  if (!env.BREVO_API_KEY) return null;
+
+  return nodemailer.createTransport({
+    host: 'smtp-relay.brevo.com',
+    port: 587,
+    secure: false,
+    auth: {
+      user: 'yeboahmichael977@gmail.com', // Your Brevo login email
+      pass: env.BREVO_API_KEY, // Your Brevo SMTP key
+    },
+  });
 };
 
-// Fallback to nodemailer if SMTP is configured
+// Fallback to generic SMTP if configured
 const getNodemailerTransporter = () => {
   if (nodemailerTransporter) return nodemailerTransporter;
 
@@ -36,29 +40,29 @@ const getNodemailerTransporter = () => {
 };
 
 export const sendEmail = async ({ to, subject, html }) => {
-  // Try Resend first (preferred)
-  const resend = getResendClient();
-  if (resend) {
+  // Try Brevo first (preferred for production)
+  const brevoTransport = getBrevoTransporter();
+  if (brevoTransport) {
     try {
-      console.log('[email] Attempting to send via Resend to:', to);
-      const result = await resend.emails.send({
-        from: 'UENR Exam System <onboarding@resend.dev>',
+      console.log('[email] Attempting to send via Brevo to:', to);
+      await brevoTransport.sendMail({
+        from: 'UENR Exam System <yeboahmichael977@gmail.com>',
         to,
         subject,
         html,
       });
-      console.log('[email] Resend success:', result);
-      return { skipped: false, method: 'resend' };
+      console.log('[email] Brevo success');
+      return { skipped: false, method: 'brevo' };
     } catch (error) {
       // eslint-disable-next-line no-console
-      console.error('[email] Resend failed:', error);
-      // Fall through to try nodemailer
+      console.error('[email] Brevo failed:', error);
+      // Fall through to try generic SMTP
     }
   } else {
-    console.log('[email] Resend not configured (no API key)');
+    console.log('[email] Brevo not configured (no API key)');
   }
 
-  // Fallback to nodemailer if available
+  // Fallback to generic SMTP if available
   const transport = getNodemailerTransporter();
   if (transport) {
     try {
@@ -85,4 +89,4 @@ export const sendEmail = async ({ to, subject, html }) => {
   return { skipped: true };
 };
 
-export const isEmailConfigured = () => getResendClient() !== null || getNodemailerTransporter() !== null;
+export const isEmailConfigured = () => getBrevoTransporter() !== null || getNodemailerTransporter() !== null;
