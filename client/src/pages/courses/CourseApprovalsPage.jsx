@@ -210,12 +210,20 @@ export const CourseApprovalsPage = () => {
           <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 grid place-items-center shrink-0">
             <AlertTriangle className="w-5 h-5" />
           </div>
-          <div className="text-sm text-amber-900">
+          <div className="text-sm text-amber-900 flex-1">
             <span className="font-bold">{courses.length} course{courses.length === 1 ? '' : 's'}</span>
             {' '}awaiting your approval across{' '}
             <span className="font-bold">{departments.length} department{departments.length === 1 ? '' : 's'}</span>.
             Select a department below to review its submissions.
           </div>
+          <button
+            className="btn-primary btn-sm shrink-0"
+            onClick={() => approveAllMutation.mutate(courses.map((c) => c.id))}
+            disabled={approveAllMutation.isPending || courses.length === 0}
+          >
+            {approveAllMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
+            Approve all departments ({courses.length})
+          </button>
         </div>
       )}
 
