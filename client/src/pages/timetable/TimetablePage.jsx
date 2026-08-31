@@ -183,6 +183,7 @@ export const TimetablePage = () => {
   const [filterVenue, setFilterVenue] = useState('');
   const [sortBy, setSortBy] = useState('date'); // date | venue | time
   const [generateOpen, setGenerateOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [result, setResult] = useState(null);
   const [venueQrData, setVenueQrData] = useState(null);
   const [venueQrLoading, setVenueQrLoading] = useState(null);
@@ -603,11 +604,12 @@ export const TimetablePage = () => {
 
   const deptGrids = useMemo(() => buildDeptGrids(entries), [entries]);
 
-  const exportPdf = async () => {
+  const exportPdf = async (grouping = 'department') => {
     if (!grid.length) {
       toast.error('Nothing to export yet.');
       return;
     }
+    setExportOpen(false);
 
     // If entries are being fetched (e.g. right after generation), wait for
     // the fresh data before building the PDF to avoid exporting stale data.
@@ -795,8 +797,11 @@ export const TimetablePage = () => {
         <table class="main-table">${tableHead}<tbody>${renderBodyRows(sortedDays)}</tbody></table>`;
     };
 
-    // Department -> Level -> Practical / Theory sections.
-    const bodyContent = pdfSections.map((dept) => {
+    // Combined mode: one flat chronological table, all departments together.
+    // Department mode: Department -> Level -> Practical / Theory sections.
+    const bodyContent = grouping === 'combined'
+      ? `<table class="main-table">${tableHead}<tbody>${renderBodyRows(buildSortedDays(freshEntries))}</tbody></table>`
+      : pdfSections.map((dept) => {
       const levelBlocks = dept.levels.map((lv) => {
         const hasPractical = lv.practicalDays.length > 0;
         const hasTheory = lv.theoryDays.length > 0;
@@ -948,7 +953,7 @@ export const TimetablePage = () => {
         description="View, filter, and export the generated examination timetable."
         actions={(
           <div className="flex items-center gap-2">
-            <button className="btn-secondary" onClick={exportPdf} disabled={!grid.length}>
+            <button className="btn-secondary" onClick={() => setExportOpen(true)} disabled={!grid.length}>
               <FileDown className="w-4 h-4" /> Export PDF
             </button>
             {isAdmin && (
@@ -1290,6 +1295,37 @@ export const TimetablePage = () => {
           ))}
         </div>
       )}
+
+      {/* Export format modal */}
+      <Modal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        title="Export timetable PDF"
+        description="Choose how the timetable should be arranged in the PDF."
+      >
+        <div className="space-y-3">
+          <button
+            type="button"
+            className="w-full text-left rounded-lg border border-surface-border hover:border-primary-400 hover:bg-primary-50/40 transition-colors p-4"
+            onClick={() => exportPdf('department')}
+          >
+            <div className="font-bold text-ink-900 text-sm">Sorted by department</div>
+            <div className="text-xs text-ink-500 mt-1">
+              Each department gets its own section, broken down by level with practical and theory courses separated.
+            </div>
+          </button>
+          <button
+            type="button"
+            className="w-full text-left rounded-lg border border-surface-border hover:border-primary-400 hover:bg-primary-50/40 transition-colors p-4"
+            onClick={() => exportPdf('combined')}
+          >
+            <div className="font-bold text-ink-900 text-sm">All together</div>
+            <div className="text-xs text-ink-500 mt-1">
+              One combined chronological timetable with every department's exams listed day by day.
+            </div>
+          </button>
+        </div>
+      </Modal>
 
       {/* Generate modal */}
       <Modal
