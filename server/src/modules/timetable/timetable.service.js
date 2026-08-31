@@ -341,6 +341,28 @@ export const timetableService = {
    * Eliminates the sessions → setSessionId → entries waterfall.
    */
   async initialData(actor) {
+    // Lazily create examination sessions for semesters that have courses but
+    // no session yet — same logic as examinationSessionsService.list().
+    const semestersNeedingSession = await prisma.semester.findMany({
+      where: {
+        courses: { some: {} },
+        examinationSessions: { none: {} },
+      },
+      select: { id: true, name: true, startDate: true, endDate: true, academicYear: { select: { name: true } } },
+    });
+    if (semestersNeedingSession.length > 0) {
+      await prisma.examinationSession.createMany({
+        data: semestersNeedingSession.map((s) => ({
+          name: `${s.name} Examinations${s.academicYear?.name ? ` (${s.academicYear.name})` : ''}`,
+          semesterId: s.id,
+          startDate: s.startDate,
+          endDate: s.endDate,
+          isPublished: false,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
     // Lightweight session list (no _count subquery).
     const sessions = await prisma.examinationSession.findMany({
       orderBy: { createdAt: 'desc' },
