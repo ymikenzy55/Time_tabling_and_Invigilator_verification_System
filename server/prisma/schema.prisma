@@ -1,7 +1,3 @@
-// Prisma schema — Examination Management System
-// Phase 1: core entities + placeholders for future phases.
-// Enums and relations are defined here so migrations create the full baseline.
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,27 +7,327 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// -------------------- Enums --------------------
-
-enum Role {
-  SUPER_ADMIN
-  DEPARTMENT_HEAD
-  INVIGILATOR
+model AcademicYear {
+  id        String     @id
+  name      String     @unique
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean    @default(false)
+  Semester  Semester[]
 }
 
-enum UserStatus {
-  PENDING_APPROVAL  // User self-registered, awaiting super admin approval
-  ACTIVE
-  SUSPENDED
-  DISABLED
-  REJECTED
+model Attendance {
+  id             String           @id
+  invigilationId String
+  userId         String?
+  result         AttendanceResult
+  scannedAt      DateTime         @default(now())
+  ipAddress      String?
+  userAgent      String?
+  notes          String?
+  Invigilation   Invigilation     @relation(fields: [invigilationId], references: [id], onDelete: Cascade)
+  User           User?            @relation(fields: [userId], references: [id])
+
+  @@index([invigilationId])
+  @@index([invigilationId, userId])
+  @@index([scannedAt])
+  @@index([userId])
 }
 
-enum CourseStatus {
-  DRAFT
-  SUBMITTED
-  APPROVED
-  REJECTED
+model AuditLog {
+  id         String   @id
+  actorId    String?
+  action     String
+  targetType String?
+  targetId   String?
+  result     String
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  User       User?    @relation(fields: [actorId], references: [id])
+
+  @@index([action])
+  @@index([actorId, createdAt])
+  @@index([actorId])
+  @@index([createdAt])
+  @@index([targetType, targetId])
+}
+
+model Course {
+  id                             String         @id
+  code                           String
+  title                          String
+  departmentId                   String
+  level                          Int
+  semesterId                     String
+  creditHours                    Int
+  studentCount                   Int            @default(0)
+  examDurationMinutes            Int            @default(120)
+  specialRequirements            String?
+  status                         CourseStatus   @default(DRAFT)
+  rejectionComment               String?
+  locked                         Boolean        @default(false)
+  createdById                    String?
+  approvedById                   String?
+  createdAt                      DateTime       @default(now())
+  updatedAt                      DateTime
+  submittedAt                    DateTime?
+  approvedAt                     DateTime?
+  instructorName                 String?
+  isPractical                    Boolean        @default(false)
+  User_Course_approvedByIdToUser User?          @relation("Course_approvedByIdToUser", fields: [approvedById], references: [id])
+  User_Course_createdByIdToUser  User?          @relation("Course_createdByIdToUser", fields: [createdById], references: [id])
+  Department                     Department     @relation(fields: [departmentId], references: [id])
+  Semester                       Semester       @relation(fields: [semesterId], references: [id])
+  Invigilation                   Invigilation[]
+
+  @@unique([code, semesterId])
+  @@index([createdById, status])
+  @@index([createdById, updatedAt])
+  @@index([departmentId, semesterId])
+  @@index([level])
+  @@index([semesterId, status])
+  @@index([status])
+  @@index([status, semesterId])
+}
+
+model CourseLevel {
+  id           String     @id
+  value        Int
+  label        String?
+  departmentId String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime
+  Department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@unique([departmentId, value])
+  @@index([departmentId, value])
+}
+
+model Department {
+  id          String        @id
+  name        String
+  code        String        @unique
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime
+  Course      Course[]
+  CourseLevel CourseLevel[]
+  User        User[]
+}
+
+model EmailVerification {
+  id        String   @id
+  email     String
+  code      String
+  expiresAt DateTime
+  verified  Boolean  @default(false)
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([email, code])
+  @@index([email])
+  @@index([expiresAt])
+}
+
+model ExaminationSession {
+  id              String            @id
+  name            String
+  semesterId      String
+  startDate       DateTime
+  endDate         DateTime
+  isPublished     Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime
+  Semester        Semester          @relation(fields: [semesterId], references: [id])
+  Invigilation    Invigilation[]
+  VenueAssignment VenueAssignment[]
+  VenueScan       VenueScan[]
+}
+
+model Invigilation {
+  id                                    String             @id
+  examinationSessionId                  String
+  courseId                              String
+  invigilatorId                         String?
+  replacementId                         String?
+  isActive                              Boolean            @default(true)
+  scheduledAt                           DateTime
+  windowOpensAt                         DateTime?
+  windowClosesAt                        DateTime?
+  gracePeriodMin                        Int                @default(0)
+  createdAt                             DateTime           @default(now())
+  updatedAt                             DateTime
+  venueId                               String?
+  splitRange                            String?
+  Attendance                            Attendance[]
+  Course                                Course             @relation(fields: [courseId], references: [id])
+  ExaminationSession                    ExaminationSession @relation(fields: [examinationSessionId], references: [id], onDelete: Cascade)
+  User_Invigilation_invigilatorIdToUser User?              @relation("Invigilation_invigilatorIdToUser", fields: [invigilatorId], references: [id])
+  User_Invigilation_replacementIdToUser User?              @relation("Invigilation_replacementIdToUser", fields: [replacementId], references: [id])
+  Venue                                 Venue?             @relation(fields: [venueId], references: [id])
+
+  @@index([courseId])
+  @@index([examinationSessionId, scheduledAt])
+  @@index([examinationSessionId, venueId, scheduledAt])
+  @@index([invigilatorId])
+  @@index([invigilatorId, scheduledAt])
+  @@index([replacementId])
+  @@index([venueId, scheduledAt])
+}
+
+model Notification {
+  id        String   @id
+  userId    String
+  type      String
+  title     String
+  message   String
+  link      String?
+  data      Json?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([type])
+  @@index([userId, createdAt])
+  @@index([userId, isRead, createdAt])
+}
+
+model PasswordReset {
+  id        String   @id
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([userId])
+}
+
+model RegistrationWindow {
+  role        Role     @id
+  opensAt     DateTime
+  closesAt    DateTime
+  updatedAt   DateTime
+  updatedById String?
+
+  @@index([opensAt, closesAt])
+}
+
+model Semester {
+  id                 String               @id
+  name               String
+  academicYearId     String
+  startDate          DateTime
+  endDate            DateTime
+  isActive           Boolean              @default(false)
+  Course             Course[]
+  ExaminationSession ExaminationSession[]
+  AcademicYear       AcademicYear         @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+
+  @@unique([academicYearId, name])
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime
+}
+
+model User {
+  id                                            String            @id
+  email                                         String            @unique
+  passwordHash                                  String?
+  fullName                                      String
+  staffId                                       String?           @unique
+  phone                                         String?
+  role                                          Role
+  status                                        UserStatus        @default(PENDING_APPROVAL)
+  departmentId                                  String?
+  createdAt                                     DateTime          @default(now())
+  updatedAt                                     DateTime
+  approvedAt                                    DateTime?
+  approvedById                                  String?
+  departmentName                                String?
+  createdById                                   String?
+  isDemo                                        Boolean           @default(false)
+  Attendance                                    Attendance[]
+  AuditLog                                      AuditLog[]
+  Course_Course_approvedByIdToUser              Course[]          @relation("Course_approvedByIdToUser")
+  Course_Course_createdByIdToUser               Course[]          @relation("Course_createdByIdToUser")
+  Invigilation_Invigilation_invigilatorIdToUser Invigilation[]    @relation("Invigilation_invigilatorIdToUser")
+  Invigilation_Invigilation_replacementIdToUser Invigilation[]    @relation("Invigilation_replacementIdToUser")
+  Notification                                  Notification[]
+  PasswordReset                                 PasswordReset[]
+  User                                          User?             @relation("UserToUser", fields: [createdById], references: [id])
+  other_User                                    User[]            @relation("UserToUser")
+  Department                                    Department?       @relation(fields: [departmentId], references: [id])
+  VenueAssignment                               VenueAssignment[]
+  VenueScan                                     VenueScan[]
+
+  @@index([departmentId])
+  @@index([email])
+  @@index([role])
+  @@index([role, status])
+  @@index([status])
+}
+
+model Venue {
+  id              String            @id
+  name            String            @unique
+  capacity        Int
+  location        String?
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime
+  Invigilation    Invigilation[]
+  VenueAssignment VenueAssignment[]
+  VenueScan       VenueScan[]
+
+  @@index([isActive])
+}
+
+model VenueAssignment {
+  id                   String             @id
+  examinationSessionId String
+  venueId              String
+  invigilatorId        String
+  slotAt               DateTime
+  createdAt            DateTime           @default(now())
+  ExaminationSession   ExaminationSession @relation(fields: [examinationSessionId], references: [id], onDelete: Cascade)
+  User                 User               @relation(fields: [invigilatorId], references: [id], onDelete: Cascade)
+  Venue                Venue              @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@unique([examinationSessionId, venueId, slotAt, invigilatorId])
+  @@index([examinationSessionId, venueId])
+  @@index([examinationSessionId, venueId, slotAt])
+  @@index([invigilatorId, examinationSessionId, slotAt])
+  @@index([invigilatorId, slotAt])
+}
+
+model VenueScan {
+  id                   String             @id
+  venueId              String
+  examinationSessionId String
+  userId               String
+  result               AttendanceResult
+  scannedAt            DateTime           @default(now())
+  ipAddress            String?
+  userAgent            String?
+  latitude             Float?
+  locationAccuracy     Float?
+  longitude            Float?
+  locationAddress      String?
+  ExaminationSession   ExaminationSession @relation(fields: [examinationSessionId], references: [id], onDelete: Cascade)
+  User                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Venue                Venue              @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@index([examinationSessionId, venueId])
+  @@index([examinationSessionId, venueId, scannedAt])
+  @@index([userId, scannedAt])
+  @@index([venueId, scannedAt])
 }
 
 enum AttendanceResult {
@@ -44,369 +340,23 @@ enum AttendanceResult {
   ABSENT
 }
 
-// -------------------- Core: Users & Auth --------------------
-
-model User {
-  id            String     @id @default(cuid())
-  email         String     @unique
-  passwordHash  String?
-  fullName      String
-  staffId       String?    @unique
-  phone         String?
-  role          Role
-  status        UserStatus @default(PENDING_APPROVAL)
-  isDemo        Boolean    @default(false)
-
-  departmentId  String?
-  department    Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  departmentName String?
-
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  approvedAt    DateTime?
-  approvedById  String?
-
-  createdById   String?
-  createdBy     User?     @relation("UserCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  createdUsers  User[]    @relation("UserCreator")
-
-  courseSubmissions Course[] @relation("CourseCreator")
-  courseApprovals   Course[] @relation("CourseApprover")
-
-  invigilations     Invigilation[] @relation("Invigilator")
-  replacedBy        Invigilation[] @relation("Replacement")
-
-  attendanceRecords Attendance[]
-
-  venueAssignments  VenueAssignment[] @relation("VenueAssignmentInvigilator")
-  venueScans        VenueScan[]       @relation("VenueScanUser")
-
-  auditLogs         AuditLog[]
-
-  notifications     Notification[]
-
-  passwordResets    PasswordReset[]
-
-  @@index([role])
-  @@index([status])
-  @@index([role, status])
-  @@index([departmentId])
-  @@index([email])
+enum CourseStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
 }
 
-model RegistrationWindow {
-  role      Role     @id
-  opensAt   DateTime
-  closesAt  DateTime
-  updatedAt DateTime @updatedAt
-  updatedById String?
-
-  @@index([opensAt, closesAt])
+enum Role {
+  SUPER_ADMIN
+  DEPARTMENT_HEAD
+  INVIGILATOR
 }
 
-model PasswordReset {
-  id        String   @id @default(cuid())
-  userId    String
-  token     String   @unique
-  expiresAt DateTime
-  used      Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([expiresAt])
-}
-
-model EmailVerification {
-  id        String   @id @default(cuid())
-  email     String
-  code      String
-  expiresAt DateTime
-  verified  Boolean  @default(false)
-  attempts  Int      @default(0)
-  createdAt DateTime @default(now())
-
-  @@index([email])
-  @@index([email, code])
-  @@index([expiresAt])
-}
-
-// -------------------- Academic Structure --------------------
-
-model Department {
-  id          String    @id @default(cuid())
-  name        String
-  code        String    @unique
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  users       User[]
-  courses     Course[]
-  courseLevels CourseLevel[]
-}
-
-model AcademicYear {
-  id        String     @id @default(cuid())
-  name      String     @unique // e.g. "2025/2026"
-  startDate DateTime
-  endDate   DateTime
-  isActive  Boolean    @default(false)
-  semesters Semester[]
-}
-
-model Semester {
-  id             String       @id @default(cuid())
-  name           String       // e.g. "First Semester"
-  academicYearId String
-  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
-  startDate      DateTime
-  endDate        DateTime
-  isActive       Boolean      @default(false)
-
-  examinationSessions ExaminationSession[]
-  courses             Course[]
-
-  @@unique([academicYearId, name])
-}
-
-// -------------------- Courses --------------------
-
-model Course {
-  id                   String       @id @default(cuid())
-  code                 String
-  title                String
-  departmentId         String
-  department           Department   @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  level                Int
-  semesterId           String
-  semester             Semester     @relation(fields: [semesterId], references: [id], onDelete: Restrict)
-  creditHours          Int
-  studentCount         Int          @default(0)
-  examDurationMinutes  Int          @default(120)
-  specialRequirements  String?
-  instructorName       String?
-  isPractical          Boolean      @default(false)
-  status               CourseStatus @default(DRAFT)
-  rejectionComment     String?
-  locked               Boolean      @default(false)
-
-  createdById  String?
-  createdBy    User?   @relation("CourseCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  approvedById String?
-  approvedBy   User?   @relation("CourseApprover", fields: [approvedById], references: [id], onDelete: SetNull)
-
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  submittedAt  DateTime?
-  approvedAt   DateTime?
-
-  invigilations Invigilation[]
-
-  @@unique([code, semesterId])
-  @@index([status])
-  @@index([status, semesterId])
-  @@index([createdById, status])
-  @@index([createdById, updatedAt])
-  @@index([departmentId, semesterId])
-  @@index([semesterId, status])
-  @@index([level])
-}
-
-model CourseLevel {
-  id            String     @id @default(cuid())
-  value         Int
-  label         String?
-  departmentId  String
-  department    Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-
-  @@unique([departmentId, value])
-  @@index([departmentId, value])
-}
-
-// -------------------- Examinations (placeholder for Phase 5+) --------------------
-
-model ExaminationSession {
-  id           String    @id @default(cuid())
-  name         String
-  semesterId   String
-  semester     Semester  @relation(fields: [semesterId], references: [id], onDelete: Restrict)
-  startDate    DateTime
-  endDate      DateTime
-  isPublished  Boolean   @default(false)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-
-  invigilations Invigilation[]
-  venueAssignments VenueAssignment[]
-  venueScans       VenueScan[]
-}
-
-model Venue {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  capacity  Int
-  location  String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  invigilations Invigilation[]
-  venueAssignments VenueAssignment[]
-  venueScans       VenueScan[]
-
-  @@index([isActive])
-}
-
-model Invigilation {
-  id                   String   @id @default(cuid())
-  examinationSessionId String
-  examinationSession   ExaminationSession @relation(fields: [examinationSessionId], references: [id], onDelete: Cascade)
-  courseId             String
-  course               Course   @relation(fields: [courseId], references: [id], onDelete: Restrict)
-
-  venueId        String?
-  venue          Venue?  @relation(fields: [venueId], references: [id], onDelete: SetNull)
-
-  invigilatorId  String?
-  invigilator    User?   @relation("Invigilator", fields: [invigilatorId], references: [id], onDelete: SetNull)
-
-  replacementId  String?
-  replacement    User?   @relation("Replacement", fields: [replacementId], references: [id], onDelete: SetNull)
-
-  isActive       Boolean  @default(true)
-  scheduledAt    DateTime
-  windowOpensAt  DateTime?
-  windowClosesAt DateTime?
-  gracePeriodMin Int      @default(0)
-  splitRange     String?
-
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  attendance     Attendance[]
-
-  @@index([invigilatorId])
-  @@index([replacementId])
-  @@index([invigilatorId, scheduledAt])
-  @@index([examinationSessionId, scheduledAt])
-  @@index([examinationSessionId, venueId, scheduledAt])
-  @@index([courseId])
-  @@index([venueId, scheduledAt])
-}
-
-// -------------------- Attendance (placeholder for Phase 6) --------------------
-
-model Attendance {
-  id             String           @id @default(cuid())
-  invigilationId String
-  invigilation   Invigilation     @relation(fields: [invigilationId], references: [id], onDelete: Cascade)
-
-  userId         String?
-  user           User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
-
-  result         AttendanceResult
-  scannedAt      DateTime         @default(now())
-  ipAddress      String?
-  userAgent      String?
-  notes          String?
-
-  @@index([invigilationId])
-  @@index([invigilationId, userId])
-  @@index([userId])
-  @@index([scannedAt])
-}
-
-// -------------------- Venue-level invigilator assignment & QR attendance --------------------
-
-model VenueAssignment {
-  id                   String   @id @default(cuid())
-  examinationSessionId String
-  examinationSession   ExaminationSession @relation(fields: [examinationSessionId], references: [id], onDelete: Cascade)
-  venueId              String
-  venue                Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  invigilatorId        String
-  invigilator          User     @relation("VenueAssignmentInvigilator", fields: [invigilatorId], references: [id], onDelete: Cascade)
-  slotAt               DateTime
-  createdAt            DateTime @default(now())
-
-  @@unique([examinationSessionId, venueId, slotAt, invigilatorId])
-  @@index([invigilatorId, slotAt])
-  @@index([invigilatorId, examinationSessionId, slotAt])
-  @@index([examinationSessionId, venueId])
-  @@index([examinationSessionId, venueId, slotAt])
-}
-
-model VenueScan {
-  id                   String   @id @default(cuid())
-  venueId              String
-  venue                Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  examinationSessionId String
-  examinationSession   ExaminationSession @relation(fields: [examinationSessionId], references: [id], onDelete: Cascade)
-  userId               String
-  user                 User     @relation("VenueScanUser", fields: [userId], references: [id], onDelete: Cascade)
-  result               AttendanceResult
-  scannedAt            DateTime @default(now())
-  ipAddress            String?
-  userAgent            String?
-  latitude             Float?
-  longitude            Float?
-  locationAccuracy     Float?
-  locationAddress      String?  // Human-readable address from reverse geocoding
-
-  @@index([examinationSessionId, venueId])
-  @@index([examinationSessionId, venueId, scannedAt])
-  @@index([userId, scannedAt])
-  @@index([venueId, scannedAt])
-}
-
-// -------------------- Audit --------------------
-
-model AuditLog {
-  id         String   @id @default(cuid())
-  actorId    String?
-  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
-  action     String   // e.g. "USER.LOGIN", "COURSE.APPROVE"
-  targetType String?  // e.g. "User", "Course"
-  targetId   String?
-  result     String   // "SUCCESS" | "FAILURE"
-  metadata   Json?
-  ipAddress  String?
-  userAgent  String?
-  createdAt  DateTime @default(now())
-
-  @@index([actorId])
-  @@index([action])
-  @@index([createdAt])
-  @@index([targetType, targetId])
-  @@index([actorId, createdAt])
-}
-
-// -------------------- Notifications --------------------
-
-model Notification {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      String   // e.g. INVITATION_CREATED, APPROVAL_PENDING, COURSE_SUBMITTED
-  title     String
-  message   String
-  link      String?  // in-app path to navigate on click
-  data      Json?
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  @@index([userId, isRead, createdAt])
-  @@index([userId, createdAt])
-  @@index([type])
-}
-
-// -------------------- Settings --------------------
-
-model Setting {
-  key       String   @id
-  value     Json
-  updatedAt DateTime @updatedAt
+enum UserStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  SUSPENDED
+  DISABLED
+  REJECTED
 }

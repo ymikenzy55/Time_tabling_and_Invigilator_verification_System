@@ -170,6 +170,44 @@ export const usersService = {
       },
     });
 
+    // Send deletion email notification
+    sendEmail({
+      to: existing.email,
+      subject: 'Account Deleted — UENR Examination System',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h2 style="color: #991b1b; margin: 0;">Account Deleted</h2>
+          </div>
+          <p style="color: #475569; font-size: 15px;">
+            Hello <strong>${existing.fullName}</strong>,
+          </p>
+          <p style="color: #475569; font-size: 15px;">
+            Your account has been permanently deleted from the UENR Examination Management System by the examination office.
+          </p>
+          <div style="background: #f9fafb; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <p style="color: #374151; font-size: 14px; margin: 8px 0;">
+              <strong>Email:</strong> ${existing.email}
+            </p>
+            ${existing.staffId ? `<p style="color: #374151; font-size: 14px; margin: 8px 0;">
+              <strong>Staff ID:</strong> ${existing.staffId}
+            </p>` : ''}
+          </div>
+          <p style="color: #64748b; font-size: 13px; margin-top: 30px;">
+            If you believe this is an error, please contact the examination office immediately.
+          </p>
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
+          <p style="color: #94a3b8; font-size: 12px;">
+            University of Energy and Natural Resources<br>
+            Examination Management System
+          </p>
+        </div>
+      `,
+    }).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('[users] Failed to send deletion email:', err);
+    });
+
     return { id, removedAssignments };
   },
 

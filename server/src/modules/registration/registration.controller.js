@@ -17,6 +17,16 @@ export const registrationController = {
     res.json({ success: true, data });
   }),
 
+  sendVerificationCode: asyncHandler(async (req, res) => {
+    const result = await registrationService.sendVerificationCode(req.body);
+    res.json({ success: true, data: result });
+  }),
+
+  verifyAndRegister: asyncHandler(async (req, res) => {
+    const user = await registrationService.verifyAndRegister(req.body);
+    res.status(201).json({ success: true, data: { user } });
+  }),
+
   register: asyncHandler(async (req, res) => {
     const user = await registrationService.register(req.body);
     res.status(201).json({ success: true, data: { user } });

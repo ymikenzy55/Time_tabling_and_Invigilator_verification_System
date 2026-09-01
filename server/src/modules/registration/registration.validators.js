@@ -40,6 +40,38 @@ export const registerSchema = z.object({
   }
 });
 
+export const sendVerificationCodeSchema = z.object({
+  role: roleEnum,
+  email: z.string().email('Please enter a valid email address.'),
+});
+
+export const verifyAndRegisterSchema = z.object({
+  role: roleEnum,
+  email: z.string().email('Please enter a valid email address.'),
+  fullName: z.string().trim().min(2, 'Full name is required.'),
+  staffId: z.string().trim().min(1, 'Staff ID is required.'),
+  phone: z.string().trim().optional(),
+  password: strongPassword,
+  departmentName: z.string().trim().optional(),
+  departmentId: z.string().trim().optional(),
+  verificationCode: z.string().trim().length(6, 'Verification code must be 6 digits.'),
+}).superRefine((value, ctx) => {
+  if (value.role === 'DEPARTMENT_HEAD' && !value.departmentName) {
+    ctx.addIssue({
+      path: ['departmentName'],
+      code: z.ZodIssueCode.custom,
+      message: 'Department name is required for department heads.',
+    });
+  }
+  if (value.role === 'INVIGILATOR' && !value.departmentName) {
+    ctx.addIssue({
+      path: ['departmentName'],
+      code: z.ZodIssueCode.custom,
+      message: 'Department name is required for invigilators.',
+    });
+  }
+});
+
 export const roleParamSchema = z.object({
   role: roleEnum,
 });

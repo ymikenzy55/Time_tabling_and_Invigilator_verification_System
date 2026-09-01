@@ -7,7 +7,7 @@ import { z } from 'zod';
 import toast from 'react-hot-toast';
 import {
   ShieldCheck, Loader2, AlertTriangle, Eye, EyeOff, CheckCircle2, Calendar,
-  ArrowLeft, ArrowRight, Check,
+  ArrowLeft, ArrowRight, Check, Mail,
 } from 'lucide-react';
 import { registrationApi } from '@/features/registration/registrationApi';
 import { departmentsApi } from '@/features/academics/departmentsApi';
@@ -76,7 +76,7 @@ const SuccessScreen = ({ onDone }) => {
       <div className="w-12 h-12 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 grid place-items-center mx-auto mb-4">
         <CheckCircle2 className="w-6 h-6" />
       </div>
-      <h2 className="text-xl font-bold text-ink-900">Application submitted</h2>
+      <h2 className="text-xl font-bold text-ink-900">Email verified & application submitted</h2>
       <p className="mt-2 text-sm text-ink-500">
         Your account is under review. Once an Exam Officer approves it, you can sign in.
       </p>
@@ -85,6 +85,106 @@ const SuccessScreen = ({ onDone }) => {
       </p>
       <button className="btn-primary mt-4 w-full" onClick={onDone}>
         Back to sign in
+      </button>
+    </div>
+  );
+};
+
+const VerificationStep = ({ email, code, setCode, onVerify, onResend, isVerifying, isResending, error, attemptsLeft }) => {
+  const inputs = [0, 1, 2, 3, 4, 5];
+
+  const handleChange = (index, value) => {
+    if (!/^\d?$/.test(value)) return;
+    const newCode = code.split('');
+    newCode[index] = value;
+    setCode(newCode.join(''));
+
+    // Auto-focus next input
+    if (value && index < 5) {
+      const next = document.getElementById(`code-${index + 1}`);
+      next?.focus();
+    }
+  };
+
+  const handleKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !code[index] && index > 0) {
+      const prev = document.getElementById(`code-${index - 1}`);
+      prev?.focus();
+    }
+  };
+
+  const handlePaste = (e) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted.length > 0) {
+      setCode(pasted.padEnd(6, '').slice(0, 6));
+      const lastFilled = Math.min(pasted.length, 5);
+      document.getElementById(`code-${lastFilled}`)?.focus();
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="text-center">
+        <div className="w-12 h-12 rounded-lg bg-primary-50 text-primary-600 border border-primary-100 grid place-items-center mx-auto mb-3">
+          <Mail className="w-6 h-6" />
+        </div>
+        <h3 className="text-lg font-bold text-ink-900">Verify your email</h3>
+        <p className="mt-1 text-sm text-ink-500">
+          Enter the 6-digit code sent to <strong className="text-ink-700">{email}</strong>
+        </p>
+      </div>
+
+      <div className="flex justify-center gap-2" onPaste={handlePaste}>
+        {inputs.map((i) => (
+          <input
+            key={i}
+            id={`code-${i}`}
+            type="text"
+            inputMode="numeric"
+            maxLength={1}
+            value={code[i] || ''}
+            onChange={(e) => handleChange(i, e.target.value)}
+            onKeyDown={(e) => handleKeyDown(i, e)}
+            className="w-12 h-14 text-center text-xl font-bold border-2 rounded-lg focus:outline-none focus:border-primary-600 transition-colors"
+            style={{ borderColor: error ? '#ef4444' : code[i] ? '#4f46e5' : '#e2e8f0' }}
+          />
+        ))}
+      </div>
+
+      {error && (
+        <p className="text-sm text-rose-600 text-center">{error}</p>
+      )}
+
+      {attemptsLeft !== null && attemptsLeft !== undefined && attemptsLeft < 5 && attemptsLeft > 0 && !error && (
+        <p className="text-xs text-amber-600 text-center">
+          {attemptsLeft} attempt{attemptsLeft === 1 ? '' : 's'} remaining
+        </p>
+      )}
+
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-ink-500">Didn't receive a code?</span>
+        <button
+          type="button"
+          onClick={onResend}
+          disabled={isResending}
+          className="text-primary-600 font-semibold hover:text-primary-700 disabled:opacity-50"
+        >
+          {isResending ? 'Sending…' : 'Resend code'}
+        </button>
+      </div>
+
+      <button
+        type="button"
+        onClick={onVerify}
+        disabled={isVerifying || code.length !== 6}
+        className="btn-primary w-full"
+      >
+        {isVerifying ? (
+          <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</>
+        ) : (
+          <><CheckCircle2 className="w-4 h-4" /> Verify & Submit</>
+        )}
       </button>
     </div>
   );
@@ -112,6 +212,9 @@ export const RegisterPage = () => {
   const schema = useMemo(() => buildSchema(role), [role]);
 
   const [step, setStep] = useState(0);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verifyError, setVerifyError] = useState('');
+  const [attemptsLeft, setAttemptsLeft] = useState(null);
 
   const {
     register: rf, handleSubmit, watch, reset, setValue, trigger,
@@ -166,6 +269,29 @@ export const RegisterPage = () => {
     }
   };
 
+  const sendCodeMutation = useMutation({
+    mutationFn: (payload) => registrationApi.sendVerificationCode(payload),
+  });
+
+  const verifyMutation = useMutation({
+    mutationFn: (payload) => registrationApi.verifyAndRegister(payload),
+    onSuccess: () => {
+      toast.success('Email verified! Your application has been submitted.');
+      reset();
+    },
+    onError: (err) => {
+      const msg = err.message || 'Verification failed.';
+      setVerifyError(msg);
+      // Extract attempts remaining from error message if present
+      const match = msg.match(/(\d+) attempt/);
+      if (match) setAttemptsLeft(parseInt(match[1], 10));
+      if (msg.includes('expired') || msg.includes('request a new')) {
+        setVerificationCode('');
+        setAttemptsLeft(null);
+      }
+    },
+  });
+
   const submitMutation = useMutation({
     mutationFn: async (values) => {
       return registrationApi.register({
@@ -217,6 +343,10 @@ export const RegisterPage = () => {
   const openRoles = roles.filter((r) => r.open);
   const nextOpen = roles.find((r) => !r.open && r.opensAt && new Date(r.opensAt) > new Date());
 
+  if (verifyMutation.isSuccess) {
+    return <SuccessScreen onDone={() => navigate('/login', { replace: true })} />;
+  }
+
   if (submitMutation.isSuccess) {
     return <SuccessScreen onDone={() => navigate('/login', { replace: true })} />;
   }
@@ -252,7 +382,7 @@ export const RegisterPage = () => {
     ['departmentName'],
     ['password', 'confirm'],
   ];
-  const stepLabels = ['Personal', 'Department', 'Security'];
+  const stepLabels = ['Personal', 'Department', 'Security', 'Verify'];
   const totalSteps = stepFields.length;
   const isLastStep = step === totalSteps - 1;
 
@@ -317,6 +447,27 @@ export const RegisterPage = () => {
         toast.error(err.message || 'Could not verify availability.');
         return;
       }
+    }
+
+    // Step 2 (Security): send verification code before advancing to verification step
+    if (step === 2) {
+      const allValid = await trigger(stepFields[2]);
+      if (!allValid) return;
+      const values = watch();
+      try {
+        await sendCodeMutation.mutateAsync({
+          role: values.role,
+          email: values.email,
+        });
+        toast.success('A 6-digit verification code has been sent to your email.');
+        setVerifyError('');
+        setAttemptsLeft(null);
+        setVerificationCode('');
+        setStep((s) => s + 1);
+      } catch (err) {
+        toast.error(err.message || 'Failed to send verification code.');
+      }
+      return;
     }
 
     setStep((s) => Math.min(s + 1, totalSteps - 1));
@@ -537,17 +688,67 @@ export const RegisterPage = () => {
             </div>
           )}
 
+          {/* Step 3: Email Verification */}
+          {step === 3 && (
+            <VerificationStep
+              email={watch('email')}
+              code={verificationCode}
+              setCode={setVerificationCode}
+              onVerify={async () => {
+                setVerifyError('');
+                const values = watch();
+                try {
+                  await verifyMutation.mutateAsync({
+                    role: values.role,
+                    email: values.email,
+                    fullName: values.fullName,
+                    staffId: values.staffId,
+                    phone: values.phone || undefined,
+                    password: values.password,
+                    departmentName: values.departmentName,
+                    verificationCode,
+                  });
+                } catch (err) {
+                  // error handled in onError callback
+                }
+              }}
+              onResend={async () => {
+                setVerifyError('');
+                setAttemptsLeft(null);
+                setVerificationCode('');
+                const values = watch();
+                try {
+                  await sendCodeMutation.mutateAsync({
+                    role: values.role,
+                    email: values.email,
+                  });
+                  toast.success('A new verification code has been sent.');
+                } catch (err) {
+                  toast.error(err.message || 'Failed to resend code.');
+                }
+              }}
+              isVerifying={verifyMutation.isPending}
+              isResending={sendCodeMutation.isPending}
+              error={verifyError}
+              attemptsLeft={attemptsLeft}
+            />
+          )}
+
           {/* Navigation buttons */}
           <div className="flex items-center gap-2 pt-2">
-            {step > 0 && (
+            {step > 0 && step < 3 && (
               <button type="button" className="btn-secondary" onClick={handleBack}>
                 <ArrowLeft className="w-4 h-4" /> Back
               </button>
             )}
-            {!isLastStep ? (
-              <button type="button" className="btn-primary ml-auto" onClick={handleNext} disabled={staffIdCheck.checking || emailCheck.checking}>
-                {(staffIdCheck.checking || emailCheck.checking) ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
-                Next
+            {step === 3 ? (
+              <button type="button" className="btn-secondary ml-auto" onClick={handleBack}>
+                <ArrowLeft className="w-4 h-4" /> Back to form
+              </button>
+            ) : !isLastStep ? (
+              <button type="button" className="btn-primary ml-auto" onClick={handleNext} disabled={staffIdCheck.checking || emailCheck.checking || sendCodeMutation.isPending}>
+                {(staffIdCheck.checking || emailCheck.checking) ? <Loader2 className="w-4 h-4 animate-spin" /> : (step === 2 ? <Mail className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />)}
+                {step === 2 ? 'Send Verification Code' : 'Next'}
               </button>
             ) : (
               <button type="submit" className="btn-primary ml-auto" disabled={submitMutation.isPending}>
