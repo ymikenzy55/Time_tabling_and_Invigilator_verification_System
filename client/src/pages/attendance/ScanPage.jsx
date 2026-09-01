@@ -155,7 +155,7 @@ export const ScanPage = () => {
   };
 
   // Geolocation — must be obtained before scanning is allowed.
-  const requestLocation = () => {
+  const requestLocation = async () => {
     setLocationError(null);
     setLocationLoading(true);
     setLocationAddress(null);
@@ -168,6 +168,37 @@ export const ScanPage = () => {
     }
 
     console.log('[Location] Requesting location...');
+
+    // For PWAs and modern browsers, check/request permission first
+    if (navigator.permissions && navigator.permissions.query) {
+      try {
+        const permissionStatus = await navigator.permissions.query({ name: 'geolocation' });
+        console.log('[Location] Current permission status:', permissionStatus.state);
+
+        if (permissionStatus.state === 'denied') {
+          setLocationError(
+            'Location permission is blocked. To enable:\n\n' +
+            'Android: Go to Settings → Apps → [Your Browser/App] → Permissions → Location → Allow\n\n' +
+            'iOS: Go to Settings → Privacy → Location Services → [Your Browser/App] → While Using App\n\n' +
+            'After changing settings, refresh the page.'
+          );
+          setLocationLoading(false);
+          return;
+        }
+
+        // Listen for permission changes
+        permissionStatus.addEventListener('change', () => {
+          console.log('[Location] Permission changed to:', permissionStatus.state);
+          if (permissionStatus.state === 'granted') {
+            // Auto-retry when permission is granted
+            requestLocation();
+          }
+        });
+      } catch (err) {
+        console.log('[Location] Permission API not fully supported:', err);
+        // Continue anyway - older browsers will show prompt via getCurrentPosition
+      }
+    }
 
     // Try to get location with a reasonable timeout
     navigator.geolocation.getCurrentPosition(
@@ -196,7 +227,19 @@ export const ScanPage = () => {
         
         switch (err.code) {
           case err.PERMISSION_DENIED:
-            msg = 'Location permission denied. Please allow location access in your browser settings and click "Retry Location" below.';
+            msg = 'Location permission denied.\n\n' +
+                  'To enable location access:\n\n' +
+                  '📱 Android:\n' +
+                  '1. Open Settings → Apps\n' +
+                  '2. Find this app or your browser\n' +
+                  '3. Tap Permissions → Location\n' +
+                  '4. Select "Allow all the time" or "Allow only while using the app"\n\n' +
+                  '📱 iOS:\n' +
+                  '1. Open Settings → Privacy & Security\n' +
+                  '2. Tap Location Services\n' +
+                  '3. Find this app or your browser\n' +
+                  '4. Select "While Using the App"\n\n' +
+                  'After changing settings, come back and tap "Retry Location".';
             break;
           case err.POSITION_UNAVAILABLE:
             msg = 'Location unavailable. Please ensure GPS/Location Services are enabled on your device and you have a good signal. Try moving to a location with better reception.';
@@ -516,13 +559,7 @@ export const ScanPage = () => {
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
               <div className="flex-1">
                 <div className="text-rose-800 font-medium">Location Error</div>
-                <div className="text-rose-700 text-xs mt-0.5">{locationError}</div>
-                {locationError.includes('unavailable') || locationError.includes('timed out') ? (
-                  <div className="text-rose-700 text-xs mt-2 flex items-start gap-1">
-                    <span className="font-medium">Tip:</span>
-                    <span>Move to an open area with clear sky view, ensure Location Services are ON, and retry.</span>
-                  </div>
-                ) : null}
+                <div className="text-rose-700 text-xs mt-0.5 whitespace-pre-line">{locationError}</div>
               </div>
               <button 
                 className="btn-secondary btn-sm shrink-0" 
@@ -610,23 +647,48 @@ export const ScanPage = () => {
                   <>
                     <AlertCircle className="w-12 h-12 mx-auto mb-3 text-rose-500" />
                     <h3 className="text-lg font-bold text-ink-900 mb-2">
-                      Location Required
+                      Location Access Required
                     </h3>
-                    <p className="text-sm text-ink-600 mb-4">
-                      You must allow location access to scan QR codes. This helps verify you are at the correct exam venue.
-                    </p>
-                    <button
-                      className="btn-primary"
-                      onClick={requestLocation}
-                      disabled={locationLoading}
-                    >
-                      {locationLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Navigation className="w-4 h-4" />
-                      )}
-                      {locationLoading ? 'Getting Location...' : 'Allow Location Access'}
-                    </button>
+                    <div className="text-sm text-ink-600 mb-4 text-left max-w-md mx-auto bg-rose-50 border border-rose-200 rounded-lg p-4">
+                      <p className="font-medium mb-2">📱 To enable location access:</p>
+                      <div className="space-y-2 text-xs">
+                        <div>
+                          <strong>Android:</strong>
+                          <ol className="list-decimal ml-4 mt-1 space-y-1">
+                            <li>Go to Settings → Apps</li>
+                            <li>Find this app or your browser</li>
+                            <li>Tap Permissions → Location</li>
+                            <li>Select "Allow all the time" or "While using"</li>
+                          </ol>
+                        </div>
+                        <div>
+                          <strong>iOS:</strong>
+                          <ol className="list-decimal ml-4 mt-1 space-y-1">
+                            <li>Go to Settings → Privacy & Security</li>
+                            <li>Tap Location Services</li>
+                            <li>Find this app or your browser</li>
+                            <li>Select "While Using the App"</li>
+                          </ol>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <button
+                        className="btn-primary"
+                        onClick={requestLocation}
+                        disabled={locationLoading}
+                      >
+                        {locationLoading ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Navigation className="w-4 h-4" />
+                        )}
+                        {locationLoading ? 'Getting Location...' : 'Retry Location Access'}
+                      </button>
+                      <p className="text-xs text-ink-500">
+                        If the button doesn't work, you may need to manually enable location in your device settings (see instructions above), then come back and tap "Retry Location Access".
+                      </p>
+                    </div>
                   </>
                 ) : null}
               </div>
