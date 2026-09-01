@@ -55,41 +55,43 @@ export const passwordResetService = {
 
     // Send email asynchronously (fire-and-forget) to avoid blocking the response
     if (isEmailConfigured()) {
-      sendEmail({
-        to: user.email,
-        subject: 'Password Reset — Examination Management System',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <h2 style="color: #1e293b;">Password Reset Request</h2>
-            <p style="color: #475569; font-size: 15px;">
-              Hello ${user.fullName},
-            </p>
-            <p style="color: #475569; font-size: 15px;">
-              We received a request to reset your password. Click the button below to set a new password:
-            </p>
-            <p style="text-align: center; margin: 30px 0;">
-              <a href="${resetLink}"
-                 style="background: #4f46e5; color: #fff; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block;">
-                Reset Password
-              </a>
-            </p>
-            <p style="color: #64748b; font-size: 13px;">
-              Or copy this link into your browser:<br>
-              <a href="${resetLink}" style="color: #4f46e5; word-break: break-all;">${resetLink}</a>
-            </p>
-            <p style="color: #64748b; font-size: 13px;">
-              This link will expire in ${RESET_EXPIRY_HOURS} hour${RESET_EXPIRY_HOURS === 1 ? '' : 's'}.<br>
-              If you did not request a password reset, you can safely ignore this email.
-            </p>
-            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
-            <p style="color: #94a3b8; font-size: 12px;">
-              Examination Management System
-            </p>
-          </div>
-        `,
-      }).catch((err) => {
-        console.error('[PasswordReset] Failed to send email:', err);
-        // Log but don't fail the request
+      // Use setImmediate to ensure email sending happens after response is sent
+      setImmediate(() => {
+        sendEmail({
+          to: user.email,
+          subject: 'Password Reset — Examination Management System',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #1e293b;">Password Reset Request</h2>
+              <p style="color: #475569; font-size: 15px;">
+                Hello ${user.fullName},
+              </p>
+              <p style="color: #475569; font-size: 15px;">
+                We received a request to reset your password. Click the button below to set a new password:
+              </p>
+              <p style="text-align: center; margin: 30px 0;">
+                <a href="${resetLink}"
+                   style="background: #4f46e5; color: #fff; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block;">
+                  Reset Password
+                </a>
+              </p>
+              <p style="color: #64748b; font-size: 13px;">
+                Or copy this link into your browser:<br>
+                <a href="${resetLink}" style="color: #4f46e5; word-break: break-all;">${resetLink}</a>
+              </p>
+              <p style="color: #64748b; font-size: 13px;">
+                This link will expire in ${RESET_EXPIRY_HOURS} hour${RESET_EXPIRY_HOURS === 1 ? '' : 's'}.<br>
+                If you did not request a password reset, you can safely ignore this email.
+              </p>
+              <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
+              <p style="color: #94a3b8; font-size: 12px;">
+                Examination Management System
+              </p>
+            </div>
+          `,
+        }).catch((err) => {
+          console.error('[PasswordReset] Failed to send email:', err);
+        });
       });
     }
 

@@ -69,7 +69,7 @@ export const ForgotPasswordPage = () => {
         <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-center">
           <div className="flex items-center justify-center gap-2 text-sm text-amber-800">
             <Loader2 className="w-4 h-4 animate-spin" />
-            <span>Checking account and sending reset link...</span>
+            <span>Processing your request...</span>
           </div>
         </div>
       )}
