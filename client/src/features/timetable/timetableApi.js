@@ -19,6 +19,10 @@ export const timetableApi = {
       },
       body: JSON.stringify(payload),
     }).then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
@@ -48,6 +52,11 @@ export const timetableApi = {
           }
         }
       }
+      
+      if (!finalResult) {
+        throw new Error('No result received from server');
+      }
+      
       return finalResult;
     });
   },

@@ -1153,7 +1153,7 @@ export const TimetablePage = () => {
             </div>
           )}
 
-          {result.venuesAssigned ? (
+          {result.venuesAssigned !== undefined && (result.venuesAssigned ? (
             <div className="flex items-center gap-2 text-sm text-emerald-700">
               <CheckCircle2 className="w-4 h-4" /> Venues have been assigned to all scheduled exams.
             </div>
@@ -1164,7 +1164,7 @@ export const TimetablePage = () => {
                 <span className="font-bold">No venues assigned.</span> Exams are scheduled without venues. You can assign venues later by regenerating with venue assignment enabled.
               </div>
             </div>
-          )}
+          ))}
 
           {invigilatorsAssigned ? (
             <div className="flex items-center gap-2 text-sm text-emerald-700">
