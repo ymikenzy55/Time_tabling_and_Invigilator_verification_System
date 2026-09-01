@@ -3,7 +3,7 @@ import { useSearchParams, useLocation } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Html5Qrcode } from 'html5-qrcode';
 import toast from 'react-hot-toast';
-import { Loader2, QrCode, ScanLine, CheckCircle2, AlertCircle, AlertTriangle, MapPin, Clock, Navigation } from 'lucide-react';
+import { Loader2, ScanLine, CheckCircle2, AlertCircle, AlertTriangle, MapPin, Clock, Navigation } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { attendanceApi } from '@/features/attendance/attendanceApi';
 import { venueAssignmentsApi } from '@/features/venueAssignments/venueAssignmentsApi';
@@ -41,7 +41,6 @@ export const ScanPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const [result, setResult] = useState(null);
-  const [manualToken, setManualToken] = useState(searchParams.get('token') || '');
   const [cameraError, setCameraError] = useState(null);
   const [cameraStarting, setCameraStarting] = useState(false);
   const [locationData, setLocationData] = useState(null);
@@ -417,7 +416,6 @@ export const ScanPage = () => {
         (decodedText) => {
           if (scannedRef.current) return;
           scannedRef.current = true;
-          setManualToken(decodedText);
           setSearchParams({ token: decodedText });
           submitToken(decodedText);
           scanner.stop().catch(() => {});
@@ -702,23 +700,6 @@ export const ScanPage = () => {
               )}
             </div>
 
-            <div className="panel p-4 space-y-3">
-              <label className="label">Or paste the token manually</label>
-              <textarea
-                className="input min-h-[80px] text-xs"
-                value={manualToken}
-                onChange={(e) => setManualToken(e.target.value)}
-                placeholder="Paste the token from the QR code..."
-              />
-              <button
-                className="btn-primary w-full"
-                disabled={!manualToken || isBusy}
-                onClick={() => submitToken(manualToken)}
-              >
-                {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
-                {verifyMutation.isPending ? 'Checking venue…' : scanMutation.isPending ? 'Recording…' : 'Submit token'}
-              </button>
-            </div>
             </>
             )}
           </>
@@ -780,12 +761,11 @@ export const ScanPage = () => {
                   <AlertCircle className="w-5 h-5 text-rose-600" />
                   {RESULT_LABELS[result.result] || result.result || 'Error'}
                 </div>
-                {result.message && (
-                  <div className="text-sm text-rose-700 mt-2 flex items-start justify-center gap-1.5">
-                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span>{result.message}</span>
-                  </div>
-                )}
+            {result.message && result.result !== 'REJECTED_VENUE_MISMATCH' && (
+              <div className="text-sm text-rose-700 mt-2">
+                {result.message}
+              </div>
+            )}
             {result.result === 'REJECTED_VENUE_MISMATCH' && (
               <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-center">
                 <div className="flex items-center justify-center gap-2 text-sm font-bold text-amber-800">
