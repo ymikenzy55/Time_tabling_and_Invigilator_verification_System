@@ -285,7 +285,7 @@ export const ScanPage = () => {
 
       // Wrong venue (or any other rejection): tell the invigilator right away
       const label = RESULT_LABELS[data.result] || data.result;
-      toast.error(`${label}${data.message ? ': ' + data.message : ''}`);
+      toast.error(label);
       setResult({ ...data, previewOnly: true });
       allowRescan();
     },
@@ -321,7 +321,7 @@ export const ScanPage = () => {
         scanHistoryQuery.refetch();
       } else {
         const label = RESULT_LABELS[data.result] || data.result;
-        toast.error(`${label}${data.message ? ': ' + data.message : ''}`);
+        toast.error(label);
         allowRescan();
       }
       setResult(data);

@@ -194,14 +194,9 @@ const evaluateVenueScan = async (token, actor) => {
 
     let message;
     if (todayAssignments.length > 0) {
-      const assignmentList = todayAssignments.map((a) => {
-        const slotTime = new Date(a.slotAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const loc = a.venue.location ? ` (${a.venue.location})` : '';
-        return `${a.venue.name}${loc} at ${slotTime}`;
-      }).join(', ');
-      message = `You are not assigned to ${venue.name}. You are assigned to: ${assignmentList}. Please proceed to your assigned venue and scan the QR code there.`;
+      message = `This is not your assigned venue. Please move to your assigned venue and scan again.`;
     } else {
-      message = `You are not assigned to ${venue.name}, and you have no venue assignments in this examination session. Please check your assignments or contact the exam officer.`;
+      message = `You are not assigned to ${venue.name}. Please check your assignments or contact the exam officer.`;
     }
 
     return {
