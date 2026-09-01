@@ -193,8 +193,12 @@ export const registrationService = {
             </p>
           </div>
         `,
-      }).then(() => {
-        console.log('[registration] Verification code sent to', email);
+      }).then((result) => {
+        if (result?.success) {
+          console.log('[registration] Verification code sent to', email, 'via', result.method);
+        } else {
+          console.error('[registration] Email send failed:', result?.error || 'unknown error');
+        }
       }).catch((err) => {
         console.error('[registration] Failed to send verification code:', err.message || err);
       });

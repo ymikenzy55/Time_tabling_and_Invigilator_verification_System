@@ -89,8 +89,12 @@ export const passwordResetService = {
               </p>
             </div>
           `,
-        }).then(() => {
-          console.log('[PasswordReset] Reset email sent successfully to', user.email);
+        }).then((result) => {
+          if (result?.success) {
+            console.log('[PasswordReset] Reset email sent successfully to', user.email, 'via', result.method);
+          } else {
+            console.error('[PasswordReset] Email send failed:', result?.error || 'unknown error');
+          }
         }).catch((err) => {
           console.error('[PasswordReset] Failed to send email:', err.message || err);
         });
