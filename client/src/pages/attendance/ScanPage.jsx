@@ -850,6 +850,20 @@ export const ScanPage = () => {
                 Time slot: {result.timeSlot}
               </div>
             )}
+            {result.locationWarning && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <div className="flex items-start gap-2 text-sm">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                  <div className="flex-1 text-left">
+                    <div className="font-medium text-amber-800">Location Warning</div>
+                    <div className="text-xs text-amber-700 mt-1">{result.locationWarning}</div>
+                    <div className="text-xs text-amber-600 mt-1">
+                      This scan has been flagged for the exam officer to review.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             {result.error && <div className="text-sm text-rose-700 mt-1">{result.error}</div>}
             {result.previewOnly && (
               <div className="text-xs text-ink-500 mt-3">

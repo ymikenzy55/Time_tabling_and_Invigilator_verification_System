@@ -63,6 +63,29 @@ const isWithinExamPeriod = (session, now) => {
 };
 
 /**
+ * Check if coordinates are within UENR campus bounds
+ * UENR Campus approximate coordinates:
+ * Latitude: 7.3° to 7.4° N
+ * Longitude: -2.35° to -2.30° W
+ */
+const isWithinUENRCampus = (latitude, longitude) => {
+  // UENR campus boundaries (approximate)
+  const UENR_BOUNDS = {
+    minLat: 7.30,
+    maxLat: 7.40,
+    minLng: -2.35,
+    maxLng: -2.30,
+  };
+
+  const isWithin = latitude >= UENR_BOUNDS.minLat && 
+                   latitude <= UENR_BOUNDS.maxLat &&
+                   longitude >= UENR_BOUNDS.minLng && 
+                   longitude <= UENR_BOUNDS.maxLng;
+
+  return isWithin;
+};
+
+/**
  * Run every venue-QR check without touching the database for writes.
  *
  * Shared by `previewVenueScan` (read-only) and `scanVenue` (which persists the
@@ -418,6 +441,17 @@ export const attendanceService = {
     const evaluation = await evaluateVenueScan(token, actor);
     const { result, payload, venue, invigilator, assignedVenue, allAssignedVenues, message, timeSlot } = evaluation;
 
+    // Check if location is within UENR campus (if coordinates provided)
+    let isOnCampus = null;
+    let locationWarning = null;
+    if (latitude && longitude) {
+      isOnCampus = isWithinUENRCampus(latitude, longitude);
+      if (!isOnCampus) {
+        locationWarning = 'Warning: Your location appears to be outside UENR campus.';
+        console.warn(`[VenueScan] Off-campus scan detected: ${latitude}, ${longitude} by user ${actor.id}`);
+      }
+    }
+
     // An unreadable QR or unknown venue has no valid venue/session to attach a
     // scan row to, so nothing is persisted for those.
     if (result === 'REJECTED_INVALID_QR') {
@@ -427,6 +461,7 @@ export const attendanceService = {
       return { result, message: message || null };
     }
 
+    // Record ALL scan attempts (successful and failed) for audit trail
     const scan = await prisma.venueScan.create({
       data: {
         venueId: payload.venueId,
@@ -438,7 +473,7 @@ export const attendanceService = {
         latitude: latitude || null,
         longitude: longitude || null,
         locationAccuracy: locationAccuracy || null,
-        locationAddress: address || null, // Human-readable address from reverse geocoding
+        locationAddress: address || null,
       },
     });
 
@@ -450,21 +485,35 @@ export const attendanceService = {
         assignedVenue: assignedVenue || null,
         allAssignedVenues: allAssignedVenues || null,
         message: message || null,
+        locationWarning: locationWarning || null,
+        isOnCampus,
       };
     }
 
-    // Notify all exam officers about the check-in (fire-and-forget) and
-    // broadcast instantly via Socket.IO so the admin page updates live.
+    // Successful scan - notify exam officer
     const checkInTime = new Date(scan.scannedAt || Date.now()).toLocaleString();
     const locationStr = latitude != null && longitude != null
-      ? ` (Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)})`
+      ? ` (Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}${!isOnCampus ? ' - OFF CAMPUS' : ''})`
       : '';
+    
+    // Notify with warning if off-campus
+    const notificationTitle = isOnCampus === false 
+      ? '⚠️ Invigilator checked in (OFF CAMPUS)' 
+      : 'Invigilator checked in';
+    
     notifyRole('SUPER_ADMIN', {
       type: 'INVIGILATOR_CHECKIN',
-      title: 'Invigilator checked in',
+      title: notificationTitle,
       message: `${invigilator.fullName} checked in at ${venue.name} — ${checkInTime}${locationStr}.`,
       link: '/invigilator-assignments',
-      data: { venueId: payload.venueId, examinationSessionId: payload.examinationSessionId, scanId: scan.id, latitude, longitude },
+      data: { 
+        venueId: payload.venueId, 
+        examinationSessionId: payload.examinationSessionId, 
+        scanId: scan.id, 
+        latitude, 
+        longitude,
+        isOnCampus,
+      },
     }).catch(() => {});
 
     broadcast.toRoles('SUPER_ADMIN', 'invigilator-checkin', {
@@ -480,6 +529,7 @@ export const attendanceService = {
       examinationSessionId: payload.examinationSessionId,
       latitude: latitude || null,
       longitude: longitude || null,
+      isOnCampus,
       timeSlot: timeSlot || null,
     });
 
@@ -489,6 +539,8 @@ export const attendanceService = {
       venue,
       timeSlot: timeSlot || null,
       invigilator: { fullName: invigilator.fullName, email: invigilator.email, staffId: invigilator.staffId },
+      locationWarning: locationWarning || null,
+      isOnCampus,
     };
   },
 
