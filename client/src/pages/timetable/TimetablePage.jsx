@@ -122,7 +122,9 @@ const DayPeriodGrid = ({ days, clashes, isAdmin, isPracticalSection, onEditEntry
                                 <span>{entry.course?.instructorName || 'N/A'}</span>
                               </div>
                               <div className="text-[8pt] font-bold text-slate-800">
-                                {entry.course?.studentCount ?? 0} students
+                                {entry.splitRange
+                                  ? `${entry.splitRange} students`
+                                  : `${entry.course?.studentCount ?? 0} students`}
                               </div>
                               {isClashing && (
                                 <div className="text-rose-600 font-bold text-[7pt] mt-0.5">⚠ CLASH</div>
@@ -708,6 +710,7 @@ export const TimetablePage = () => {
             title,
             classes: [],
             students: 0,
+            splitRanges: [],
             examiners: new Set(),
             venues: new Set(),
             clash: false,
@@ -717,6 +720,7 @@ export const TimetablePage = () => {
         const cls = classLabel(e);
         if (cls && !row.classes.includes(cls)) row.classes.push(cls);
         row.students += e.course?.studentCount || 0;
+        if (e.splitRange) row.splitRanges.push(e.splitRange);
         if (e.course?.instructorName) row.examiners.add(e.course.instructorName);
         if (e.venue?.name) row.venues.add(e.venue.name);
         if (isClashing) row.clash = true;
@@ -798,7 +802,7 @@ export const TimetablePage = () => {
           <td class="code-cell">${esc(row.code)}<div class="time-tag">${esc(timeLabel)}</div></td>
           <td class="title-cell">${esc(row.title)}${row.clash ? ' <span class="clash-tag">&#9888; CLASH</span>' : ''}</td>
           <td class="class-cell">${esc(row.classes.join(', '))}</td>
-          <td class="stds-cell">${row.students || ''}</td>
+          <td class="stds-cell">${row.splitRanges.length > 0 ? esc(row.splitRanges.join(', ')) : (row.students || '')}</td>
           <td class="examiner-cell">${esc([...row.examiners].join(', '))}</td>
           <td class="venue-cell">${esc([...row.venues].join(', '))}</td>
         </tr>`;

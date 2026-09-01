@@ -196,7 +196,7 @@ const scheduleCourses = (courses, slots, venues) => {
         deptLevelDayBusy.get(dk).add(k);
         deptLevelLastDate.set(k, dk);
       }
-      for (const course of group) placements.push({ course, slot, venue: null });
+      for (const course of group) placements.push({ course, slot, venue: null, splitCount: null, isSplit: false });
       return true;
     }
 
@@ -267,7 +267,7 @@ const scheduleCourses = (courses, slots, venues) => {
       deptLevelDayBusy.get(dk).add(k);
       deptLevelLastDate.set(k, dk);
     }
-    for (const { course, venue } of chosen) placements.push({ course, slot, venue });
+    for (const c of chosen) placements.push({ course: c.course, slot, venue: c.venue, splitCount: c.splitCount || null, isSplit: !!c.isSplit });
     return true;
   };
 
@@ -290,7 +290,7 @@ const scheduleCourses = (courses, slots, venues) => {
       for (const k of deptLevelKeys) {
         deptLevelBusy.get(slot.key).add(k);
       }
-      for (const course of group) placements.push({ course, slot, venue: null });
+      for (const course of group) placements.push({ course, slot, venue: null, splitCount: null, isSplit: false });
       return true;
     }
 
@@ -352,7 +352,7 @@ const scheduleCourses = (courses, slots, venues) => {
     for (const k of deptLevelKeys) {
       deptLevelBusy.get(slot.key).add(k);
     }
-    for (const { course, venue } of chosen) placements.push({ course, slot, venue });
+    for (const c of chosen) placements.push({ course: c.course, slot, venue: c.venue, splitCount: c.splitCount || null, isSplit: !!c.isSplit });
     return true;
   };
 
@@ -506,6 +506,7 @@ export const timetableService = {
         select: {
           id: true,
           scheduledAt: true,
+          splitRange: true,
           course: {
             select: {
               id: true, code: true, title: true, level: true, studentCount: true,
@@ -581,6 +582,7 @@ export const timetableService = {
       select: {
         id: true,
         scheduledAt: true,
+        splitRange: true,
         course: {
           select: {
             id: true, code: true, title: true, level: true, studentCount: true,
@@ -725,9 +727,31 @@ export const timetableService = {
     const { placements, unscheduled } = bestResult;
     
     progress(`Assigning venues to all courses…`);
+
+    // Compute split ranges for courses split across multiple venues.
+    // Group split placements by courseId, then assign sequential student ranges.
+    const splitGroups = new Map(); // courseId -> [{ placement, index }]
+    for (const p of placements) {
+      if (p.isSplit && p.splitCount) {
+        if (!splitGroups.has(p.course.id)) splitGroups.set(p.course.id, []);
+        splitGroups.get(p.course.id).push(p);
+      }
+    }
+    const splitRangeMap = new Map(); // placement object -> "start-end"
+    for (const [, splitPlacements] of splitGroups) {
+      let offset = 1;
+      for (const p of splitPlacements) {
+        const start = offset;
+        const end = offset + p.splitCount - 1;
+        splitRangeMap.set(p, `${start}-${end}`);
+        offset = end + 1;
+      }
+    }
+
     // Persist the best solution found
-    const rows = placements.map(({ course, slot, venue }) => {
+    const rows = placements.map(({ course, slot, venue, isSplit, splitCount }) => {
       const scheduledAt = new Date(slot.timestamp);
+      const self = { course, slot, venue, isSplit, splitCount };
       return {
         examinationSessionId,
         courseId: course.id,
@@ -736,6 +760,7 @@ export const timetableService = {
         windowOpensAt: scheduledAt,
         windowClosesAt: new Date(slot.timestamp + SLOT_MINUTES * 60 * 1000 + 30 * 60 * 1000),
         gracePeriodMin: 30,
+        splitRange: splitRangeMap.get(self) || null,
       };
     });
 
