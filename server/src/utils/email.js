@@ -1,9 +1,18 @@
 import { MailerSend, EmailParams, Sender, Recipient } from 'mailersend';
 import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { env } from '../config/env.js';
 
 let mailerSendClient = null;
 let nodemailerTransporter = null;
+let resendClient = null;
+
+const getResendClient = () => {
+  if (resendClient) return resendClient;
+  if (!env.RESEND_API_KEY) return null;
+  resendClient = new Resend(env.RESEND_API_KEY);
+  return resendClient;
+};
 
 const getMailerSendClient = () => {
   if (mailerSendClient) return mailerSendClient;
@@ -27,10 +36,33 @@ const getNodemailerTransporter = () => {
   return nodemailerTransporter;
 };
 
-const FROM_EMAIL = env.MAILERSEND_FROM_EMAIL || 'noreply@trial-vyjq2lr7q3p4z0g7.mlsender.net';
-const FROM_NAME = env.MAILERSEND_FROM_NAME || 'UENR Exam System';
+const FROM_EMAIL = env.RESEND_FROM_EMAIL || env.MAILERSEND_FROM_EMAIL || 'onboarding@resend.dev';
+const FROM_NAME = env.RESEND_FROM_NAME || env.MAILERSEND_FROM_NAME || 'UENR Exam System';
 
 export const sendEmail = async ({ to, subject, html }) => {
+  const resend = getResendClient();
+  if (resend) {
+    try {
+      console.log('[email] Sending via Resend to:', to);
+      const { data, error } = await resend.emails.send({
+        from: `${FROM_NAME} <${FROM_EMAIL}>`,
+        to,
+        subject,
+        html,
+      });
+      if (error) {
+        console.error('[email] Resend error:', error);
+      } else {
+        console.log('[email] Resend success:', data?.id);
+        return { success: true, skipped: false, method: 'resend' };
+      }
+    } catch (error) {
+      console.error('[email] Resend failed:', error.message || error);
+    }
+  } else {
+    console.log('[email] Resend not configured (no API key)');
+  }
+
   const mailerSend = getMailerSendClient();
   if (mailerSend) {
     try {
@@ -74,4 +106,4 @@ export const sendEmail = async ({ to, subject, html }) => {
   return { success: false, skipped: true, error: 'No email service configured' };
 };
 
-export const isEmailConfigured = () => getMailerSendClient() !== null || getNodemailerTransporter() !== null;
+export const isEmailConfigured = () => getResendClient() !== null || getMailerSendClient() !== null || getNodemailerTransporter() !== null;

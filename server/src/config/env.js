@@ -49,6 +49,11 @@ const schema = z.object({
   MAILERSEND_FROM_EMAIL: z.string().optional(),
   MAILERSEND_FROM_NAME: z.string().optional(),
 
+  // Resend API for emails
+  RESEND_API_KEY: z.string().optional(),
+  RESEND_FROM_EMAIL: z.string().optional(),
+  RESEND_FROM_NAME: z.string().optional(),
+
   // Legacy SMTP fallback
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().positive().default(587),
