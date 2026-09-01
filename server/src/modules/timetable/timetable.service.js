@@ -647,9 +647,6 @@ export const timetableService = {
       message: resultMessage,
     };
   },
-      period: { start: periodStart, end: periodEnd },
-    };
-  },
 
   /** Update a single timetable entry's venue and/or date/time slot. */
   async updateEntry(entryId, { venueId, scheduledAt }, actor) {
