@@ -777,45 +777,6 @@ export const ScanPage = () => {
                 </div>
               </div>
             )}
-            {result.result === 'REJECTED_VENUE_MISMATCH' && result.allAssignedVenues && result.allAssignedVenues.length > 0 && (
-              <div className="mt-3 rounded-lg border border-primary-200 bg-primary-50 p-3 text-left">
-                <div className="flex items-center gap-2 text-xs font-bold text-primary-800 uppercase tracking-wide">
-                  <MapPin className="w-3.5 h-3.5" /> Your assigned venues
-                </div>
-                <div className="mt-2 space-y-1.5">
-                  {result.allAssignedVenues.map((v, i) => (
-                    <div key={i} className="text-sm">
-                      <span className="font-bold text-ink-900">{v.name}</span>
-                      {v.location && <span className="text-ink-600"> · {v.location}</span>}
-                      {v.slotAt && (
-                        <span className="text-xs text-ink-500 ml-1">
-                          at {new Date(v.slotAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {result.result === 'REJECTED_VENUE_MISMATCH' && result.assignedVenue && !result.allAssignedVenues && (
-              <div className="mt-3 rounded-lg border border-primary-200 bg-primary-50 p-3 text-left">
-                <div className="flex items-center gap-2 text-xs font-bold text-primary-800 uppercase tracking-wide">
-                  <MapPin className="w-3.5 h-3.5" /> Your assigned venue today
-                </div>
-                <div className="mt-1.5 text-base font-bold text-ink-900">{result.assignedVenue.name}</div>
-                {result.assignedVenue.location && (
-                  <div className="text-sm text-ink-600">{result.assignedVenue.location}</div>
-                )}
-                {result.assignedVenue.slotAt && (
-                  <div className="text-xs text-ink-500 mt-1">
-                    Slot: {new Date(result.assignedVenue.slotAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </div>
-                )}
-                <div className="text-xs text-primary-700 mt-2">
-                  Please head there and scan the QR code posted at that venue.
-                </div>
-              </div>
-            )}
             {result.venue && (
               <div className="text-sm text-ink-700 mt-2">
                 Venue: <span className="font-medium">{result.venue.name}</span>
