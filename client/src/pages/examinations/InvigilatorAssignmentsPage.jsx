@@ -442,7 +442,7 @@ export const InvigilatorAssignmentsPage = () => {
                                 {s.slotAt ? getTimeSlot(s.slotAt) : '—'}
                               </td>
                               <td className="px-4 py-3 text-sm text-ink-500">
-                                {new Date(s.scannedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                                {new Date(s.scannedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                               </td>
                               <td className="px-4 py-3">
                                 {s.result === 'RECORDED' ? (
@@ -483,7 +483,7 @@ export const InvigilatorAssignmentsPage = () => {
                               )}
                               <div className="flex items-center gap-1 text-xs text-ink-400 mt-0.5">
                                 <CheckCircle2 className="w-3 h-3" />
-                                {new Date(s.scannedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                                {new Date(s.scannedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                               </div>
                             </div>
                             {s.result === 'RECORDED' ? (
