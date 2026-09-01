@@ -83,7 +83,7 @@ export const BottomNav = () => {
       )}
 
       {/* Bottom navigation bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-white border-t border-surface-border pb-safe no-print">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 xl:hidden bg-white border-t border-surface-border pb-safe no-print">
         <div className="flex items-stretch justify-around h-16">
           {/* Primary items — first half */}
           {primary.slice(0, 2).map((item) => (

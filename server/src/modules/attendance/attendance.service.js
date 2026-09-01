@@ -217,8 +217,56 @@ const evaluateVenueScan = async (token, actor) => {
     };
   }
 
-  // No duplicate check — invigilators can scan multiple times per slot.
-  // Each scan is logged with timestamp and location for audit purposes.
+  // Check for duplicate scan — same venue, same invigilator, same time slot, already recorded.
+  // Only block if a RECORDED scan already exists for this venue + slot.
+  if (!isDemo) {
+    const slotHour = new Date(assignment.slotAt).getHours();
+    const slotLabel = EXAM_TIME_SLOTS.find((s) => slotHour >= s.startHour && slotHour < s.endHour)?.label || 'Exam Session';
+    const existingScan = await prisma.venueScan.findFirst({
+      where: {
+        userId: actor.id,
+        venueId: payload.venueId,
+        examinationSessionId: payload.examinationSessionId,
+        result: 'RECORDED',
+        scannedAt: {
+          gte: new Date(new Date(assignment.slotAt).getTime() - 60 * 60 * 1000),
+          lte: new Date(new Date(assignment.slotAt).getTime() + 4 * 60 * 60 * 1000),
+        },
+      },
+    });
+    if (existingScan) {
+      return {
+        result: 'REJECTED_DUPLICATE',
+        payload,
+        venue,
+        invigilator,
+        message: `You have already checked in at ${venue.name} for this time slot (${slotLabel}). Duplicate scans for the same venue and time are not allowed.`,
+      };
+    }
+  }
+
+  // Time window check for regular invigilators: must be within the exam time slot.
+  // Demo invigilators bypass this check.
+  if (!isDemo) {
+    const slotStart = new Date(assignment.slotAt);
+    const slotEnd = new Date(slotStart.getTime() + (assignment.examDurationMinutes || 180) * 60 * 1000);
+    // Allow scanning 15 minutes before slot start and up to 30 minutes after slot end.
+    const windowStart = new Date(slotStart.getTime() - 15 * 60 * 1000);
+    const windowEnd = new Date(slotEnd.getTime() + 30 * 60 * 1000);
+    if (now < windowStart || now > windowEnd) {
+      const sHour = slotStart.getHours();
+      const sLabel = EXAM_TIME_SLOTS.find((s) => sHour >= s.startHour && sHour < s.endHour)?.label || 'Exam Session';
+      return {
+        result: 'REJECTED_WINDOW',
+        payload,
+        venue,
+        invigilator,
+        assignment,
+        message: `Scanning for ${venue.name} is only allowed during your assigned exam time (${slotStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – ${slotEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}). Please come back during your exam window.`,
+      };
+    }
+  }
+
   // Determine the time slot label from the assignment's scheduled time.
   const slotHour = new Date(assignment.slotAt).getHours();
   const slotLabel = EXAM_TIME_SLOTS.find((s) => slotHour >= s.startHour && slotHour < s.endHour)?.label || 'Exam Session';

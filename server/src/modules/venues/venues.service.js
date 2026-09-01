@@ -1,13 +1,21 @@
 import { prisma } from '../../utils/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { logAudit } from '../../utils/auditLog.js';
+import { cache } from '../../utils/cache.js';
+
+const clearVenuesCache = () => {
+  cache.clearPrefix('venues:');
+};
 
 export const venuesService = {
   async list({ activeOnly } = {}) {
-    return prisma.venue.findMany({
-      where: activeOnly ? { isActive: true } : undefined,
-      orderBy: [{ createdAt: 'desc' }],
-    });
+    const cacheKey = `venues:list:${activeOnly ? 'active' : 'all'}`;
+    return cache.remember(cacheKey, 60_000, async () =>
+      prisma.venue.findMany({
+        where: activeOnly ? { isActive: true } : undefined,
+        orderBy: [{ createdAt: 'desc' }],
+      })
+    );
   },
 
   async getById(id) {
@@ -38,6 +46,7 @@ export const venuesService = {
       metadata: { name: venue.name, capacity: venue.capacity },
     });
 
+    clearVenuesCache();
     return venue;
   },
 
@@ -87,6 +96,7 @@ export const venuesService = {
       metadata: { created: created.length, skipped },
     });
 
+    clearVenuesCache();
     return { created, skipped, total: venues.length };
   },
 
@@ -118,6 +128,7 @@ export const venuesService = {
       metadata: { name: updated.name, capacity: updated.capacity },
     });
 
+    clearVenuesCache();
     return updated;
   },
 
@@ -142,6 +153,7 @@ export const venuesService = {
       metadata: { name: venue.name },
     });
 
+    clearVenuesCache();
     return { id };
   },
 };

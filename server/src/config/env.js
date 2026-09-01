@@ -44,10 +44,11 @@ const schema = z.object({
 
   QR_SIGNING_SECRET: z.string().min(16).optional(),
 
-  // Brevo (Sendinblue) API for emails
-  BREVO_API_KEY: z.string().optional(),
-  BREVO_SMTP_USER: z.string().optional(), // Brevo login email or 'apikey'
-  
+  // MailerSend API for emails
+  MAILERSEND_API_KEY: z.string().optional(),
+  MAILERSEND_FROM_EMAIL: z.string().optional(),
+  MAILERSEND_FROM_NAME: z.string().optional(),
+
   // Legacy SMTP fallback
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().positive().default(587),

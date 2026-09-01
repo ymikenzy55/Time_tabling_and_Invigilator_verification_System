@@ -9,6 +9,7 @@ import { departmentsApi } from '@/features/academics/departmentsApi';
 import { StatusBadge } from './StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Badge } from '@/components/ui/Badge';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useAuth } from '@/context/AuthContext';
 
@@ -214,9 +215,7 @@ export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
       </div>
 
       {query.isLoading && (
-        <div className="panel p-10 grid place-items-center text-ink-500">
-          <Loader2 className="w-5 h-5 animate-spin" />
-        </div>
+        <SkeletonTable rows={6} cols={7} />
       )}
 
       {query.isError && (

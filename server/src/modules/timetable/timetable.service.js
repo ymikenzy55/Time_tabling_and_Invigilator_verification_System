@@ -212,6 +212,30 @@ const scheduleCourses = (courses, slots, venues) => {
           if (trial.get(venue.id) >= students && students <= venue.capacity) { pick = venue; break; }
         }
       }
+      // Split support: if students > any single venue capacity, split across multiple venues
+      if (!pick && students > 0 && hasVenues) {
+        const splitChosen = [];
+        let remainingStudents = students;
+        const splitTrial = new Map(trial);
+        const splitUsed = new Set(usedVenues);
+        for (const venue of sortedVenues) {
+          if (splitUsed.has(venue.id)) continue;
+          if (remainingStudents <= 0) break;
+          const avail = Math.min(splitTrial.get(venue.id), venue.capacity);
+          if (avail <= 0) continue;
+          const take = Math.min(avail, remainingStudents);
+          splitTrial.set(venue.id, splitTrial.get(venue.id) - take);
+          splitUsed.add(venue.id);
+          splitChosen.push({ course, venue, splitCount: take, isSplit: true });
+          remainingStudents -= take;
+        }
+        if (remainingStudents <= 0) {
+          for (const [vid, left] of splitTrial) trial.set(vid, left);
+          usedVenues.add(...splitUsed);
+          for (const sc of splitChosen) chosen.push(sc);
+          continue;
+        }
+      }
       if (!pick) return false;
 
       trial.set(pick.id, trial.get(pick.id) - students);
@@ -275,6 +299,30 @@ const scheduleCourses = (courses, slots, venues) => {
       if (!pick) {
         for (const venue of sortedVenues) {
           if (trial.get(venue.id) >= students && students <= venue.capacity) { pick = venue; break; }
+        }
+      }
+      // Split support for relaxed mode too
+      if (!pick && students > 0 && hasVenues) {
+        const splitChosen = [];
+        let remainingStudents = students;
+        const splitTrial = new Map(trial);
+        const splitUsed = new Set(usedVenues);
+        for (const venue of sortedVenues) {
+          if (splitUsed.has(venue.id)) continue;
+          if (remainingStudents <= 0) break;
+          const avail = Math.min(splitTrial.get(venue.id), venue.capacity);
+          if (avail <= 0) continue;
+          const take = Math.min(avail, remainingStudents);
+          splitTrial.set(venue.id, splitTrial.get(venue.id) - take);
+          splitUsed.add(venue.id);
+          splitChosen.push({ course, venue, splitCount: take, isSplit: true });
+          remainingStudents -= take;
+        }
+        if (remainingStudents <= 0) {
+          for (const [vid, left] of splitTrial) trial.set(vid, left);
+          for (const su of splitUsed) usedVenues.add(su);
+          for (const sc of splitChosen) chosen.push(sc);
+          continue;
         }
       }
       if (!pick) return false;
@@ -479,7 +527,7 @@ export const timetableService = {
     return entries;
   },
 
-  async generate(examinationSessionId, options = {}, actor) {
+  async generate(examinationSessionId, options = {}, actor, onProgress) {
     if (actor.role !== 'SUPER_ADMIN') {
       throw ApiError.forbidden('Only super admins can generate timetables.');
     }
@@ -566,17 +614,28 @@ export const timetableService = {
     
     console.log(`[Timetable] Starting generation with up to ${maxRetries} attempts...`);
     
+    const progress = (msg) => {
+      console.log(`[Timetable] ${msg}`);
+      if (onProgress) onProgress(msg);
+    };
+    
+    progress(`Preparing timetable generation…`);
+    progress(`Found ${courses.length} approved courses and ${venues.length} active venues.`);
+    progress(`Building time slots from ${periodStart.toLocaleDateString()} to ${periodEnd.toLocaleDateString()}…`);
+    progress(`Created ${slots.length} available time slots.`);
+    
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      progress(`Attempt ${attempt}/${maxRetries}: Scheduling courses…`);
       // Run the constraint solver in memory
       const { placements, unscheduled } = scheduleCourses(courses, slots, venues);
       
-      console.log(`[Timetable] Attempt ${attempt}: ${placements.length}/${courses.length} courses scheduled, ${unscheduled.length} unscheduled`);
+      progress(`Attempt ${attempt}: ${placements.length}/${courses.length} courses scheduled, ${unscheduled.length} unscheduled`);
       
       // If we found a complete solution, use it immediately
       if (unscheduled.length === 0) {
         bestResult = { placements, unscheduled };
         bestAttemptNumber = attempt;
-        console.log(`[Timetable] ✓ Complete solution found on attempt ${attempt}`);
+        progress(`✓ Complete solution found on attempt ${attempt}!`);
         break;
       }
       
@@ -584,18 +643,19 @@ export const timetableService = {
       if (!bestResult || unscheduled.length < bestResult.unscheduled.length) {
         bestResult = { placements, unscheduled };
         bestAttemptNumber = attempt;
-        console.log(`[Timetable] New best: ${placements.length} scheduled (attempt ${attempt})`);
+        progress(`New best: ${placements.length} scheduled (attempt ${attempt})`);
       }
       
       // If this is not the last attempt and we have unscheduled courses, continue trying
       if (attempt < maxRetries && unscheduled.length > 0) {
-        console.log(`[Timetable] Retrying with different randomization...`);
+        progress(`Retrying with different randomization…`);
         continue;
       }
     }
 
     const { placements, unscheduled } = bestResult;
     
+    progress(`Assigning venues to all courses…`);
     // Persist the best solution found
     const rows = placements.map(({ course, slot, venue }) => {
       const scheduledAt = new Date(slot.timestamp);
@@ -613,12 +673,16 @@ export const timetableService = {
     if (rows.length) {
       await prisma.invigilation.createMany({ data: rows });
     }
+    progress(`Saved ${rows.length} timetable entries to database.`);
+    
+    progress(`Assigning invigilators to venues…`);
 
     const wasComplete = unscheduled.length === 0;
     const resultMessage = wasComplete 
       ? `Complete timetable generated successfully on attempt ${bestAttemptNumber}.`
       : `Best solution found after ${maxRetries} attempts. ${unscheduled.length} courses could not be scheduled (see details below).`;
 
+    progress(wasComplete ? `Timetable generation complete! All ${courses.length} courses scheduled.` : `Generation complete with ${unscheduled.length} unscheduled courses.`);
     console.log(`[Timetable] Final: ${rows.length}/${courses.length} courses scheduled. ${wasComplete ? '✓ Complete' : '⚠ Incomplete'}`);
 
     logAudit({

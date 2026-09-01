@@ -284,9 +284,17 @@ export const TimetablePage = () => {
   const isReady = !!readiness?.ready;
 
   const [invigilatorsAssigned, setInvigilatorsAssigned] = useState(false);
+  const [generateProgress, setGenerateProgress] = useState(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const generateMutation = useMutation({
-    mutationFn: timetableApi.generate,
+    mutationFn: async (payload) => {
+      setIsGenerating(true);
+      setGenerateProgress([]);
+      return timetableApi.generateStream(payload, (msg) => {
+        setGenerateProgress((prev) => [...prev, msg]);
+      });
+    },
     onSuccess: (data) => {
       const venueMsg = data.venuesAssigned ? ' with venues' : ' without venues';
       toast.success(`Timetable generated${venueMsg}: ${data.created}/${data.total} courses scheduled.`);
@@ -305,6 +313,10 @@ export const TimetablePage = () => {
       setGenerateAssignInvigilators(false);
     },
     onError: (err) => toast.error(err.message || 'Failed to generate timetable.'),
+    onSettled: () => {
+      setIsGenerating(false);
+      setGenerateProgress(null);
+    },
   });
 
   const [generateAssignInvigilators, setGenerateAssignInvigilators] = useState(false);
@@ -1069,15 +1081,25 @@ export const TimetablePage = () => {
         </div>
       )}
 
-      {/* Generation in-progress overlay */}
-      {generateMutation.isPending && (
+      {/* Generation in-progress overlay with live progress */}
+      {isGenerating && (
         <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center">
-          <div className="bg-white rounded-xl shadow-lg px-8 py-6 flex flex-col items-center gap-4 max-w-sm">
+          <div className="bg-white rounded-xl shadow-lg px-8 py-6 flex flex-col items-center gap-4 max-w-md w-full mx-4">
             <Loader2 className="w-10 h-10 text-primary-600 animate-spin" />
             <div className="text-center">
               <div className="text-lg font-bold text-ink-900">Generating Timetable…</div>
-              <div className="text-sm text-ink-500 mt-1">Scheduling courses into time slots with venue and clash constraints. This may take a moment.</div>
+              <div className="text-sm text-ink-500 mt-1">Scheduling courses into time slots with venue and clash constraints.</div>
             </div>
+            {generateProgress && generateProgress.length > 0 && (
+              <div className="w-full max-h-32 overflow-y-auto bg-surface-subtle rounded-lg p-3 space-y-1">
+                {generateProgress.slice(-6).map((msg, i) => (
+                  <div key={i} className="text-xs text-ink-600 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary-500 shrink-0" />
+                    {msg}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1165,13 +1187,13 @@ export const TimetablePage = () => {
               <button
                 type="button"
                 className="btn-primary"
-                disabled={generateMutation.isPending}
+                disabled={isGenerating}
                 onClick={() => {
                   setResult(null);
                   openGenerate();
                 }}
               >
-                {generateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                 Regenerate Timetable
               </button>
             )}

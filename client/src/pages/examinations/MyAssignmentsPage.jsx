@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ClipboardList, MapPin, Clock, CheckCircle2,
   Building, BookOpen, Download, UserPlus, Send, Loader2, AlertCircle,
+  ScanLine,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -41,8 +43,9 @@ const getTimeSlot = (datetimeStr) => {
 
 export const MyAssignmentsPage = () => {
   const { user } = useAuth();
+  const isDemoUser = user?.isDemo === true;
   const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState('schedule');
+  const navigate = useNavigate();
   const [delegateModalOpen, setDelegateModalOpen] = useState(false);
 
   const assignmentsQuery = useQuery({
@@ -137,155 +140,158 @@ export const MyAssignmentsPage = () => {
         <PageHeader
           title="Invigilation Schedule"
           description="Your assigned examination venues, dates, and times."
-          actions={assignments.length > 0 ? (
-            <button className="btn-secondary" onClick={handleExportPdf}>
-              <Download className="w-4 h-4" />
-              Export PDF
-            </button>
-          ) : undefined}
+          actions={(
+            <div className="flex items-center gap-2">
+              <button className="btn-primary" onClick={() => setDelegateModalOpen(true)}>
+                <UserPlus className="w-4 h-4" />
+                Delegate
+              </button>
+              {assignments.length > 0 && (
+                <button className="btn-secondary" onClick={handleExportPdf}>
+                  <Download className="w-4 h-4" />
+                  Export PDF
+                </button>
+              )}
+            </div>
+          )}
         />
 
-        {/* Tabs */}
-        <div className="tabs mb-4">
-          <button className={`tab ${activeTab === 'schedule' ? 'tab-active' : ''}`} onClick={() => setActiveTab('schedule')}>
-            My Schedule
-          </button>
-          <button className={`tab ${activeTab === 'delegate' ? 'tab-active' : ''}`} onClick={() => setActiveTab('delegate')}>
-            <UserPlus className="w-3.5 h-3.5 inline mr-1" />
-            Delegate
-          </button>
-        </div>
-
-        {activeTab === 'schedule' && (
+        {isLoading ? (
+          <SkeletonCardGrid count={4} lines={3} />
+        ) : assignments.length === 0 ? (
+          <EmptyState
+            icon={ClipboardList}
+            title="No invigilation duties assigned"
+            description="You have not been assigned to any examination venues. Once the exam officer assigns you, your schedule will appear here."
+          />
+        ) : (
           <>
             {/* Stats summary */}
-            {!isLoading && assignments.length > 0 && (
-              <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4">
-                <div className="panel p-3 sm:p-4 text-center">
-                  <div className="text-xl sm:text-2xl font-bold text-ink-900">{assignments.length}</div>
-                  <div className="text-xs text-ink-500 mt-0.5">Total Slots</div>
-                </div>
-                <div className="panel p-3 sm:p-4 text-center">
-                  <div className="text-xl sm:text-2xl font-bold text-emerald-600">
-                    {scans.filter((s) => s.result === 'RECORDED').length}
-                  </div>
-                  <div className="text-xs text-ink-500 mt-0.5">Checked In</div>
-                </div>
-                <div className="panel p-3 sm:p-4 text-center">
-                  <div className="text-xl sm:text-2xl font-bold text-amber-600">
-                    {assignments.filter((a) => !isScanned(a.id) && new Date(a.slotAt) > new Date()).length}
-                  </div>
-                  <div className="text-xs text-ink-500 mt-0.5">Upcoming</div>
-                </div>
+            <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4">
+              <div className="panel p-3 sm:p-4 text-center">
+                <div className="text-xl sm:text-2xl font-bold text-ink-900">{assignments.length}</div>
+                <div className="text-xs text-ink-500 mt-0.5">Total Slots</div>
               </div>
-            )}
+              <div className="panel p-3 sm:p-4 text-center">
+                <div className="text-xl sm:text-2xl font-bold text-emerald-600">
+                  {scans.filter((s) => s.result === 'RECORDED').length}
+                </div>
+                <div className="text-xs text-ink-500 mt-0.5">Checked In</div>
+              </div>
+              <div className="panel p-3 sm:p-4 text-center">
+                <div className="text-xl sm:text-2xl font-bold text-amber-600">
+                  {assignments.filter((a) => !isScanned(a.id) && new Date(a.slotAt) > new Date()).length}
+                </div>
+                <div className="text-xs text-ink-500 mt-0.5">Upcoming</div>
+              </div>
+            </div>
 
-            {isLoading ? (
-              <SkeletonCardGrid count={4} lines={3} />
-            ) : assignments.length === 0 ? (
-              <EmptyState
-                icon={ClipboardList}
-                title="No invigilation duties assigned"
-                description="You have not been assigned to any examination venues. Once the exam officer assigns you, your schedule will appear here."
-              />
-            ) : (
-              <div className="space-y-6">
-                {sortedDates.map((dateKey) => {
-                  const dayAssignments = grouped[dateKey];
-                  const isToday = new Date().toDateString() === dateKey;
-                  const isPast = new Date(dateKey) < new Date() && !isToday;
+            <div className="space-y-6">
+              {sortedDates.map((dateKey) => {
+                const dayAssignments = grouped[dateKey];
+                const isToday = new Date().toDateString() === dateKey;
+                const isPast = new Date(dateKey) < new Date() && !isToday;
 
-                  return (
-                    <div key={dateKey}>
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className={`w-2 h-2 rounded-full ${isToday ? 'bg-primary-600' : isPast ? 'bg-ink-300' : 'bg-emerald-500'}`} />
-                        <h3 className="text-sm font-bold text-ink-900">
-                          {isToday ? 'Today' : formatDate(dateKey)}
-                        </h3>
-                        <span className="text-xs text-ink-400">
-                          {dayAssignments.length} slot{dayAssignments.length === 1 ? '' : 's'}
-                        </span>
-                      </div>
+                return (
+                  <div key={dateKey}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className={`w-2 h-2 rounded-full ${isToday ? 'bg-primary-600' : isPast ? 'bg-ink-300' : 'bg-emerald-500'}`} />
+                      <h3 className="text-sm font-bold text-ink-900">
+                        {isToday ? 'Today' : formatDate(dateKey)}
+                      </h3>
+                      <span className="text-xs text-ink-400">
+                        {dayAssignments.length} slot{dayAssignments.length === 1 ? '' : 's'}
+                      </span>
+                    </div>
 
-                      <div className="space-y-2">
-                        {dayAssignments.map((a) => {
-                          const scanned = isScanned(a.id);
-                          const slotLabel = getTimeSlot(a.slotAt);
-                          const courseList = a.courses || [];
+                    <div className="space-y-2">
+                      {dayAssignments.map((a) => {
+                        const scanned = isScanned(a.id);
+                        const slotLabel = getTimeSlot(a.slotAt);
+                        const courseList = a.courses || [];
 
-                          return (
-                            <div
-                              key={a.id}
-                              className={`card p-4 flex flex-col sm:flex-row sm:items-center gap-3 transition-all ${
-                                scanned ? 'border-emerald-300 bg-emerald-50/30' : ''
-                              } ${isToday && !scanned ? 'ring-1 ring-primary-200' : ''}`}
-                            >
-                              <div className="flex items-center gap-2 sm:w-40 shrink-0">
-                                <Clock className="w-4 h-4 text-ink-400 shrink-0" />
-                                <div className="min-w-0">
-                                  <div className="text-sm font-medium text-ink-900">{slotLabel}</div>
-                                  <div className="text-xs text-ink-400">3 hrs</div>
-                                </div>
+                        return (
+                          <div
+                            key={a.id}
+                            className={`card p-4 flex flex-col sm:flex-row sm:items-center gap-3 transition-all ${
+                              scanned ? 'border-emerald-300 bg-emerald-50/30' : ''
+                            } ${isToday && !scanned ? 'ring-1 ring-primary-200' : ''}`}
+                          >
+                            <div className="flex items-center gap-2 sm:w-40 shrink-0">
+                              <Clock className="w-4 h-4 text-ink-400 shrink-0" />
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium text-ink-900">{slotLabel}</div>
+                                <div className="text-xs text-ink-400">3 hrs</div>
                               </div>
+                            </div>
 
-                              <div className="flex items-center gap-2 sm:w-44 shrink-0 min-w-0">
-                                <Building className="w-4 h-4 text-ink-400 shrink-0" />
-                                <div className="min-w-0">
-                                  <div className="text-sm font-medium text-ink-900 truncate">{a.venue?.name || '—'}</div>
-                                  {a.venue?.location && (
-                                    <div className="text-xs text-ink-400 truncate flex items-center gap-1">
-                                      <MapPin className="w-3 h-3 shrink-0" />
-                                      <span className="truncate">{a.venue.location}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="flex-1 min-w-0">
-                                {courseList.length > 0 ? (
-                                  <div className="space-y-1">
-                                    {courseList.map((c) => (
-                                      <div key={c.id} className="flex items-center gap-1.5 text-sm text-ink-700">
-                                        <BookOpen className="w-3.5 h-3.5 text-ink-400 shrink-0" />
-                                        <span className="font-medium">{c.code}</span>
-                                        <span className="text-ink-500 truncate">— {c.title}</span>
-                                      </div>
-                                    ))}
+                            <div className="flex items-center gap-2 sm:w-44 shrink-0 min-w-0">
+                              <Building className="w-4 h-4 text-ink-400 shrink-0" />
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium text-ink-900 truncate">{a.venue?.name || '—'}</div>
+                                {a.venue?.location && (
+                                  <div className="text-xs text-ink-400 truncate flex items-center gap-1">
+                                    <MapPin className="w-3 h-3 shrink-0" />
+                                    <span className="truncate">{a.venue.location}</span>
                                   </div>
-                                ) : (
-                                  <div className="text-sm text-ink-400 italic">No course assigned</div>
-                                )}
-                              </div>
-
-                              <div className="shrink-0">
-                                {scanned ? (
-                                  <Badge variant="success">
-                                    <CheckCircle2 className="w-3 h-3 mr-1" />
-                                    Checked In
-                                  </Badge>
-                                ) : isPast ? (
-                                  <Badge variant="neutral">Missed</Badge>
-                                ) : (
-                                  <Badge variant="info">Pending</Badge>
                                 )}
                               </div>
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        )}
 
-        {activeTab === 'delegate' && (
-          <DelegateTab
-            assignments={assignments}
-            onOpenModal={() => setDelegateModalOpen(true)}
-          />
+                            <div className="flex-1 min-w-0">
+                              {courseList.length > 0 ? (
+                                <div className="space-y-1">
+                                  {courseList.map((c) => (
+                                    <div key={c.id} className="flex items-center gap-1.5 text-sm text-ink-700">
+                                      <BookOpen className="w-3.5 h-3.5 text-ink-400 shrink-0" />
+                                      <span className="font-medium">{c.code}</span>
+                                      <span className="text-ink-500 truncate">— {c.title}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-sm text-ink-400 italic">No course assigned</div>
+                              )}
+                            </div>
+
+                            <div className="shrink-0 flex items-center gap-2">
+                              {scanned ? (
+                                <Badge variant="success">
+                                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                                  Checked In
+                                </Badge>
+                              ) : isPast ? (
+                                <Badge variant="neutral">Missed</Badge>
+                              ) : (
+                                <Badge variant="info">Pending</Badge>
+                              )}
+                              {!scanned && !isPast && (
+                                <button
+                                  className="btn-primary btn-sm"
+                                  onClick={() => navigate('/scan', {
+                                    state: {
+                                      fromAssignment: {
+                                        ...a,
+                                        examDurationMinutes: 180,
+                                        isDemo: isDemoUser,
+                                      },
+                                    },
+                                  })}
+                                >
+                                  <ScanLine className="w-3.5 h-3.5" />
+                                  Scan
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
 

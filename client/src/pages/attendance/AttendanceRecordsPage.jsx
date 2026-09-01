@@ -90,6 +90,7 @@ export const AttendanceRecordsPage = () => {
                   <th className="text-left font-medium px-4 py-3">Status</th>
                   <th className="text-left font-medium px-4 py-3">Scanned At</th>
                   <th className="text-left font-medium px-4 py-3">Location</th>
+                  <th className="text-left font-medium px-4 py-3">Address</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-divider">
@@ -119,6 +120,13 @@ export const AttendanceRecordsPage = () => {
                           <MapPin className="w-3 h-3" />
                           {r.latitude.toFixed(6)}, {r.longitude.toFixed(6)}
                         </span>
+                      ) : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-ink-500">
+                      {r.locationAddress ? (
+                        <span>{r.locationAddress}</span>
+                      ) : r.locationAccuracy != null ? (
+                        <span className="text-ink-400">±{Math.round(r.locationAccuracy)}m</span>
                       ) : '—'}
                     </td>
                   </tr>

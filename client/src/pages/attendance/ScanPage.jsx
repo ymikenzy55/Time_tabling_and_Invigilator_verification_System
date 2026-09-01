@@ -86,7 +86,7 @@ export const ScanPage = () => {
     : null;
 
   const isScanAvailable = fromAssignment
-    ? isDemoUser || (now >= examStart && now <= examEnd)
+    ? isDemoUser || fromAssignment.isDemo || (now >= examStart && now <= examEnd)
     : false;
 
   const formatCountdown = useCallback((ms) => {
@@ -498,7 +498,7 @@ export const ScanPage = () => {
                 : 'text-rose-800'
             }>
               {isScanAvailable
-                ? isDemoUser
+                ? (isDemoUser || fromAssignment?.isDemo)
                   ? 'Demo mode — scanning is available at any time'
                   : timeUntilClose
                   ? `Scan window is open — closes in ${timeUntilClose}`

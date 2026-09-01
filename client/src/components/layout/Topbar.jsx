@@ -178,12 +178,12 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
     .split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
 
   return (
-    <header className="h-14 bg-chrome border-b border-chrome-border sticky top-0 z-40 no-print">
+    <header className="h-14 bg-chrome border-b border-chrome-border fixed top-0 left-0 right-0 z-40 no-print">
       <div className="h-full flex items-center gap-2 sm:gap-3 px-3 sm:px-4">
         <button
           type="button"
           onClick={onToggleSidebar}
-          className="hidden lg:flex p-2 rounded-md text-chrome-text hover:bg-chrome-hover hover:text-white shrink-0 transition-colors"
+          className="hidden xl:flex p-2 rounded-md text-chrome-text hover:bg-chrome-hover hover:text-white shrink-0 transition-colors"
           aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
           aria-expanded={sidebarOpen}
         >
@@ -199,8 +199,8 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
           </span>
         </Link>
 
-        <span className="hidden lg:inline-block h-5 w-px bg-chrome-border mx-1" />
-        <span className="hidden lg:inline-block text-xs text-chrome-text">
+        <span className="hidden xl:inline-block h-5 w-px bg-chrome-border mx-1" />
+        <span className="hidden xl:inline-block text-xs text-chrome-text">
           {ROLE_LABELS[user?.role] || 'User'}
         </span>
 

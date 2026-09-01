@@ -1,89 +1,65 @@
+import { MailerSend, EmailParams, Sender, Recipient } from 'mailersend';
 import nodemailer from 'nodemailer';
 import { env } from '../config/env.js';
 
+let mailerSendClient = null;
 let nodemailerTransporter = null;
 
-// Brevo (Sendinblue) SMTP configuration
-const getBrevoTransporter = () => {
-  if (!env.BREVO_API_KEY) return null;
-
-  // Brevo SMTP accepts 'apikey' as the username when using an API key.
-  // Fall back to SMTP_USER for backward compatibility.
-  const brevoUser = env.BREVO_SMTP_USER || env.SMTP_USER || 'apikey';
-
-  return nodemailer.createTransport({
-    host: 'smtp-relay.brevo.com',
-    port: 587,
-    secure: false,
-    auth: {
-      user: brevoUser,
-      pass: env.BREVO_API_KEY,
-    },
-    connectionTimeout: 10000, // 10 seconds
-    greetingTimeout: 5000,    // 5 seconds
-    socketTimeout: 15000,     // 15 seconds
-  });
+const getMailerSendClient = () => {
+  if (mailerSendClient) return mailerSendClient;
+  if (!env.MAILERSEND_API_KEY) return null;
+  mailerSendClient = new MailerSend({ apiKey: env.MAILERSEND_API_KEY });
+  return mailerSendClient;
 };
 
-// Fallback to generic SMTP if configured
 const getNodemailerTransporter = () => {
   if (nodemailerTransporter) return nodemailerTransporter;
-
-  if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) {
-    return null;
-  }
-
+  if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) return null;
   nodemailerTransporter = nodemailer.createTransport({
     host: env.SMTP_HOST,
     port: env.SMTP_PORT,
     secure: env.SMTP_PORT === 465,
-    auth: {
-      user: env.SMTP_USER,
-      pass: env.SMTP_PASS,
-    },
-    connectionTimeout: 10000, // 10 seconds
-    greetingTimeout: 5000,    // 5 seconds
-    socketTimeout: 15000,     // 15 seconds
+    auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
+    connectionTimeout: 10000,
+    greetingTimeout: 5000,
+    socketTimeout: 15000,
   });
-
   return nodemailerTransporter;
 };
 
+const FROM_EMAIL = env.MAILERSEND_FROM_EMAIL || 'noreply@trial-vyjq2lr7q3p4z0g7.mlsender.net';
+const FROM_NAME = env.MAILERSEND_FROM_NAME || 'UENR Exam System';
+
 export const sendEmail = async ({ to, subject, html }) => {
-  // Try Brevo first (preferred for production)
-  const brevoTransport = getBrevoTransporter();
-  if (brevoTransport) {
+  const mailerSend = getMailerSendClient();
+  if (mailerSend) {
     try {
-      console.log('[email] Attempting to send via Brevo to:', to);
-      const fromEmail = env.BREVO_SMTP_USER || env.SMTP_USER || 'noreply@uenr.edu.gh';
-      await brevoTransport.sendMail({
-        from: `UENR Exam System <${fromEmail}>`,
-        to,
-        subject,
-        html,
-      });
-      console.log('[email] Brevo success');
-      return { success: true, skipped: false, method: 'brevo' };
+      console.log('[email] Sending via MailerSend to:', to);
+      const sentFrom = new Sender(FROM_EMAIL, FROM_NAME);
+      const recipients = [new Recipient(to)];
+      const emailParams = new EmailParams()
+        .setFrom(sentFrom)
+        .setTo(recipients)
+        .setReplyTo(sentFrom)
+        .setSubject(subject)
+        .setHtml(html)
+        .setText(html.replace(/<[^>]*>/g, ''));
+      await mailerSend.email.send(emailParams);
+      console.log('[email] MailerSend success');
+      return { success: true, skipped: false, method: 'mailersend' };
     } catch (error) {
-      console.error('[email] Brevo failed:', error.code || error.message);
-      // Fall through to try generic SMTP
+      console.error('[email] MailerSend failed:', error.message || error);
     }
   } else {
-    console.log('[email] Brevo not configured (no API key or user)');
+    console.log('[email] MailerSend not configured (no API key)');
   }
 
-  // Fallback to generic SMTP if available
   const transport = getNodemailerTransporter();
   if (transport) {
     try {
       console.log('[email] Attempting to send via SMTP to:', to);
       const from = env.SMTP_FROM || env.SMTP_USER;
-      await transport.sendMail({
-        from,
-        to,
-        subject,
-        html,
-      });
+      await transport.sendMail({ from, to, subject, html });
       console.log('[email] SMTP success');
       return { success: true, skipped: false, method: 'smtp' };
     } catch (error) {
@@ -98,4 +74,4 @@ export const sendEmail = async ({ to, subject, html }) => {
   return { success: false, skipped: true, error: 'No email service configured' };
 };
 
-export const isEmailConfigured = () => getBrevoTransporter() !== null || getNodemailerTransporter() !== null;
+export const isEmailConfigured = () => getMailerSendClient() !== null || getNodemailerTransporter() !== null;
