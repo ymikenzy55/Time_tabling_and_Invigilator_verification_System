@@ -383,7 +383,7 @@ export const RegisterPage = () => {
     ['password', 'confirm'],
   ];
   const stepLabels = ['Personal', 'Department', 'Security', 'Verify'];
-  const totalSteps = stepFields.length;
+  const totalSteps = stepLabels.length; // 4 steps including Verify
   const isLastStep = step === totalSteps - 1;
 
   const handleNext = async () => {
@@ -475,41 +475,12 @@ export const RegisterPage = () => {
       {!role ? (
         <p className="text-sm text-ink-500 text-center">Select a role to continue.</p>
       ) : (
-        <form onSubmit={handleSubmit(async (v) => {
-          // Validate ALL steps before submitting
-          const allFields = stepFields.flat();
-          const valid = await trigger(allFields);
-          if (!valid) {
-            const errorMessages = [];
-            if (errors.fullName) errorMessages.push('Full name is required');
-            if (errors.email) errorMessages.push('Valid email is required');
-            if (errors.staffId) errorMessages.push('Staff ID is required');
-            if (errors.departmentName) errorMessages.push('Department is required');
-            if (errors.password) errorMessages.push('Password does not meet requirements');
-            if (errors.confirm) errorMessages.push(errors.confirm.message || 'Passwords do not match');
-            toast.error(`Please fix these issues:\n${errorMessages.join('\n')}`);
-            return;
+        <form onSubmit={handleSubmit((v) => {
+          // The old direct submit is replaced by the verification flow.
+          // If we somehow get here, redirect to the verification step.
+          if (step < 3) {
+            handleNext();
           }
-          // Re-check staff ID and email before submitting
-          try {
-            const staffIdResult = await registrationApi.checkStaffId(v.staffId);
-            if (!staffIdResult.available) {
-              toast.error('This Staff ID is already in use. Please go back and change it.');
-              setStep(0);
-              return;
-            }
-            const emailResult = await registrationApi.checkEmail(v.email);
-            if (!emailResult.available) {
-              toast.error('This email is already registered. Please go back and change it.');
-              setStep(0);
-              return;
-            }
-          } catch {
-            toast.error('Could not verify availability. Please try again.');
-            return;
-          }
-          // Submit registration directly
-          submitMutation.mutate(v);
         })} className="space-y-4" noValidate>
           <input type="hidden" value={role} {...rf('role')} />
 
@@ -705,21 +676,12 @@ export const RegisterPage = () => {
               <button type="button" className="btn-secondary ml-auto" onClick={handleBack}>
                 <ArrowLeft className="w-4 h-4" /> Back to form
               </button>
-            ) : !isLastStep ? (
+            ) : step < 3 ? (
               <button type="button" className="btn-primary ml-auto" onClick={handleNext} disabled={sendCodeMutation.isPending}>
                 {sendCodeMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (step === 2 ? <Mail className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />)}
                 {step === 2 ? 'Send Verification Code' : 'Next'}
               </button>
-            ) : (
-              <button type="submit" className="btn-primary ml-auto" disabled={submitMutation.isPending}>
-                {submitMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <CheckCircle2 className="w-4 h-4" />
-                )}
-                {submitMutation.isPending ? 'Submitting…' : 'Submit Registration'}
-              </button>
-            )}
+            : null}
           </div>
         </form>
       )}
