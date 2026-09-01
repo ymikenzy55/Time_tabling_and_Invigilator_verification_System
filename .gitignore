@@ -45,3 +45,14 @@ render-secrets.txt
 back4app-secrets.txt
 deployment-secrets.txt
 *-secrets.txt
+
+# Documentation (generated guides, not to be committed)
+*_SETUP.md
+*_GUIDE.md
+SMS_*.md
+HUBTEL_*.md
+MNOTIFY_*.md
+ARKESEL_*.md
+VOKRYN_*.md
+PICK_ANY_*.md
+FREE_*.md

@@ -414,7 +414,7 @@ export const attendanceService = {
     };
   },
 
-  async scanVenue({ token, ipAddress, userAgent, latitude, longitude, locationAccuracy }, actor) {
+  async scanVenue({ token, ipAddress, userAgent, latitude, longitude, locationAccuracy, address }, actor) {
     const evaluation = await evaluateVenueScan(token, actor);
     const { result, payload, venue, invigilator, assignedVenue, allAssignedVenues, message, timeSlot } = evaluation;
 
@@ -438,6 +438,7 @@ export const attendanceService = {
         latitude: latitude || null,
         longitude: longitude || null,
         locationAccuracy: locationAccuracy || null,
+        locationAddress: address || null, // Human-readable address from reverse geocoding
       },
     });
 

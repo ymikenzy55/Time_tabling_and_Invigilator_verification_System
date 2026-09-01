@@ -339,6 +339,7 @@ model VenueScan {
   latitude             Float?
   longitude            Float?
   locationAccuracy     Float?
+  locationAddress      String?  // Human-readable address from reverse geocoding
 
   @@index([examinationSessionId, venueId])
   @@index([examinationSessionId, venueId, scannedAt])

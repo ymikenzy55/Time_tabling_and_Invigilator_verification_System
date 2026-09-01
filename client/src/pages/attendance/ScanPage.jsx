@@ -50,6 +50,7 @@ export const ScanPage = () => {
   const [locationData, setLocationData] = useState(null);
   const [locationError, setLocationError] = useState(null);
   const [locationLoading, setLocationLoading] = useState(false);
+  const [locationAddress, setLocationAddress] = useState(null); // Human-readable address
   const scannerRef = useRef(null);
   const scannedRef = useRef(false);
   const fromAssignment = location.state?.fromAssignment;
@@ -111,42 +112,121 @@ export const ScanPage = () => {
     scannedRef.current = false;
   };
 
+  // Reverse geocode coordinates to get human-readable address
+  const reverseGeocode = async (lat, lng) => {
+    try {
+      // Using Nominatim (OpenStreetMap) - free, no API key needed
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'UENR-Exam-System', // Required by Nominatim
+          },
+        }
+      );
+      
+      if (!response.ok) {
+        console.warn('[Location] Reverse geocoding failed');
+        return null;
+      }
+      
+      const data = await response.json();
+      
+      // Build a readable address
+      const address = data.address || {};
+      const parts = [];
+      
+      if (address.road || address.street) parts.push(address.road || address.street);
+      if (address.suburb || address.neighbourhood) parts.push(address.suburb || address.neighbourhood);
+      if (address.city || address.town || address.village) parts.push(address.city || address.town || address.village);
+      if (address.state || address.region) parts.push(address.state || address.region);
+      if (address.country) parts.push(address.country);
+      
+      const readableAddress = parts.length > 0 
+        ? parts.join(', ')
+        : data.display_name || 'Location acquired';
+      
+      console.log('[Location] Reverse geocoded:', readableAddress);
+      return readableAddress;
+    } catch (error) {
+      console.error('[Location] Reverse geocoding error:', error);
+      return null;
+    }
+  };
+
   // Geolocation — must be obtained before scanning is allowed.
   const requestLocation = () => {
     setLocationError(null);
     setLocationLoading(true);
+    setLocationAddress(null);
+
+    // Check if geolocation is supported
     if (!navigator.geolocation) {
-      setLocationError('Geolocation is not supported by your browser. Please use a modern browser.');
+      setLocationError('Geolocation is not supported by your browser. Please use a modern browser like Chrome, Firefox, or Safari.');
       setLocationLoading(false);
       return;
     }
+
+    console.log('[Location] Requesting location...');
+
+    // Try to get location with a reasonable timeout
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
+        console.log('[Location] Success:', pos.coords);
+        const latitude = pos.coords.latitude;
+        const longitude = pos.coords.longitude;
+        
         setLocationData({
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
+          latitude,
+          longitude,
           locationAccuracy: pos.coords.accuracy,
         });
+        
+        // Get human-readable address
+        const address = await reverseGeocode(latitude, longitude);
+        if (address) {
+          setLocationAddress(address);
+        }
+        
         setLocationLoading(false);
       },
       (err) => {
+        console.error('[Location] Error:', err.code, err.message);
         let msg = 'Could not get your location.';
-        if (err.name === 'NotAllowedError') {
-          msg = 'Location permission denied. You must allow location access to scan QR codes. Please enable it in your browser settings and try again.';
-        } else if (err.name === 'PositionUnavailableError') {
-          msg = 'Your location is unavailable. Please check your GPS/network and try again.';
-        } else if (err.name === 'TimeoutError') {
-          msg = 'Location request timed out. Please try again.';
+        
+        switch (err.code) {
+          case err.PERMISSION_DENIED:
+            msg = 'Location permission denied. Please allow location access in your browser settings and click "Retry Location" below.';
+            break;
+          case err.POSITION_UNAVAILABLE:
+            msg = 'Location unavailable. Please ensure GPS/Location Services are enabled on your device and you have a good signal. Try moving to a location with better reception.';
+            break;
+          case err.TIMEOUT:
+            msg = 'Location request timed out. Please ensure you have a good GPS/network signal and try again. You may need to move to a location with better reception.';
+            break;
+          default:
+            msg = `Location error: ${err.message}. Please check your device settings and try again.`;
         }
+        
         setLocationError(msg);
         setLocationLoading(false);
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      { 
+        enableHighAccuracy: true, 
+        timeout: 30000, // Increased to 30 seconds
+        maximumAge: 0 
+      }
     );
   };
 
+  // Try to get location on mount
   useEffect(() => {
-    requestLocation();
+    // Small delay to let the page render first
+    const timer = setTimeout(() => {
+      requestLocation();
+    }, 500);
+    
+    return () => clearTimeout(timer);
   }, []);
 
   // Stage 1 — ask the server which venue this QR is for and whether the
@@ -190,7 +270,13 @@ export const ScanPage = () => {
   const scanMutation = useMutation({
     mutationFn: async (token) => {
       try {
-        const data = await attendanceApi.scanVenue(token, locationData || {});
+        // Include human-readable address in location data
+        const locationPayload = locationData ? {
+          ...locationData,
+          address: locationAddress || null,
+        } : {};
+        
+        const data = await attendanceApi.scanVenue(token, locationPayload);
         if (data.result === 'RECORDED' || data.result?.startsWith('REJECTED')) return data;
       } catch (err) {
         if (err?.status !== 400 && err?.status !== 404) throw err;
@@ -221,10 +307,19 @@ export const ScanPage = () => {
 
   const submitToken = (token) => {
     if (!token || isBusy) return;
+    
+    // Check if location is available
     if (!locationData) {
-      toast.error('Location access is required to scan. Please allow location access and try again.');
+      if (locationLoading) {
+        toast.error('Please wait for location to be acquired before scanning.');
+      } else if (locationError) {
+        toast.error('Location is required to scan. Please fix the location error and try again.');
+      } else {
+        toast.error('Location access is required. Please allow location access and try again.');
+      }
       return;
     }
+    
     setResult(null);
     verifyMutation.mutate(token);
   };
@@ -321,13 +416,17 @@ export const ScanPage = () => {
   };
 
   useEffect(() => {
-    startCamera();
+    // Only start camera if location is available
+    if (locationData) {
+      startCamera();
+    }
+    
     return () => {
       if (scannerRef.current && scannerRef.current.isScanning) {
         scannerRef.current.stop().catch(() => {});
       }
     };
-  }, []);
+  }, [locationData]); // Re-run when location becomes available
 
   return (
     <>
@@ -399,24 +498,54 @@ export const ScanPage = () => {
           {locationData ? (
             <>
               <Navigation className="w-4 h-4 shrink-0 text-emerald-600" />
-              <span className="text-emerald-800">
-                Location acquired — Lat: {locationData.latitude.toFixed(6)}, Lng: {locationData.longitude.toFixed(6)}
-                {locationData.locationAccuracy ? ` (±${Math.round(locationData.locationAccuracy)}m)` : ''}
-              </span>
+              <div className="flex-1">
+                <div className="text-emerald-800 font-medium">✓ Location acquired successfully</div>
+                {locationAddress && (
+                  <div className="text-emerald-700 text-xs mt-0.5 font-medium">
+                    📍 {locationAddress}
+                  </div>
+                )}
+                <div className="text-emerald-600 text-xs mt-0.5">
+                  Coordinates: {locationData.latitude.toFixed(6)}, {locationData.longitude.toFixed(6)}
+                  {locationData.locationAccuracy && ` • Accuracy: ±${Math.round(locationData.locationAccuracy)}m`}
+                </div>
+              </div>
             </>
           ) : locationError ? (
             <>
               <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-              <span className="text-rose-800 flex-1">{locationError}</span>
-              <button className="btn-secondary btn-sm" onClick={requestLocation} disabled={locationLoading}>
-                {locationLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Navigation className="w-3.5 h-3.5" />}
-                Retry
+              <div className="flex-1">
+                <div className="text-rose-800 font-medium">Location Error</div>
+                <div className="text-rose-700 text-xs mt-0.5">{locationError}</div>
+                {locationError.includes('unavailable') || locationError.includes('timed out') ? (
+                  <div className="text-rose-700 text-xs mt-2 flex items-start gap-1">
+                    <span className="font-medium">Tip:</span>
+                    <span>Move to an open area with clear sky view, ensure Location Services are ON, and retry.</span>
+                  </div>
+                ) : null}
+              </div>
+              <button 
+                className="btn-secondary btn-sm shrink-0" 
+                onClick={requestLocation} 
+                disabled={locationLoading}
+              >
+                {locationLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Navigation className="w-3.5 h-3.5" />
+                )}
+                {locationLoading ? 'Retrying...' : 'Retry'}
               </button>
             </>
           ) : (
             <>
               <Loader2 className="w-4 h-4 shrink-0 text-amber-600 animate-spin" />
-              <span className="text-amber-800">Getting your location…</span>
+              <div className="flex-1">
+                <div className="text-amber-800 font-medium">Getting your location...</div>
+                <div className="text-amber-700 text-xs mt-0.5">
+                  Please allow location access when prompted. This may take up to 30 seconds.
+                </div>
+              </div>
             </>
           )}
         </div>
@@ -462,6 +591,47 @@ export const ScanPage = () => {
           </div>
         ) : (
           <>
+            {!locationData ? (
+              <div className="panel p-6 text-center">
+                {locationLoading ? (
+                  <>
+                    <Loader2 className="w-12 h-12 mx-auto mb-3 text-amber-500 animate-spin" />
+                    <h3 className="text-lg font-bold text-ink-900 mb-2">
+                      Getting Your Location
+                    </h3>
+                    <p className="text-sm text-ink-600 mb-4">
+                      Please allow location access when prompted. This is required to verify you are at the correct venue.
+                    </p>
+                    <p className="text-xs text-ink-500">
+                      This may take up to 30 seconds. If you're indoors or have weak signal, consider moving to a location with better GPS reception.
+                    </p>
+                  </>
+                ) : locationError ? (
+                  <>
+                    <AlertCircle className="w-12 h-12 mx-auto mb-3 text-rose-500" />
+                    <h3 className="text-lg font-bold text-ink-900 mb-2">
+                      Location Required
+                    </h3>
+                    <p className="text-sm text-ink-600 mb-4">
+                      You must allow location access to scan QR codes. This helps verify you are at the correct exam venue.
+                    </p>
+                    <button
+                      className="btn-primary"
+                      onClick={requestLocation}
+                      disabled={locationLoading}
+                    >
+                      {locationLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Navigation className="w-4 h-4" />
+                      )}
+                      {locationLoading ? 'Getting Location...' : 'Allow Location Access'}
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            ) : (
+              <>
             <div className="panel p-4">
               <div id={SCANNER_ID} className="w-full aspect-square rounded-lg overflow-hidden bg-black" />
               {cameraStarting && (
@@ -514,6 +684,8 @@ export const ScanPage = () => {
                 {verifyMutation.isPending ? 'Checking venue…' : scanMutation.isPending ? 'Recording…' : 'Submit token'}
               </button>
             </div>
+            </>
+            )}
           </>
         )}
 

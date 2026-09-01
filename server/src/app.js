@@ -23,6 +23,9 @@ export const createApp = () => {
   if (!isProd) app.use(morgan('dev'));
   app.use(generalLimiter);
 
+  // Health check endpoint for Render port detection — must not touch the DB.
+  app.get('/health', (_req, res) => res.status(200).json({ status: 'ok' }));
+
   app.use('/api/v1', apiRoutes);
 
   app.use(notFound);
