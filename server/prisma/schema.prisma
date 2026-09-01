@@ -118,6 +118,20 @@ model PasswordReset {
   @@index([expiresAt])
 }
 
+model EmailVerification {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  verified  Boolean  @default(false)
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([email, code])
+  @@index([expiresAt])
+}
+
 // -------------------- Academic Structure --------------------
 
 model Department {

@@ -22,6 +22,9 @@ const getBrevoTransporter = () => {
       user: brevoUser,
       pass: env.BREVO_API_KEY,
     },
+    connectionTimeout: 10000, // 10 seconds
+    greetingTimeout: 5000,    // 5 seconds
+    socketTimeout: 15000,     // 15 seconds
   });
 };
 
@@ -41,6 +44,9 @@ const getNodemailerTransporter = () => {
       user: env.SMTP_USER,
       pass: env.SMTP_PASS,
     },
+    connectionTimeout: 10000, // 10 seconds
+    greetingTimeout: 5000,    // 5 seconds
+    socketTimeout: 15000,     // 15 seconds
   });
 
   return nodemailerTransporter;
@@ -62,8 +68,7 @@ export const sendEmail = async ({ to, subject, html }) => {
       console.log('[email] Brevo success');
       return { success: true, skipped: false, method: 'brevo' };
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('[email] Brevo failed:', error.message);
+      console.error('[email] Brevo failed:', error.code || error.message);
       // Fall through to try generic SMTP
     }
   } else {
@@ -85,15 +90,13 @@ export const sendEmail = async ({ to, subject, html }) => {
       console.log('[email] SMTP success');
       return { success: true, skipped: false, method: 'smtp' };
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('[email] SMTP failed:', error.message);
+      console.error('[email] SMTP failed:', error.code || error.message);
       return { success: false, skipped: false, error: error.message };
     }
   } else {
     console.log('[email] SMTP not configured');
   }
 
-  // eslint-disable-next-line no-console
   console.warn('[email] No email service configured — skipping email send to', to);
   return { success: false, skipped: true, error: 'No email service configured' };
 };
