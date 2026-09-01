@@ -178,7 +178,7 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
     .split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
 
   return (
-    <header className="h-14 bg-chrome border-b border-chrome-border sticky top-0 z-40">
+    <header className="h-14 bg-chrome border-b border-chrome-border sticky top-0 z-40 no-print">
       <div className="h-full flex items-center gap-2 sm:gap-3 px-3 sm:px-4">
         <button
           type="button"

@@ -56,6 +56,7 @@ export const requireAuth = async (req, _res, next) => {
           status: true,
           departmentId: true,
           departmentName: true,
+          isDemo: true,
         },
       });
       if (user) {

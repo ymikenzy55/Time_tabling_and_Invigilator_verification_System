@@ -7,13 +7,20 @@ let nodemailerTransporter = null;
 const getBrevoTransporter = () => {
   if (!env.BREVO_API_KEY) return null;
 
+  // Use configured email or fallback to SMTP_USER for backward compatibility
+  const brevoUser = env.BREVO_SMTP_USER || env.SMTP_USER;
+  if (!brevoUser) {
+    console.warn('[email] Brevo API key is set but BREVO_SMTP_USER is not configured');
+    return null;
+  }
+
   return nodemailer.createTransport({
     host: 'smtp-relay.brevo.com',
     port: 587,
     secure: false,
     auth: {
-      user: 'yeboahmichael977@gmail.com', // Your Brevo login email
-      pass: env.BREVO_API_KEY, // Your Brevo SMTP key
+      user: brevoUser,
+      pass: env.BREVO_API_KEY,
     },
   });
 };
@@ -45,21 +52,22 @@ export const sendEmail = async ({ to, subject, html }) => {
   if (brevoTransport) {
     try {
       console.log('[email] Attempting to send via Brevo to:', to);
+      const fromEmail = env.BREVO_SMTP_USER || env.SMTP_USER || 'noreply@uenr.edu.gh';
       await brevoTransport.sendMail({
-        from: 'UENR Exam System <yeboahmichael977@gmail.com>',
+        from: `UENR Exam System <${fromEmail}>`,
         to,
         subject,
         html,
       });
       console.log('[email] Brevo success');
-      return { skipped: false, method: 'brevo' };
+      return { success: true, skipped: false, method: 'brevo' };
     } catch (error) {
       // eslint-disable-next-line no-console
-      console.error('[email] Brevo failed:', error);
+      console.error('[email] Brevo failed:', error.message);
       // Fall through to try generic SMTP
     }
   } else {
-    console.log('[email] Brevo not configured (no API key)');
+    console.log('[email] Brevo not configured (no API key or user)');
   }
 
   // Fallback to generic SMTP if available
@@ -75,10 +83,11 @@ export const sendEmail = async ({ to, subject, html }) => {
         html,
       });
       console.log('[email] SMTP success');
-      return { skipped: false, method: 'smtp' };
+      return { success: true, skipped: false, method: 'smtp' };
     } catch (error) {
       // eslint-disable-next-line no-console
-      console.error('[email] SMTP failed:', error);
+      console.error('[email] SMTP failed:', error.message);
+      return { success: false, skipped: false, error: error.message };
     }
   } else {
     console.log('[email] SMTP not configured');
@@ -86,7 +95,7 @@ export const sendEmail = async ({ to, subject, html }) => {
 
   // eslint-disable-next-line no-console
   console.warn('[email] No email service configured — skipping email send to', to);
-  return { skipped: true };
+  return { success: false, skipped: true, error: 'No email service configured' };
 };
 
 export const isEmailConfigured = () => getBrevoTransporter() !== null || getNodemailerTransporter() !== null;

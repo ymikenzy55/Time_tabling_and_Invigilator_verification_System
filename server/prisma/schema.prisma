@@ -41,6 +41,7 @@ enum AttendanceResult {
   REJECTED_UNASSIGNED
   REJECTED_INVALID_QR
   REJECTED_VENUE_MISMATCH
+  ABSENT
 }
 
 // -------------------- Core: Users & Auth --------------------
@@ -54,6 +55,7 @@ model User {
   phone         String?
   role          Role
   status        UserStatus @default(PENDING_APPROVAL)
+  isDemo        Boolean    @default(false)
 
   departmentId  String?
   department    Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
@@ -87,7 +89,9 @@ model User {
 
   @@index([role])
   @@index([status])
+  @@index([role, status])
   @@index([departmentId])
+  @@index([email])
 }
 
 model RegistrationWindow {
@@ -187,10 +191,12 @@ model Course {
 
   @@unique([code, semesterId])
   @@index([status])
+  @@index([status, semesterId])
   @@index([createdById, status])
   @@index([createdById, updatedAt])
   @@index([departmentId, semesterId])
   @@index([semesterId, status])
+  @@index([level])
 }
 
 model CourseLevel {
@@ -271,6 +277,7 @@ model Invigilation {
   @@index([replacementId])
   @@index([invigilatorId, scheduledAt])
   @@index([examinationSessionId, scheduledAt])
+  @@index([examinationSessionId, venueId, scheduledAt])
   @@index([courseId])
   @@index([venueId, scheduledAt])
 }
@@ -291,7 +298,10 @@ model Attendance {
   userAgent      String?
   notes          String?
 
+  @@index([invigilationId])
   @@index([invigilationId, userId])
+  @@index([userId])
+  @@index([scannedAt])
 }
 
 // -------------------- Venue-level invigilator assignment & QR attendance --------------------
@@ -309,7 +319,9 @@ model VenueAssignment {
 
   @@unique([examinationSessionId, venueId, slotAt, invigilatorId])
   @@index([invigilatorId, slotAt])
+  @@index([invigilatorId, examinationSessionId, slotAt])
   @@index([examinationSessionId, venueId])
+  @@index([examinationSessionId, venueId, slotAt])
 }
 
 model VenueScan {
@@ -329,7 +341,9 @@ model VenueScan {
   locationAccuracy     Float?
 
   @@index([examinationSessionId, venueId])
+  @@index([examinationSessionId, venueId, scannedAt])
   @@index([userId, scannedAt])
+  @@index([venueId, scannedAt])
 }
 
 // -------------------- Audit --------------------
@@ -350,6 +364,8 @@ model AuditLog {
   @@index([actorId])
   @@index([action])
   @@index([createdAt])
+  @@index([targetType, targetId])
+  @@index([actorId, createdAt])
 }
 
 // -------------------- Notifications --------------------
@@ -367,6 +383,8 @@ model Notification {
   createdAt DateTime @default(now())
 
   @@index([userId, isRead, createdAt])
+  @@index([userId, createdAt])
+  @@index([type])
 }
 
 // -------------------- Settings --------------------

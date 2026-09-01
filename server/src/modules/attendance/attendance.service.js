@@ -13,22 +13,21 @@ export const signQrToken = (invigilationId) =>
   jwt.sign({ invigilationId, type: 'QR_ATTENDANCE' }, QR_SECRET, { expiresIn: QR_TOKEN_EXPIRY });
 
 /**
- * Venue QR tokens stay valid until the examination window ends (session
- * endDate + 1 day of grace), so one printed QR per venue lasts the whole
- * exam period. Falls back to 7 days if the session has no end date.
+ * Venue QR tokens are simple, human-readable strings: `VENUE:{venueId}:{sessionId}`.
+ * No JWT — the QR encodes the venue code, not a link. The scan endpoint
+ * parses the string and validates the invigilator's assignment.
  */
-export const signVenueQrToken = (venueId, examinationSessionId, sessionEndDate) => {
-  const payload = { venueId, examinationSessionId, type: 'VENUE_QR' };
-  if (sessionEndDate) {
-    const end = new Date(sessionEndDate);
-    end.setHours(23, 59, 59, 999);
-    end.setDate(end.getDate() + 1); // 1 day grace
-    const secondsUntilEnd = Math.floor((end.getTime() - Date.now()) / 1000);
-    if (secondsUntilEnd > 0) {
-      return jwt.sign(payload, QR_SECRET, { expiresIn: secondsUntilEnd });
-    }
-  }
-  return jwt.sign(payload, QR_SECRET, { expiresIn: VENUE_QR_FALLBACK_EXPIRY });
+export const signVenueQrToken = (venueId, examinationSessionId) => {
+  return `VENUE:${venueId}:${examinationSessionId}`;
+};
+
+export const parseVenueQrToken = (token) => {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split(':');
+  if (parts.length !== 3 || parts[0] !== 'VENUE') return null;
+  const [, venueId, examinationSessionId] = parts;
+  if (!venueId || !examinationSessionId) return null;
+  return { venueId, examinationSessionId, type: 'VENUE_QR' };
 };
 
 export const verifyQrToken = (token) => {
@@ -70,7 +69,7 @@ const isWithinExamPeriod = (session, now) => {
  * outcome), so both always agree on the verdict.
  */
 const evaluateVenueScan = async (token, actor) => {
-  const payload = verifyQrToken(token);
+  const payload = parseVenueQrToken(token);
   if (!payload || payload.type !== 'VENUE_QR' || !payload.venueId || !payload.examinationSessionId) {
     return { result: 'REJECTED_INVALID_QR', payload: null, message: 'This QR code is not a valid venue check-in code.' };
   }
@@ -79,13 +78,13 @@ const evaluateVenueScan = async (token, actor) => {
     return {
       result: 'REJECTED_UNASSIGNED',
       payload: null,
-      message: 'Only invigilators can check in with a venue QR code.',
+      message: 'Only registered invigilators can check in with a venue QR code. If you believe this is an error, contact the exam office.',
     };
   }
 
   const invigilator = await prisma.user.findUnique({
     where: { id: actor.id },
-    select: { id: true, role: true, status: true, fullName: true, email: true, staffId: true },
+    select: { id: true, role: true, status: true, fullName: true, email: true, staffId: true, isDemo: true },
   });
 
   if (!invigilator || invigilator.role !== 'INVIGILATOR' || invigilator.status !== 'ACTIVE') {
@@ -114,9 +113,11 @@ const evaluateVenueScan = async (token, actor) => {
   }
 
   const now = new Date();
+  const isDemo = invigilator.isDemo;
 
   // Enforce exam period — QR only valid during the session date range.
-  if (!isWithinExamPeriod(session, now)) {
+  // Demo invigilators bypass this check.
+  if (!isDemo && !isWithinExamPeriod(session, now)) {
     return {
       result: 'REJECTED_WINDOW',
       payload,
@@ -126,39 +127,41 @@ const evaluateVenueScan = async (token, actor) => {
     };
   }
 
-  // Enforce time slot — QR only valid during 8–11, 11–2, or 2–5.
-  const currentSlot = getCurrentTimeSlot(now);
-  if (!currentSlot) {
-    return {
-      result: 'REJECTED_WINDOW',
-      payload,
-      venue,
-      invigilator,
-      message: 'QR codes can only be scanned during exam time slots: 8:00–11:00 AM, 11:00 AM–2:00 PM, or 2:00–5:00 PM.',
-    };
-  }
-
-  // Verify the invigilator is assigned to THIS venue on THIS day.
-  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-
-  const assignment = await prisma.venueAssignment.findFirst({
-    where: {
-      invigilatorId: actor.id,
-      venueId: payload.venueId,
-      examinationSessionId: payload.examinationSessionId,
-      slotAt: { gte: dayStart, lt: dayEnd },
-    },
-  });
-
-  if (!assignment) {
-    // Find where the invigilator IS assigned today so we can point them there.
-    const todayAssignments = await prisma.venueAssignment.findMany({
+  // Verify the invigilator is assigned to THIS venue.
+  // Demo invigilators: search any assignment to this venue in the session (no day restriction).
+  // Regular invigilators: only search assignments for today.
+  let assignment;
+  if (isDemo) {
+    assignment = await prisma.venueAssignment.findFirst({
       where: {
         invigilatorId: actor.id,
+        venueId: payload.venueId,
+        examinationSessionId: payload.examinationSessionId,
+      },
+    });
+  } else {
+    const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+    assignment = await prisma.venueAssignment.findFirst({
+      where: {
+        invigilatorId: actor.id,
+        venueId: payload.venueId,
         examinationSessionId: payload.examinationSessionId,
         slotAt: { gte: dayStart, lt: dayEnd },
       },
+    });
+  }
+
+  if (!assignment) {
+    // Find where the invigilator IS assigned so we can point them there.
+    // Demo invigilators: search all assignments in the session.
+    // Regular invigilators: search only today's assignments.
+    const fallbackWhere = isDemo
+      ? { invigilatorId: actor.id, examinationSessionId: payload.examinationSessionId }
+      : { invigilatorId: actor.id, examinationSessionId: payload.examinationSessionId, slotAt: { gte: dayStart, lt: dayEnd } };
+
+    const todayAssignments = await prisma.venueAssignment.findMany({
+      where: fallbackWhere,
       orderBy: { slotAt: 'asc' },
       select: {
         slotAt: true,
@@ -173,9 +176,9 @@ const evaluateVenueScan = async (token, actor) => {
         const loc = a.venue.location ? ` (${a.venue.location})` : '';
         return `${a.venue.name}${loc} at ${slotTime}`;
       }).join(', ');
-      message = `You are not assigned to ${venue.name}. Today you are assigned to: ${assignmentList}. Please proceed to your assigned venue and scan the QR code there.`;
+      message = `You are not assigned to ${venue.name}. You are assigned to: ${assignmentList}. Please proceed to your assigned venue and scan the QR code there.`;
     } else {
-      message = `You are not assigned to ${venue.name}, and you have no venue assignments for today in this examination session. Please check your assignments or contact the exam officer.`;
+      message = `You are not assigned to ${venue.name}, and you have no venue assignments in this examination session. Please check your assignments or contact the exam officer.`;
     }
 
     return {
@@ -193,7 +196,10 @@ const evaluateVenueScan = async (token, actor) => {
 
   // No duplicate check — invigilators can scan multiple times per slot.
   // Each scan is logged with timestamp and location for audit purposes.
-  return { result: 'RECORDED', payload, venue, invigilator, assignment, timeSlot: currentSlot.label };
+  // Determine the time slot label from the assignment's scheduled time.
+  const slotHour = new Date(assignment.slotAt).getHours();
+  const slotLabel = EXAM_TIME_SLOTS.find((s) => slotHour >= s.startHour && slotHour < s.endHour)?.label || 'Exam Session';
+  return { result: 'RECORDED', payload, venue, invigilator, assignment, timeSlot: slotLabel };
 };
 
 const assertQrAccess = (invigilation, actor) => {
@@ -341,12 +347,12 @@ export const attendanceService = {
     return {
       session,
       venues: venues.map((venue) => {
-        const token = signVenueQrToken(venue.id, examinationSessionId, session.endDate);
+        const token = signVenueQrToken(venue.id, examinationSessionId);
         return {
           venueId: venue.id,
           venue,
           token,
-          link: `${primaryClientOrigin}/scan?token=${encodeURIComponent(token)}`,
+          code: token,
         };
       }),
     };
@@ -376,10 +382,10 @@ export const attendanceService = {
       throw ApiError.badRequest('No timetable entries for this venue in this session. Generate a timetable first.');
     }
 
-    const token = signVenueQrToken(venueId, examinationSessionId, session.endDate);
+    const token = signVenueQrToken(venueId, examinationSessionId);
     return {
       token,
-      link: `${primaryClientOrigin}/scan?token=${encodeURIComponent(token)}`,
+      code: token,
       venue,
       session,
     };

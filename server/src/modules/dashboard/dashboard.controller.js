@@ -65,7 +65,7 @@ export const dashboardController = {
         ],
         recentActivity: recentAudits,
       };
-      cache.set(cacheKey, data, 15_000);
+      cache.set(cacheKey, data, 30_000); // Increased cache to 30 seconds for better performance
       return res.json({ success: true, data });
     }
 
@@ -113,7 +113,7 @@ export const dashboardController = {
           label: `${c.code} — ${c.title}`,
         })),
       };
-      cache.set(cacheKey, data, 15_000);
+      cache.set(cacheKey, data, 30_000); // Increased cache to 30 seconds for better performance
       return res.json({ success: true, data });
     }
 

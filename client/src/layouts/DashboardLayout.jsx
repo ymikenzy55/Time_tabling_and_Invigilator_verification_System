@@ -10,8 +10,10 @@ export const DashboardLayout = () => {
 
   return (
     <div className="min-h-screen bg-surface-muted">
-      <Topbar onToggleSidebar={() => setSidebarOpen((v) => !v)} sidebarOpen={sidebarOpen} />
-      <Sidebar open={sidebarOpen} />
+      <div className="no-print">
+        <Topbar onToggleSidebar={() => setSidebarOpen((v) => !v)} sidebarOpen={sidebarOpen} />
+        <Sidebar open={sidebarOpen} />
+      </div>
       <div
         className={cn(
           'transition-[padding] duration-300 ease-in-out',
@@ -22,7 +24,9 @@ export const DashboardLayout = () => {
           <Outlet />
         </main>
       </div>
-      <BottomNav />
+      <div className="no-print">
+        <BottomNav />
+      </div>
     </div>
   );
 };

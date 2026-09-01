@@ -5,6 +5,8 @@ import { broadcast } from '../../utils/broadcast.js';
 import { courseLevelsService } from '../courseLevels/courseLevels.service.js';
 import { logAudit, logAuditBatch } from '../../utils/auditLog.js';
 import { cache } from '../../utils/cache.js';
+import { sendEmail } from '../../utils/email.js';
+import { primaryClientOrigin } from '../../config/env.js';
 
 const ALLOWED_SEMESTER_NAMES = new Set(['first semester', 'second semester']);
 
@@ -442,6 +444,52 @@ export const coursesService = {
         data: { courseId: id },
       }).catch(() => {});
       broadcast.toUser(course.createdById, 'course-approved', { courseId: id });
+
+      // Send email to course creator
+      const creator = await prisma.user.findUnique({
+        where: { id: course.createdById },
+        select: { email: true, fullName: true },
+      });
+      if (creator?.email) {
+        sendEmail({
+          to: creator.email,
+          subject: 'Course Approved — UENR Examination System',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="background: #d1fae5; border-left: 4px solid #10b981; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h2 style="color: #065f46; margin: 0;">✓ Course Approved</h2>
+              </div>
+              <p style="color: #475569; font-size: 15px;">
+                Hello <strong>${creator.fullName}</strong>,
+              </p>
+              <p style="color: #475569; font-size: 15px;">
+                Your course has been approved by the examination office.
+              </p>
+              <div style="background: #f9fafb; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <p style="color: #374151; font-size: 14px; margin: 8px 0;">
+                  <strong>Course Code:</strong> ${course.code}
+                </p>
+                <p style="color: #374151; font-size: 14px; margin: 8px 0;">
+                  <strong>Title:</strong> ${course.title}
+                </p>
+              </div>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${primaryClientOrigin}/courses"
+                   style="background: #4f46e5; color: #fff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block; font-size: 16px;">
+                  View Courses
+                </a>
+              </div>
+              <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
+              <p style="color: #94a3b8; font-size: 12px;">
+                University of Energy and Natural Resources<br>
+                Examination Management System
+              </p>
+            </div>
+          `,
+        }).catch((err) => {
+          console.error('[courses] Failed to send approval email:', err);
+        });
+      }
     }
 
     broadcast.toRoles('SUPER_ADMIN', 'course-approved', { courseId: id });
@@ -505,6 +553,48 @@ export const coursesService = {
         data: { courseIds: creatorCourses.map((c) => c.id) },
       }).catch(() => {});
       broadcast.toUser(creatorId, 'course-approved', { courseIds: creatorCourses.map((c) => c.id) });
+
+      // Send email to course creator
+      const creator = await prisma.user.findUnique({
+        where: { id: creatorId },
+        select: { email: true, fullName: true },
+      });
+      if (creator?.email) {
+        const courseList = creatorCourses.map((c) => `<li><strong>${c.code}</strong> — ${c.title}</li>`).join('');
+        sendEmail({
+          to: creator.email,
+          subject: `${creatorCourses.length} Course(s) Approved — UENR Examination System`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="background: #d1fae5; border-left: 4px solid #10b981; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h2 style="color: #065f46; margin: 0;">✓ ${creatorCourses.length} Course${creatorCourses.length === 1 ? '' : 's'} Approved</h2>
+              </div>
+              <p style="color: #475569; font-size: 15px;">
+                Hello <strong>${creator.fullName}</strong>,
+              </p>
+              <p style="color: #475569; font-size: 15px;">
+                The following course${creatorCourses.length === 1 ? '' : 's'} ha${creatorCourses.length === 1 ? 's' : 've'} been approved by the examination office:
+              </p>
+              <ul style="color: #374151; font-size: 14px; line-height: 1.8;">
+                ${courseList}
+              </ul>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${primaryClientOrigin}/courses"
+                   style="background: #4f46e5; color: #fff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block; font-size: 16px;">
+                  View Courses
+                </a>
+              </div>
+              <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
+              <p style="color: #94a3b8; font-size: 12px;">
+                University of Energy and Natural Resources<br>
+                Examination Management System
+              </p>
+            </div>
+          `,
+        }).catch((err) => {
+          console.error('[courses] Failed to send bulk approval email:', err);
+        });
+      }
     }
 
     broadcast.toRoles('SUPER_ADMIN', 'course-approved', { courseIds: courses.map((c) => c.id) });

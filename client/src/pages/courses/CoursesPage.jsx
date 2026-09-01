@@ -541,11 +541,17 @@ export const CoursesPage = () => {
           <div className="p-10">
             <EmptyState
               icon={BookOpen}
-              title="No courses yet"
-              description={allowCreate ? 'Create a course to start planning examinations.' : 'Courses will appear here once your department is linked and ready.'}
-              action={allowCreate ? (
+              title={allCourses.length === 0 ? 'No courses yet' : 'No matching courses found'}
+              description={allCourses.length === 0
+                ? (allowCreate ? 'Create a course to start planning examinations.' : 'Courses will appear here once your department is linked and ready.')
+                : `No courses match your search or filters. Try adjusting your search term or clearing filters.`}
+              action={allCourses.length === 0 && allowCreate ? (
                 <button className="btn-primary" onClick={openCreate}>
                   <Plus className="w-4 h-4" /> Add New Course
+                </button>
+              ) : allCourses.length > 0 ? (
+                <button className="btn-secondary" onClick={() => { setSearchInput(''); setFilterDept(''); setFilterLevel(''); setFilterSemester(''); }}>
+                  Clear filters
                 </button>
               ) : null}
             />

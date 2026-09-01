@@ -22,7 +22,7 @@ const schema = z.object({
 
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
 
-  JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters for production security'),
   JWT_EXPIRES_IN: z.string().default('1d'),
   BCRYPT_ROUNDS: z.coerce.number().int().min(8).max(15).default(10),
 
@@ -46,6 +46,7 @@ const schema = z.object({
 
   // Brevo (Sendinblue) API for emails
   BREVO_API_KEY: z.string().optional(),
+  BREVO_SMTP_USER: z.string().email().optional(), // Brevo login email
   
   // Legacy SMTP fallback
   SMTP_HOST: z.string().optional(),
@@ -53,6 +54,37 @@ const schema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().optional(),
+
+  // SMS Configuration - Hubtel (Ghana - 20+ years, very reliable)
+  HUBTEL_CLIENT_ID: z.string().optional(),
+  HUBTEL_CLIENT_SECRET: z.string().optional(),
+  HUBTEL_SENDER_ID: z.string().optional(), // Your sender ID (e.g., "UENR")
+
+  // SMS Configuration - mNotify (Ghana)
+  MNOTIFY_API_KEY: z.string().optional(),
+  MNOTIFY_SENDER_ID: z.string().optional(), // Your sender ID
+
+  // SMS Configuration - Arkesel (Ghana - RECOMMENDED, ~GH₵0.05/SMS)
+  ARKESEL_API_KEY: z.string().optional(),
+  ARKESEL_SENDER_ID: z.string().optional(), // Your sender ID (e.g., "UENR")
+
+  // SMS Configuration - Vokryn (1000 FREE SMS/month!)
+  VOKRYN_API_KEY: z.string().optional(),
+  VOKRYN_SENDER_ID: z.string().optional(), // Optional sender ID
+
+  // SMS Configuration - Twilio
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_PHONE_NUMBER: z.string().optional(), // E.164 format: +1234567890
+
+  // SMS Configuration - Africa's Talking
+  AFRICASTALKING_API_KEY: z.string().optional(),
+  AFRICASTALKING_USERNAME: z.string().optional(),
+  AFRICASTALKING_SENDER_ID: z.string().optional(), // Optional sender ID
+
+  // SMS Configuration - Termii
+  TERMII_API_KEY: z.string().optional(),
+  TERMII_SENDER_ID: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);

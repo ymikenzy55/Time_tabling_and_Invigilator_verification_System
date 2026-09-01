@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Modal } from '@/components/ui/Modal';
 import { attendanceApi } from '@/features/attendance/attendanceApi';
 import { venueAssignmentsApi } from '@/features/venueAssignments/venueAssignmentsApi';
+import { useAuth } from '@/context/AuthContext';
 
 const SCANNER_ID = 'qr-scanner';
 
@@ -18,9 +19,26 @@ const RESULT_LABELS = {
   REJECTED_VENUE_MISMATCH: 'Wrong Venue',
   REJECTED_DUPLICATE: 'Already Checked In',
   REJECTED_WINDOW: 'Outside Exam Time Window',
+  ABSENT: 'Marked Absent',
+};
+
+const CountdownUnit = ({ value, label }) => {
+  const v = Math.max(0, value);
+  return (
+    <div className="flex flex-col items-center">
+      <div className="w-20 h-20 rounded-xl bg-amber-50 border-2 border-amber-200 grid place-items-center">
+        <span className="text-3xl font-bold text-amber-700 tabular-nums">
+          {String(v).padStart(2, '0')}
+        </span>
+      </div>
+      <span className="text-xs font-medium text-ink-500 mt-1.5 uppercase tracking-wide">{label}</span>
+    </div>
+  );
 };
 
 export const ScanPage = () => {
+  const { user } = useAuth();
+  const isDemoUser = user?.isDemo === true;
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const [result, setResult] = useState(null);
@@ -52,27 +70,42 @@ export const ScanPage = () => {
 
   const assignments = assignmentsQuery.data || [];
 
-  // Check if scan is available (30 min before exam start, until exam end)
-  const now = new Date();
-  const isScanAvailable = fromAssignment ? (() => {
-    const slotTime = new Date(fromAssignment.slotAt);
-    const examDuration = fromAssignment.examDurationMinutes || 180;
-    const scanOpenTime = new Date(slotTime.getTime() - 30 * 60 * 1000);
-    const examEndTime = new Date(slotTime.getTime() + examDuration * 60 * 1000);
-    return now >= scanOpenTime && now <= examEndTime;
-  })() : false;
+  // Real-time clock for countdown — updates every second so the invigilator
+  // sees the window status change without needing to refresh the page.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
-  const timeUntilScan = fromAssignment ? (() => {
-    const slotTime = new Date(fromAssignment.slotAt);
-    const scanOpenTime = new Date(slotTime.getTime() - 30 * 60 * 1000);
-    const diffMs = scanOpenTime - now;
-    if (diffMs <= 0) return null;
-    const diffMins = Math.ceil(diffMs / (1000 * 60));
-    if (diffMins < 60) return `${diffMins} min`;
-    const hours = Math.floor(diffMins / 60);
-    const mins = diffMins % 60;
-    return `${hours}h ${mins}m`;
-  })() : null;
+  // Scan window: opens at exam start, closes at exam end.
+  const examStart = fromAssignment ? new Date(fromAssignment.slotAt) : null;
+  const examEnd = fromAssignment
+    ? new Date(new Date(fromAssignment.slotAt).getTime() + (fromAssignment.examDurationMinutes || 180) * 60 * 1000)
+    : null;
+
+  const isScanAvailable = fromAssignment
+    ? isDemoUser || (now >= examStart && now <= examEnd)
+    : false;
+
+  const formatCountdown = useCallback((ms) => {
+    if (ms <= 0) return null;
+    const totalSec = Math.ceil(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if (h > 0) return `${h}h ${m}m ${s}s`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+  }, []);
+
+  const timeUntilScan = fromAssignment && examStart
+    ? formatCountdown(examStart - now)
+    : null;
+
+  const timeUntilClose = fromAssignment && examEnd && isScanAvailable
+    ? formatCountdown(examEnd - now)
+    : null;
 
   const allowRescan = () => {
     scannedRef.current = false;
@@ -328,7 +361,11 @@ export const ScanPage = () => {
                 : 'text-rose-800'
             }>
               {isScanAvailable
-                ? 'Scan window is open'
+                ? isDemoUser
+                  ? 'Demo mode — scanning is available at any time'
+                  : timeUntilClose
+                  ? `Scan window is open — closes in ${timeUntilClose}`
+                  : 'Scan window is open'
                 : timeUntilScan
                 ? `Scan opens in ${timeUntilScan}`
                 : 'Scan window is closed'}
@@ -388,15 +425,34 @@ export const ScanPage = () => {
       <div className="max-w-md mx-auto space-y-6">
         {!isScanAvailable && fromAssignment ? (
           <div className="panel p-6 text-center">
-            <AlertCircle className="w-12 h-12 mx-auto mb-3 text-rose-500" />
-            <h3 className="text-lg font-bold text-ink-900 mb-2">
-              {timeUntilScan ? 'Scan Not Yet Available' : 'Scan Window Closed'}
-            </h3>
-            <p className="text-sm text-ink-600 mb-4">
-              {timeUntilScan
-                ? `Scanning opens 30 minutes before the exam. Please wait ${timeUntilScan}.`
-                : 'The scan window has closed. Scanning is only available from 30 minutes before the exam until the exam ends.'}
-            </p>
+            {timeUntilScan ? (
+              <>
+                <Clock className="w-12 h-12 mx-auto mb-3 text-amber-500" />
+                <h3 className="text-lg font-bold text-ink-900 mb-2">
+                  Scan Opens In
+                </h3>
+                <div className="my-6 flex items-center justify-center gap-2">
+                  <CountdownUnit value={Math.floor((examStart - now) / 3600000)} label="Hours" />
+                  <span className="text-3xl font-bold text-ink-300">:</span>
+                  <CountdownUnit value={Math.floor(((examStart - now) % 3600000) / 60000)} label="Minutes" />
+                  <span className="text-3xl font-bold text-ink-300">:</span>
+                  <CountdownUnit value={Math.ceil(((examStart - now) % 60000) / 1000)} label="Seconds" />
+                </div>
+                <p className="text-sm text-ink-600 mb-4">
+                  Scanning opens when the exam starts. The scanner will unlock automatically.
+                </p>
+              </>
+            ) : (
+              <>
+                <AlertCircle className="w-12 h-12 mx-auto mb-3 text-rose-500" />
+                <h3 className="text-lg font-bold text-ink-900 mb-2">
+                  Scan Window Closed
+                </h3>
+                <p className="text-sm text-ink-600 mb-4">
+                  The scan window has closed. Scanning is only available during the exam.
+                </p>
+              </>
+            )}
             <button
               className="btn-secondary"
               onClick={() => window.location.reload()}

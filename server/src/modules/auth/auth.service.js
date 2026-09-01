@@ -118,6 +118,7 @@ export const authService = {
         status: hydratedUser.status,
         departmentId: hydratedUser.departmentId,
         departmentName: hydratedUser.departmentName,
+        isDemo: hydratedUser.isDemo || false,
       },
     };
   },
@@ -136,6 +137,7 @@ export const authService = {
         staffId: true,
         phone: true,
         createdAt: true,
+        isDemo: true,
       },
     });
     if (!user) throw ApiError.notFound('User not found.');

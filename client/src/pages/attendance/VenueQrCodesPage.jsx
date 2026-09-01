@@ -68,8 +68,8 @@ export const VenueQrCodesPage = () => {
       await Promise.allSettled(
         (data?.venues || []).map(async (v) => {
           try {
-            const url = await QRCode.toDataURL(v.link, { width: 512, margin: 1 });
-            setQrCache((prev) => ({ ...prev, [v.venueId]: { url, token: v.token, link: v.link } }));
+            const url = await QRCode.toDataURL(v.code || v.token, { width: 512, margin: 1 });
+            setQrCache((prev) => ({ ...prev, [v.venueId]: { url, token: v.token, code: v.code } }));
           } catch {
             setQrCache((prev) => ({ ...prev, [v.venueId]: { error: true } }));
           }

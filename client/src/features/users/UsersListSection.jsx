@@ -228,8 +228,10 @@ export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
       {!query.isLoading && !query.isError && filtered.length === 0 && (
         <EmptyState
           icon={UsersIcon}
-          title={emptyTitle}
-          description={emptyDescription}
+          title={users.length === 0 ? emptyTitle : 'No matching users found'}
+          description={users.length === 0
+            ? emptyDescription
+            : `No users match "${q}"${deptFilter ? ` in ${deptFilter}` : ''}. Try a different search term or clear filters.`}
         />
       )}
 

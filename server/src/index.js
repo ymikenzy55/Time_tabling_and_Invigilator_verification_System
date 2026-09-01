@@ -3,6 +3,7 @@ import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
 import { prisma } from './utils/prisma.js';
 import { initSocket } from './utils/socket.js';
+import { startAutoAbsentChecker, stopAutoAbsentChecker } from './modules/attendance/autoAbsent.service.js';
 
 const app = createApp();
 
@@ -11,9 +12,11 @@ const server = app.listen(env.PORT, '0.0.0.0', () => {
 });
 
 initSocket(server);
+startAutoAbsentChecker();
 
 const shutdown = async (signal) => {
   logger.info(`Received ${signal}, shutting down...`);
+  stopAutoAbsentChecker();
   server.close(async () => {
     await prisma.$disconnect();
     process.exit(0);

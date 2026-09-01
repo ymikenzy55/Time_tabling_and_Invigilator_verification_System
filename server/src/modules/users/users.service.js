@@ -155,7 +155,7 @@ export const usersService = {
     ]);
     invalidateAuthCache(id);
 
-    const removedAssignments = result[0]?.count ?? 0;
+    const removedAssignments = result[0].count;
 
     logAudit({
       actorId: actor.id,
@@ -182,6 +182,9 @@ export const usersService = {
 
     const passwordHash = await hashPassword(newPassword);
     await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+
+    // Invalidate auth cache to force re-authentication with new password
+    invalidateAuthCache(userId);
 
     logAudit({
       actorId: userId,

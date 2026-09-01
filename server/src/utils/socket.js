@@ -37,6 +37,12 @@ export const initSocket = (server) => {
   io.on('connection', (socket) => {
     socket.join(`user:${socket.userId}`);
     socket.join(`role:${socket.userRole}`);
+
+    // Clean up on disconnect
+    socket.on('disconnect', () => {
+      socket.leave(`user:${socket.userId}`);
+      socket.leave(`role:${socket.userRole}`);
+    });
   });
 
   return io;

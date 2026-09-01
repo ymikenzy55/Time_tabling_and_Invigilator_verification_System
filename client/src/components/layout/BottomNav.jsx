@@ -39,7 +39,7 @@ export const BottomNav = () => {
     <>
       {/* Slide-up "More" sheet */}
       {moreOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-50 lg:hidden no-print">
           <div
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setMoreOpen(false)}
@@ -83,7 +83,7 @@ export const BottomNav = () => {
       )}
 
       {/* Bottom navigation bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-white border-t border-surface-border pb-safe">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-white border-t border-surface-border pb-safe no-print">
         <div className="flex items-stretch justify-around h-16">
           {/* Primary items — first half */}
           {primary.slice(0, 2).map((item) => (

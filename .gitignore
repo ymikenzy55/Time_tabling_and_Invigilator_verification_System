@@ -43,4 +43,5 @@ playwright-test-responsive.js
 fly-secrets.txt
 render-secrets.txt
 back4app-secrets.txt
+deployment-secrets.txt
 *-secrets.txt

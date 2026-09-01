@@ -2,6 +2,8 @@ import { prisma } from '../../utils/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { logAudit } from '../../utils/auditLog.js';
 import { createNotification } from '../notifications/notifications.service.js';
+import { sendEmail } from '../../utils/email.js';
+import { primaryClientOrigin } from '../../config/env.js';
 
 const publicSelect = {
   id: true,
@@ -141,20 +143,79 @@ export const venueAssignmentsService = {
       });
     }
 
+    // Batch notification creation for better performance
     const notified = new Set();
+    const notificationPromises = [];
+    
     for (const row of assignmentRows) {
       if (notified.has(row.invigilatorId)) continue;
       notified.add(row.invigilatorId);
 
-      await createNotification({
-        userId: row.invigilatorId,
-        type: 'INVIGILATION_ASSIGNED',
-        title: 'Examination Invigilation Duty',
-        message: 'You have been assigned invigilation duties for upcoming examinations. Review your duty schedule for venue and time details.',
-        link: '/my-assignments',
-        data: { examinationSessionId },
-      }).catch(() => {});
+      notificationPromises.push(
+        createNotification({
+          userId: row.invigilatorId,
+          type: 'INVIGILATION_ASSIGNED',
+          title: 'Examination Invigilation Duty',
+          message: 'You have been assigned invigilation duties for upcoming examinations. Review your duty schedule for venue and time details.',
+          link: '/my-assignments',
+          data: { examinationSessionId },
+        }).catch(() => {})
+      );
+
+      // Send email notification
+      const invigilator = invigilators.find((i) => i.id === row.invigilatorId);
+      if (invigilator && invigilator.email) {
+        const myAssignments = assignmentRows.filter((r) => r.invigilatorId === row.invigilatorId);
+        const venueList = [...new Set(myAssignments.map((r) => r.venue?.name || 'TBD'))];
+        sendEmail({
+          to: invigilator.email,
+          subject: 'Invigilation Duty Assignment — UENR Examination System',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="background: #eef2ff; border-left: 4px solid #4f46e5; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h2 style="color: #3730a3; margin: 0;">Invigilation Duty Assigned</h2>
+              </div>
+              <p style="color: #475569; font-size: 15px;">
+                Hello <strong>${invigilator.fullName}</strong>,
+              </p>
+              <p style="color: #475569; font-size: 15px;">
+                You have been assigned invigilation duties for the upcoming examination period.
+              </p>
+              <div style="background: #f9fafb; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <p style="color: #374151; font-size: 14px; margin: 8px 0;">
+                  <strong>Session:</strong> ${session.name}
+                </p>
+                <p style="color: #374151; font-size: 14px; margin: 8px 0;">
+                  <strong>Venues:</strong> ${venueList.join(', ')}
+                </p>
+                <p style="color: #374151; font-size: 14px; margin: 8px 0;">
+                  <strong>Assignments:</strong> ${myAssignments.length}
+                </p>
+              </div>
+              <p style="color: #475569; font-size: 15px;">
+                Please review your complete duty schedule for dates, times, and venue details.
+              </p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${primaryClientOrigin}/my-assignments"
+                   style="background: #4f46e5; color: #fff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block; font-size: 16px;">
+                  View My Assignments
+                </a>
+              </div>
+              <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
+              <p style="color: #94a3b8; font-size: 12px;">
+                University of Energy and Natural Resources<br>
+                Examination Management System
+              </p>
+            </div>
+          `,
+        }).catch((err) => {
+          console.error('[venueAssignments] Failed to send assignment email:', err);
+        });
+      }
     }
+
+    // Execute all notifications in parallel
+    await Promise.all(notificationPromises);
 
     logAudit({
       actorId: actor.id,
@@ -220,7 +281,7 @@ export const venueAssignmentsService = {
 
     // Check: invigilator can only have one time frame per day
     const slotDate = new Date(slotAt);
-    const dayStart = new Date(slotDate.getFullYear(), slotDate.getMonth(), slotDate.getDate());
+    const dayStart = new Date(Date.UTC(slotDate.getUTCFullYear(), slotDate.getUTCMonth(), slotDate.getUTCDate()));
     const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
     const sameDayAssignments = await prisma.venueAssignment.findMany({
       where: {
@@ -270,6 +331,51 @@ export const venueAssignmentsService = {
       link: '/my-assignments',
       data: { examinationSessionId, venueId },
     }).catch(() => {});
+
+    // Send email notification
+    if (assignment.invigilator?.email) {
+      sendEmail({
+        to: assignment.invigilator.email,
+        subject: 'Invigilation Duty Assignment — UENR Examination System',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: #eef2ff; border-left: 4px solid #4f46e5; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+              <h2 style="color: #3730a3; margin: 0;">Invigilation Duty Assigned</h2>
+            </div>
+            <p style="color: #475569; font-size: 15px;">
+              Hello <strong>${assignment.invigilator.fullName}</strong>,
+            </p>
+            <p style="color: #475569; font-size: 15px;">
+              You have been manually assigned an invigilation duty.
+            </p>
+            <div style="background: #f9fafb; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <p style="color: #374151; font-size: 14px; margin: 8px 0;">
+                <strong>Venue:</strong> ${assignment.venue.name}
+              </p>
+              <p style="color: #374151; font-size: 14px; margin: 8px 0;">
+                <strong>Date:</strong> ${new Date(slotAt).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+              </p>
+              ${assignment.venue.location ? `<p style="color: #374151; font-size: 14px; margin: 8px 0;">
+                <strong>Location:</strong> ${assignment.venue.location}
+              </p>` : ''}
+            </div>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${primaryClientOrigin}/my-assignments"
+                 style="background: #4f46e5; color: #fff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block; font-size: 16px;">
+                View My Assignments
+              </a>
+            </div>
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
+            <p style="color: #94a3b8; font-size: 12px;">
+              University of Energy and Natural Resources<br>
+              Examination Management System
+            </p>
+          </div>
+        `,
+      }).catch((err) => {
+        console.error('[venueAssignments] Failed to send manual assignment email:', err);
+      });
+    }
 
     logAudit({
       actorId: actor.id,

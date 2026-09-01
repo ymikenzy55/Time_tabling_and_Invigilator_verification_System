@@ -16,6 +16,7 @@ import attendanceRoutes from '../modules/attendance/attendance.routes.js';
 import venueAssignmentsRoutes from '../modules/venueAssignments/venueAssignments.routes.js';
 import timetableRoutes from '../modules/timetable/timetable.routes.js';
 import venuesRoutes from '../modules/venues/venues.routes.js';
+import testSmsRoutes from './testSms.js';
 
 const router = Router();
 
@@ -55,5 +56,8 @@ router.use('/settings', placeholderRouter('Settings'));
 // Phase 8+
 router.use('/venues', venuesRoutes);
 router.use('/timetable', timetableRoutes);
+
+// Testing utilities (SUPER_ADMIN only)
+router.use('/', testSmsRoutes);
 
 export default router;
