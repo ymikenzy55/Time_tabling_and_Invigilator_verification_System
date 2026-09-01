@@ -1,4 +1,4 @@
-import { api } from '@/lib/api';
+import { api, tokenStore } from '@/lib/api';
 
 export const timetableApi = {
   initialData: () => api.get('/timetable/initial').then((r) => r.data),
@@ -10,8 +10,9 @@ export const timetableApi = {
   deleteTimetable: (examinationSessionId) => api.delete(`/timetable/${examinationSessionId}`).then((r) => r.data),
 
   generateStream: (payload, onProgress) => {
-    const token = localStorage.getItem('token');
-    return fetch(`${import.meta.env.VITE_API_URL || '/api'}/timetable/generate`, {
+    const token = tokenStore.get();
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+    return fetch(`${baseUrl}/timetable/generate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

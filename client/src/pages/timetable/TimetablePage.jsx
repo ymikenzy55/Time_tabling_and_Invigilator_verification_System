@@ -209,7 +209,7 @@ export const TimetablePage = () => {
   const initialQuery = useQuery({
     queryKey: ['timetable', 'initial'],
     queryFn: () => timetableApi.initialData(),
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
   });
 

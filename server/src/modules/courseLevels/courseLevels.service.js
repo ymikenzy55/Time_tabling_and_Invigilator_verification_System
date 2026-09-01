@@ -21,10 +21,7 @@ const resolveDepartmentId = (actor, requestedDepartmentId) => {
   }
 
   if (actor.role === 'SUPER_ADMIN') {
-    if (!requestedDepartmentId) {
-      throw ApiError.badRequest('departmentId is required.');
-    }
-    return requestedDepartmentId;
+    return requestedDepartmentId || null;
   }
 
   throw ApiError.forbidden('You do not have permission to manage course levels.');
@@ -48,6 +45,12 @@ export const courseLevelsService = {
   async list(actor, { departmentId } = {}) {
     const targetDepartmentId = resolveDepartmentId(actor, departmentId);
     if (!targetDepartmentId) {
+      if (actor.role === 'SUPER_ADMIN') {
+        return prisma.courseLevel.findMany({
+          orderBy: { value: 'asc' },
+          select: levelSelect,
+        });
+      }
       return DEFAULT_LEVEL_VALUES.map((value) => ({
         id: `default-${value}`,
         value,
