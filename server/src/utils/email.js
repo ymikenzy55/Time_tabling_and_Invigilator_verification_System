@@ -7,42 +7,45 @@ let mailerSendClient = null;
 let nodemailerTransporter = null;
 let resendClient = null;
 
-let brevoTransporter = null;
-
-const getBrevoTransporter = () => {
-  if (brevoTransporter) return brevoTransporter;
+const getBrevoClient = () => {
   if (!env.BREVO_API_KEY) return null;
-  brevoTransporter = nodemailer.createTransport({
-    host: 'smtp-relay.brevo.com',
-    port: 587,
-    secure: false,
-    auth: { user: 'smtp', pass: env.BREVO_API_KEY },
-    connectionTimeout: 10000,
-    greetingTimeout: 5000,
-    socketTimeout: 15000,
-  });
-  return brevoTransporter;
+  return {
+    apiKey: env.BREVO_API_KEY,
+    senderEmail: env.BREVO_SENDER_EMAIL || 'noreply@brevo.com',
+    senderName: env.BREVO_SENDER_NAME || 'UENR Exam System',
+  };
 };
 
 const sendViaBrevo = async ({ to, subject, html }) => {
-  const transport = getBrevoTransporter();
-  if (!transport) return null;
-
-  const senderEmail = env.BREVO_SENDER_EMAIL || 'noreply@brevo.com';
-  const senderName = env.BREVO_SENDER_NAME || 'UENR Exam System';
+  const brevo = getBrevoClient();
+  if (!brevo) return null;
 
   try {
-    console.log('[email] Sending via Brevo SMTP to:', to);
-    await transport.sendMail({
-      from: `${senderName} <${senderEmail}>`,
-      to,
-      subject,
-      html,
+    console.log('[email] Sending via Brevo API to:', to);
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-key': brevo.apiKey,
+      },
+      body: JSON.stringify({
+        sender: { email: brevo.senderEmail, name: brevo.senderName },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      }),
     });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error('[email] Brevo error:', response.status, errorBody);
+      return null;
+    }
+
     console.log('[email] Brevo success');
     return { success: true, skipped: false, method: 'brevo' };
   } catch (error) {
-    console.error('[email] Brevo failed:', error.code || error.message);
+    console.error('[email] Brevo failed:', error.message || error);
     return null;
   }
 };
@@ -152,7 +155,7 @@ export const sendEmail = async ({ to, subject, html }) => {
 };
 
 export const isEmailConfigured = () =>
-  getBrevoTransporter() !== null ||
+  getBrevoClient() !== null ||
   getResendClient() !== null ||
   getMailerSendClient() !== null ||
   getNodemailerTransporter() !== null;
