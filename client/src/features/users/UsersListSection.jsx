@@ -10,8 +10,11 @@ import { StatusBadge } from './StatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Badge } from '@/components/ui/Badge';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { Pagination } from '@/components/ui/Pagination';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useAuth } from '@/context/AuthContext';
+
+const PAGE_SIZE = 10;
 
 const formatDate = (v) => {
   if (!v) return '—';
@@ -27,6 +30,7 @@ const formatDate = (v) => {
 export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
   const [q, setQ] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
+  const [page, setPage] = useState(1);
   const qc = useQueryClient();
   const confirm = useConfirm();
   const { user: me } = useAuth();
@@ -90,6 +94,12 @@ export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
         .some((v) => String(v).toLowerCase().includes(s));
     });
   }, [users, q, deptFilter]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginatedFiltered = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, page]);
 
   const renderRow = (u, isSub) => (
     <tr key={u.id} className={`hover:bg-surface-subtle/50 ${isSub ? 'bg-surface-subtle/30' : ''}`}>
@@ -183,7 +193,7 @@ export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
             className="input pl-9"
             placeholder="Search by name, email, staff ID..."
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e) => { setQ(e.target.value); setPage(1); }}
           />
         </div>
         {role === 'DEPARTMENT_HEAD' && deptsQuery.data && (
@@ -192,7 +202,7 @@ export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
             <select
               className="input pl-9 pr-8 appearance-none cursor-pointer"
               value={deptFilter}
-              onChange={(e) => setDeptFilter(e.target.value)}
+              onChange={(e) => { setDeptFilter(e.target.value); setPage(1); }}
             >
               <option value="">All Departments</option>
               {deptsQuery.data.map((d) => (
@@ -252,12 +262,12 @@ export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
               <tbody className="divide-y divide-surface-divider">
                 {(() => {
                   if (role !== 'DEPARTMENT_HEAD') {
-                    return filtered.map((u) => renderRow(u, false));
+                    return paginatedFiltered.map((u) => renderRow(u, false));
                   }
                   // Group: primary heads (no createdById) with their sub-heads nested
-                  const primaries = filtered.filter((u) => !u.createdById);
+                  const primaries = paginatedFiltered.filter((u) => !u.createdById);
                   const subsByParent = {};
-                  for (const u of filtered) {
+                  for (const u of paginatedFiltered) {
                     if (u.createdById) {
                       if (!subsByParent[u.createdById]) subsByParent[u.createdById] = [];
                       subsByParent[u.createdById].push(u);
@@ -273,7 +283,7 @@ export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
                   }
                   // Also show subs whose parent isn't in the current filtered set
                   const primaryIds = new Set(primaries.map((p) => p.id));
-                  const orphanSubs = filtered.filter((u) => u.createdById && !primaryIds.has(u.createdById));
+                  const orphanSubs = paginatedFiltered.filter((u) => u.createdById && !primaryIds.has(u.createdById));
                   for (const sub of orphanSubs) {
                     rows.push(renderRow(sub, true));
                   }
@@ -282,6 +292,13 @@ export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
               </tbody>
             </table>
           </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={filtered.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setPage}
+          />
         </div>
       )}
     </div>

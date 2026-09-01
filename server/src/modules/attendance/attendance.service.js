@@ -535,7 +535,9 @@ export const attendanceService = {
 
     // Successful scan - notify exam officer
     const checkInTime = new Date(scan.scannedAt || Date.now()).toLocaleString();
-    const locationStr = latitude != null && longitude != null
+    const locationStr = address
+      ? ` (Location: ${address}${!isOnCampus ? ' - OFF CAMPUS' : ''})`
+      : latitude != null && longitude != null
       ? ` (Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}${!isOnCampus ? ' - OFF CAMPUS' : ''})`
       : '';
     
@@ -572,6 +574,7 @@ export const attendanceService = {
       examinationSessionId: payload.examinationSessionId,
       latitude: latitude || null,
       longitude: longitude || null,
+      address: address || null,
       isOnCampus,
       timeSlot: timeSlot || null,
     });

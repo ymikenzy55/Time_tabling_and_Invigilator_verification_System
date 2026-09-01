@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, ClipboardList, Calendar, MapPin } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Badge } from '@/components/ui/Badge';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { Pagination } from '@/components/ui/Pagination';
 import { attendanceApi } from '@/features/attendance/attendanceApi';
+
+const PAGE_SIZE = 10;
 
 const STATUS_VARIANT = {
   RECORDED: 'success',
@@ -33,6 +36,7 @@ const formatDateTime = (v) => {
 
 export const AttendanceRecordsPage = () => {
   const [dateFilter, setDateFilter] = useState('');
+  const [page, setPage] = useState(1);
 
   const query = useQuery({
     queryKey: ['venue-scans', 'admin', { date: dateFilter }],
@@ -40,6 +44,18 @@ export const AttendanceRecordsPage = () => {
   });
 
   const records = query.data || [];
+
+  const totalPages = Math.ceil(records.length / PAGE_SIZE);
+  const paginatedRecords = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return records.slice(start, start + PAGE_SIZE);
+  }, [records, page]);
+
+  // Reset page when filter changes
+  const handleDateChange = (val) => {
+    setDateFilter(val);
+    setPage(1);
+  };
 
   return (
     <>
@@ -56,12 +72,12 @@ export const AttendanceRecordsPage = () => {
             type="date"
             className="input max-w-[180px]"
             value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
+            onChange={(e) => handleDateChange(e.target.value)}
           />
           {dateFilter && (
             <button
               className="btn-secondary btn-sm"
-              onClick={() => setDateFilter('')}
+              onClick={() => { setDateFilter(''); setPage(1); }}
             >
               Clear
             </button>
@@ -94,7 +110,7 @@ export const AttendanceRecordsPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-divider">
-                {records.map((r) => (
+                {paginatedRecords.map((r) => (
                   <tr key={r.id} className="hover:bg-surface-subtle/50">
                     <td className="px-4 py-3">
                       <div className="font-medium text-ink-900">{r.user?.fullName || '—'}</div>
@@ -134,6 +150,13 @@ export const AttendanceRecordsPage = () => {
               </tbody>
             </table>
           </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={records.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setPage}
+          />
         </div>
       )}
     </>

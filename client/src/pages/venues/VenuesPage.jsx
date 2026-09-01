@@ -11,9 +11,12 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { Pagination } from '@/components/ui/Pagination';
 import { ImportPreviewModal } from '@/components/ui/ImportPreviewModal';
 import { venuesApi } from '@/features/venues/venuesApi';
 import { parseSpreadsheet, rowsToVenues } from '@/utils/fileImport';
+
+const PAGE_SIZE = 10;
 
 const schema = z.object({
   name: z.string().min(1, 'Venue name is required.').max(120),
@@ -30,6 +33,7 @@ export const VenuesPage = () => {
   const [selected, setSelected] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const fileInputRef = useRef(null);
   const [importing, setImporting] = useState(false);
   const [previewRows, setPreviewRows] = useState(null);
@@ -168,6 +172,12 @@ export const VenuesPage = () => {
   }, [allVenues, search]);
   const activeCount = allVenues.filter((v) => v.isActive).length;
 
+  const totalPages = Math.ceil(venues.length / PAGE_SIZE);
+  const paginatedVenues = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return venues.slice(start, start + PAGE_SIZE);
+  }, [venues, page]);
+
   return (
     <>
       <PageHeader
@@ -205,7 +215,7 @@ export const VenuesPage = () => {
               className="input pl-9"
               placeholder="Search venues by name, location, or capacity..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             />
           </div>
         </div>
@@ -230,7 +240,7 @@ export const VenuesPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-divider">
-                {venues.map((venue) => (
+                {paginatedVenues.map((venue) => (
                   <tr key={venue.id} className="hover:bg-surface-subtle/60">
                     <td className="px-4 py-3 font-medium text-ink-900">{venue.name}</td>
                     <td className="px-4 py-3 text-ink-700">
@@ -273,8 +283,15 @@ export const VenuesPage = () => {
               </tbody>
             </table>
           </div>
-        )}
-      </div>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={venues.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setPage}
+          />
+        </div>
+      )}
 
       <Modal
         open={modalOpen}
