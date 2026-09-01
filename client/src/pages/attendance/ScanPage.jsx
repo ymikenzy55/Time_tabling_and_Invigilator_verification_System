@@ -268,38 +268,11 @@ export const ScanPage = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Stage 1 — ask the server which venue this QR is for and whether the
-  // invigilator is assigned there. This records nothing.
-  const verifyMutation = useMutation({
-    mutationFn: (token) => attendanceApi.previewVenueScan(token),
-    onSuccess: (data, token) => {
-      if (data.ok) {
-        // Correct venue: automatically submit (no confirmation needed)
-        console.log('[Scan] Verification successful, auto-submitting...');
-        // Do NOT set pendingToken — that would open the confirmation modal.
-        // Just submit directly.
-        scanMutation.mutate(token);
-        return;
-      }
-
-      // Wrong venue (or any other rejection): tell the invigilator right away
-      const label = RESULT_LABELS[data.result] || data.result;
-      toast.error(label);
-      setResult({ ...data, previewOnly: true });
-      allowRescan();
-    },
-    onError: (err) => {
-      toast.error(err.message || 'Could not verify this QR code.');
-      setResult({ error: err.message });
-      allowRescan();
-    },
-  });
-
-  // Stage 2 — actually record the attendance after venue verification passes.
+  // Single API call — scanVenue handles both verification and recording.
+  // This replaces the old two-step preview + scan flow for faster performance.
   const scanMutation = useMutation({
     mutationFn: async (token) => {
       try {
-        // Include human-readable address in location data
         const locationPayload = locationData ? {
           ...locationData,
           address: locationAddress || null,
@@ -332,7 +305,7 @@ export const ScanPage = () => {
     },
   });
 
-  const isBusy = verifyMutation.isPending || scanMutation.isPending;
+  const isBusy = scanMutation.isPending;
 
   const submitToken = (token) => {
     if (!token || isBusy) return;
@@ -350,7 +323,7 @@ export const ScanPage = () => {
     }
     
     setResult(null);
-    verifyMutation.mutate(token);
+    scanMutation.mutate(token);
   };
 
   useEffect(() => {
@@ -709,18 +682,11 @@ export const ScanPage = () => {
           <div className="panel p-4 text-center">
             <Loader2 className="w-8 h-8 mx-auto mb-3 text-primary-600 animate-spin" />
             <h3 className="text-base font-bold text-ink-900 mb-1">
-              Sending Details to Exam Officer
+              Processing Scan
             </h3>
             <p className="text-sm text-ink-600">
-              Recording your attendance and location...
+              Recording your attendance…
             </p>
-          </div>
-        )}
-
-        {verifyMutation.isPending && !scanMutation.isPending && (
-          <div className="panel p-4 flex items-center justify-center gap-2 text-sm text-ink-600">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Verifying venue assignment…
           </div>
         )}
 

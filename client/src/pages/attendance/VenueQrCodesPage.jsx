@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import QRCode from 'qrcode';
-import { QrCode, Printer, FileDown } from 'lucide-react';
+import { QrCode, Printer, FileDown, Search } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonCardGrid } from '@/components/ui/Skeleton';
@@ -15,6 +15,7 @@ export const VenueQrCodesPage = () => {
   const isAdmin = user?.role === 'SUPER_ADMIN';
   const [sessionId, setSessionId] = useState('');
   const [qrCache, setQrCache] = useState({});
+  const [searchQuery, setSearchQuery] = useState('');
 
   const sessionsQuery = useQuery({
     queryKey: ['examinationSessions'],
@@ -58,6 +59,16 @@ export const VenueQrCodesPage = () => {
     }
     return [...map.entries()].map(([id, val]) => ({ id, ...val }));
   }, [entries]);
+
+  // Filter venue slots by search query
+  const filteredVenueSlots = useMemo(() => {
+    if (!searchQuery.trim()) return venueSlots;
+    const q = searchQuery.toLowerCase();
+    return venueSlots.filter((vs) =>
+      vs.venue?.name?.toLowerCase().includes(q) ||
+      vs.venue?.location?.toLowerCase().includes(q)
+    );
+  }, [venueSlots, searchQuery]);
 
   // Generate QR codes for all venues — single batch API call, then render
   // each QR image locally in parallel.
@@ -182,16 +193,33 @@ export const VenueQrCodesPage = () => {
       />
 
       <div className="panel p-4 mb-6">
-        <div className="w-full sm:w-72">
-          <label className="label">Examination session</label>
-          <select className="input" value={sessionId} onChange={(e) => { setSessionId(e.target.value); setQrCache({}); }}>
-            <option value="">Select session</option>
-            {sessions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} {s.semester?.name ? `· ${s.semester.name}` : ''}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+          <div className="flex-1">
+            <label className="label">Examination session</label>
+            <select className="input" value={sessionId} onChange={(e) => { setSessionId(e.target.value); setQrCache({}); }}>
+              <option value="">Select session</option>
+              {sessions.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} {s.semester?.name ? `· ${s.semester.name}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          {venueSlots.length > 0 && (
+            <div className="flex-1 max-w-xs">
+              <label className="label">Search venues</label>
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
+                <input
+                  type="text"
+                  className="input pl-9"
+                  placeholder="Search by venue name or location…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -203,15 +231,15 @@ export const VenueQrCodesPage = () => {
         />
       ) : entriesQuery.isLoading ? (
         <SkeletonCardGrid count={6} lines={4} />
-      ) : venueSlots.length === 0 ? (
+      ) : filteredVenueSlots.length === 0 ? (
         <EmptyState
           icon={QrCode}
-          title="No venue assignments found"
-          description="Generate a timetable for this session to see venue QR codes here."
+          title={searchQuery ? "No matching venues" : "No venue assignments found"}
+          description={searchQuery ? "Try a different search term." : "Generate a timetable for this session to see venue QR codes here."}
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {venueSlots.map((vs) => {
+          {filteredVenueSlots.map((vs) => {
             const qr = qrCache[vs.id];
             return (
               <div key={vs.id} className="panel p-5 flex flex-col items-center text-center">
