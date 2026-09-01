@@ -5,7 +5,6 @@ import { Html5Qrcode } from 'html5-qrcode';
 import toast from 'react-hot-toast';
 import { Loader2, QrCode, ScanLine, CheckCircle2, AlertCircle, AlertTriangle, MapPin, Clock, Navigation } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { Modal } from '@/components/ui/Modal';
 import { attendanceApi } from '@/features/attendance/attendanceApi';
 import { venueAssignmentsApi } from '@/features/venueAssignments/venueAssignmentsApi';
 import { useAuth } from '@/context/AuthContext';
@@ -43,8 +42,6 @@ export const ScanPage = () => {
   const location = useLocation();
   const [result, setResult] = useState(null);
   const [manualToken, setManualToken] = useState(searchParams.get('token') || '');
-  const [pendingToken, setPendingToken] = useState(null);
-  const [verification, setVerification] = useState(null);
   const [cameraError, setCameraError] = useState(null);
   const [cameraStarting, setCameraStarting] = useState(false);
   const [locationData, setLocationData] = useState(null);
@@ -280,12 +277,9 @@ export const ScanPage = () => {
       if (data.ok) {
         // Correct venue: automatically submit (no confirmation needed)
         console.log('[Scan] Verification successful, auto-submitting...');
-        setPendingToken(token);
-        setVerification(data);
-        // Auto-submit immediately
-        setTimeout(() => {
-          scanMutation.mutate(token);
-        }, 100);
+        // Do NOT set pendingToken — that would open the confirmation modal.
+        // Just submit directly.
+        scanMutation.mutate(token);
         return;
       }
 
@@ -293,8 +287,6 @@ export const ScanPage = () => {
       const label = RESULT_LABELS[data.result] || data.result;
       toast.error(`${label}${data.message ? ': ' + data.message : ''}`);
       setResult({ ...data, previewOnly: true });
-      setPendingToken(null);
-      setVerification(null);
       allowRescan();
     },
     onError: (err) => {
@@ -304,7 +296,7 @@ export const ScanPage = () => {
     },
   });
 
-  // Stage 2 — actually record the attendance, only after an explicit Yes.
+  // Stage 2 — actually record the attendance after venue verification passes.
   const scanMutation = useMutation({
     mutationFn: async (token) => {
       try {
@@ -325,7 +317,7 @@ export const ScanPage = () => {
     onSuccess: (data) => {
       const isRecorded = data.result === 'RECORDED';
       if (isRecorded) {
-        toast.success('Attendance recorded successfully!');
+        toast.success('Scan successful — attendance recorded!');
         scanHistoryQuery.refetch();
       } else {
         const label = RESULT_LABELS[data.result] || data.result;
@@ -360,20 +352,6 @@ export const ScanPage = () => {
     
     setResult(null);
     verifyMutation.mutate(token);
-  };
-
-  const confirmSubmit = () => {
-    if (!pendingToken) return;
-    const token = pendingToken;
-    setPendingToken(null);
-    setVerification(null);
-    scanMutation.mutate(token);
-  };
-
-  const cancelSubmit = () => {
-    setPendingToken(null);
-    setVerification(null);
-    allowRescan();
   };
 
   useEffect(() => {
@@ -771,25 +749,58 @@ export const ScanPage = () => {
               ? 'border-emerald-300 bg-emerald-50'
               : 'border-rose-300 bg-rose-50'
           }`}>
-            <div className="flex items-center justify-center gap-2 text-lg font-bold">
-              {result.result === 'RECORDED'
-                ? <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                : <AlertCircle className="w-5 h-5 text-rose-600" />
-              }
-              {result.result === 'RECORDED'
-                ? 'Attendance Recorded'
-                : RESULT_LABELS[result.result] || result.result || 'Error'}
-            </div>
-            {result.message && (
-              <div className="text-sm text-rose-700 mt-2 flex items-start justify-center gap-1.5">
-                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{result.message}</span>
+            {result.result === 'RECORDED' ? (
+              <>
+                <div className="flex items-center justify-center gap-2 text-lg font-bold text-emerald-700">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                  Scan Successful
+                </div>
+                <div className="text-sm text-emerald-700 mt-2">
+                  Your attendance has been recorded.
+                </div>
+                {result.venue && (
+                  <div className="text-sm text-ink-700 mt-1">
+                    Venue: <span className="font-medium">{result.venue.name}</span>
+                  </div>
+                )}
+                {result.timeSlot && (
+                  <div className="text-xs text-ink-500 mt-1">
+                    Time slot: {result.timeSlot}
+                  </div>
+                )}
+                {result.scan?.scannedAt && (
+                  <div className="text-xs text-ink-500 mt-1">
+                    Scanned at: {new Date(result.scan.scannedAt).toLocaleString()}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-center gap-2 text-lg font-bold text-rose-700">
+                  <AlertCircle className="w-5 h-5 text-rose-600" />
+                  {RESULT_LABELS[result.result] || result.result || 'Error'}
+                </div>
+                {result.message && (
+                  <div className="text-sm text-rose-700 mt-2 flex items-start justify-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{result.message}</span>
+                  </div>
+                )}
+            {result.result === 'REJECTED_VENUE_MISMATCH' && (
+              <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-center">
+                <div className="flex items-center justify-center gap-2 text-sm font-bold text-amber-800">
+                  <AlertTriangle className="w-5 h-5 text-amber-600" />
+                  This is not the venue you are supposed to scan.
+                </div>
+                <div className="text-sm text-amber-700 mt-2">
+                  Please move to your assigned venue and scan again.
+                </div>
               </div>
             )}
             {result.result === 'REJECTED_VENUE_MISMATCH' && result.allAssignedVenues && result.allAssignedVenues.length > 0 && (
               <div className="mt-3 rounded-lg border border-primary-200 bg-primary-50 p-3 text-left">
                 <div className="flex items-center gap-2 text-xs font-bold text-primary-800 uppercase tracking-wide">
-                  <MapPin className="w-3.5 h-3.5" /> Your assigned venues today
+                  <MapPin className="w-3.5 h-3.5" /> Your assigned venues
                 </div>
                 <div className="mt-2 space-y-1.5">
                   {result.allAssignedVenues.map((v, i) => (
@@ -803,9 +814,6 @@ export const ScanPage = () => {
                       )}
                     </div>
                   ))}
-                </div>
-                <div className="text-xs text-primary-700 mt-2">
-                  Please head to your assigned venue and scan the QR code there.
                 </div>
               </div>
             )}
@@ -882,17 +890,7 @@ export const ScanPage = () => {
                 <ScanLine className="w-3.5 h-3.5" /> Scan again
               </button>
             )}
-            {result.result === 'RECORDED' && (
-              <button
-                className="btn-secondary btn-sm mt-3"
-                onClick={() => {
-                  setResult(null);
-                  allowRescan();
-                  startCamera();
-                }}
-              >
-                <ScanLine className="w-3.5 h-3.5" /> Scan again
-              </button>
+              </>
             )}
           </div>
         )}
@@ -926,65 +924,6 @@ export const ScanPage = () => {
           </div>
         )}
       </div>
-
-      {/* Shown only once the venue has been verified as correct. */}
-      <Modal
-        open={!!pendingToken}
-        onClose={cancelSubmit}
-        title={verification?.unverified ? 'Confirm Attendance Submission' : 'You are at the correct venue'}
-        size="sm"
-      >
-        <div className="space-y-4">
-          {verification?.unverified ? (
-            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>
-                This is not a venue QR code, so the venue could not be verified in
-                advance. Make sure you are scanning the code for your assigned venue.
-              </span>
-            </div>
-          ) : (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-              <div className="flex items-center gap-2 text-sm font-bold text-emerald-800">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                Venue verified
-              </div>
-              <div className="mt-2 text-base font-bold text-ink-900">
-                {verification?.venue?.name || fromAssignment?.venue?.name}
-              </div>
-              {verification?.venue?.location && (
-                <div className="text-sm text-ink-600">{verification.venue.location}</div>
-              )}
-              {verification?.slotAt && (
-                <div className="text-xs text-ink-500 mt-1">
-                  Slot: {new Date(verification.slotAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </div>
-              )}
-            </div>
-          )}
-
-          <p className="text-sm text-ink-700">
-            Send your attendance to the exam officer now?
-          </p>
-
-          <div className="flex justify-end gap-2">
-            <button className="btn-secondary" onClick={cancelSubmit} disabled={scanMutation.isPending}>
-              No, cancel
-            </button>
-            <button
-              className="btn-primary"
-              onClick={confirmSubmit}
-              disabled={scanMutation.isPending}
-            >
-              {scanMutation.isPending
-                ? <Loader2 className="w-4 h-4 animate-spin" />
-                : <CheckCircle2 className="w-4 h-4" />
-              }
-              Yes, send attendance
-            </button>
-          </div>
-        </div>
-      </Modal>
     </>
   );
 };
