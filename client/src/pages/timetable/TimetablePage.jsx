@@ -1197,9 +1197,13 @@ export const TimetablePage = () => {
             </div>
           ))}
 
-          {invigilatorsAssigned ? (
+          {invigilatorsAssigned || assignMutation.isPending ? (
             <div className="flex items-center gap-2 text-sm text-emerald-700">
-              <CheckCircle2 className="w-4 h-4" /> Invigilators have been assigned to venues.
+              {assignMutation.isPending ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Assigning invigilators to venues…</>
+              ) : (
+                <><CheckCircle2 className="w-4 h-4" /> Invigilators have been assigned to venues.</>
+              )}
             </div>
           ) : (
             <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
