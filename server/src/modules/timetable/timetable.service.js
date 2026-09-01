@@ -497,6 +497,7 @@ export const timetableService = {
       skipWeekends = true,
       clearExisting = true,
       assignVenues = true,
+      maxRetries = 10, // New: maximum number of attempts to find complete solution
     } = options;
 
     // Resolve the exam period: officer sets a start date and either an end
@@ -559,9 +560,43 @@ export const timetableService = {
     const slots = buildSlots(periodStart, periodEnd, { skipWeekends });
     if (!slots.length) throw ApiError.badRequest('No available time slots in the selected date range.');
 
-    // Run the constraint solver in memory, then persist in one batch.
-    const { placements, unscheduled } = scheduleCourses(courses, slots, venues);
+    // NEW: Retry mechanism - try multiple times to find complete solution
+    let bestResult = null;
+    let bestAttemptNumber = 0;
+    
+    console.log(`[Timetable] Starting generation with up to ${maxRetries} attempts...`);
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      // Run the constraint solver in memory
+      const { placements, unscheduled } = scheduleCourses(courses, slots, venues);
+      
+      console.log(`[Timetable] Attempt ${attempt}: ${placements.length}/${courses.length} courses scheduled, ${unscheduled.length} unscheduled`);
+      
+      // If we found a complete solution, use it immediately
+      if (unscheduled.length === 0) {
+        bestResult = { placements, unscheduled };
+        bestAttemptNumber = attempt;
+        console.log(`[Timetable] ✓ Complete solution found on attempt ${attempt}`);
+        break;
+      }
+      
+      // Keep track of the best attempt (fewest unscheduled)
+      if (!bestResult || unscheduled.length < bestResult.unscheduled.length) {
+        bestResult = { placements, unscheduled };
+        bestAttemptNumber = attempt;
+        console.log(`[Timetable] New best: ${placements.length} scheduled (attempt ${attempt})`);
+      }
+      
+      // If this is not the last attempt and we have unscheduled courses, continue trying
+      if (attempt < maxRetries && unscheduled.length > 0) {
+        console.log(`[Timetable] Retrying with different randomization...`);
+        continue;
+      }
+    }
 
+    const { placements, unscheduled } = bestResult;
+    
+    // Persist the best solution found
     const rows = placements.map(({ course, slot, venue }) => {
       const scheduledAt = new Date(slot.timestamp);
       return {
@@ -579,17 +614,26 @@ export const timetableService = {
       await prisma.invigilation.createMany({ data: rows });
     }
 
+    const wasComplete = unscheduled.length === 0;
+    const resultMessage = wasComplete 
+      ? `Complete timetable generated successfully on attempt ${bestAttemptNumber}.`
+      : `Best solution found after ${maxRetries} attempts. ${unscheduled.length} courses could not be scheduled (see details below).`;
+
+    console.log(`[Timetable] Final: ${rows.length}/${courses.length} courses scheduled. ${wasComplete ? '✓ Complete' : '⚠ Incomplete'}`);
+
     logAudit({
       actorId: actor.id,
       action: 'TIMETABLE.GENERATE',
       targetType: 'ExaminationSession',
       targetId: examinationSessionId,
-      result: 'SUCCESS',
+      result: wasComplete ? 'SUCCESS' : 'PARTIAL',
       metadata: {
         examinationSessionId,
         created: rows.length,
         total: courses.length,
         unscheduled: unscheduled.map((c) => c.code),
+        attempts: bestAttemptNumber,
+        maxRetries,
       },
     });
 
@@ -598,6 +642,11 @@ export const timetableService = {
       total: courses.length,
       unscheduled,
       venuesAssigned: assignVenues,
+      attempts: bestAttemptNumber,
+      complete: wasComplete,
+      message: resultMessage,
+    };
+  },
       period: { start: periodStart, end: periodEnd },
     };
   },
