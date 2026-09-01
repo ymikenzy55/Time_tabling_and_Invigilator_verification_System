@@ -15,13 +15,17 @@ const schema = z.object({
 export const ForgotPasswordPage = () => {
   const navigate = useNavigate();
   const [sent, setSent] = useState(false);
+  const [email, setEmail] = useState('');
 
   const {
     register, handleSubmit, formState: { errors },
   } = useForm({ resolver: zodResolver(schema), defaultValues: { email: '' } });
 
   const mutation = useMutation({
-    mutationFn: (values) => authApi.forgotPassword(values.email),
+    mutationFn: (values) => {
+      setEmail(values.email);
+      return authApi.forgotPassword(values.email);
+    },
     onSuccess: (data) => {
       setSent(true);
       toast.success(data.message || 'Password reset link sent.');
@@ -36,11 +40,11 @@ export const ForgotPasswordPage = () => {
           <CheckCircle2 className="w-6 h-6" />
         </div>
         <h2 className="text-lg font-bold text-ink-900 mb-2">Check your email</h2>
-        <p className="text-sm text-ink-500 mb-1">
-          If an account exists for that email, a reset link has been sent.
+        <p className="text-sm text-ink-600 mb-1">
+          If an account exists for <strong>{email}</strong>, a password reset link has been sent.
         </p>
         <p className="text-xs text-ink-500 mb-6">
-          Check your inbox (and spam folder) for the password reset email.
+          Check your inbox (and spam folder) for the password reset email. The link will expire in 1 hour.
         </p>
         <button className="btn-primary w-full" onClick={() => navigate('/login')}>
           Back to sign in
@@ -57,9 +61,18 @@ export const ForgotPasswordPage = () => {
         </div>
         <h2 className="text-xl font-bold text-ink-900">Reset your password</h2>
         <p className="mt-2 text-sm text-ink-500">
-          Enter the email you used during registration and we'll send you a reset link.
+          Enter your email address and we'll send you a password reset link.
         </p>
       </div>
+
+      {mutation.isPending && (
+        <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-center">
+          <div className="flex items-center justify-center gap-2 text-sm text-amber-800">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Checking account and sending reset link...</span>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit((v) => mutation.mutate(v))} className="space-y-4" noValidate>
         <div>
@@ -73,6 +86,7 @@ export const ForgotPasswordPage = () => {
               className="input pl-9"
               placeholder="you@university.edu"
               {...register('email')}
+              disabled={mutation.isPending}
             />
           </div>
           {errors.email && <p className="field-error">{errors.email.message}</p>}
@@ -83,7 +97,7 @@ export const ForgotPasswordPage = () => {
           disabled={mutation.isPending}
         >
           {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-          Send reset link
+          {mutation.isPending ? 'Sending...' : 'Send reset link'}
         </button>
       </form>
 
@@ -91,6 +105,7 @@ export const ForgotPasswordPage = () => {
         type="button"
         onClick={() => navigate('/login')}
         className="mt-6 w-full text-sm text-ink-500 hover:text-ink-700 flex items-center justify-center gap-1"
+        disabled={mutation.isPending}
       >
         <ArrowLeft className="w-3.5 h-3.5" /> Back to sign in
       </button>

@@ -17,12 +17,25 @@ export const passwordResetService = {
   async requestReset({ email }) {
     const user = await prisma.user.findUnique({ where: { email } });
 
-    if (!user) {
-      throw ApiError.notFound('No account found with that email address.');
-    }
-
-    if (user.status !== 'ACTIVE') {
-      throw ApiError.forbidden('Your account is not active. Please contact the administrator.');
+    // Security: Don't reveal whether a user exists or not (prevents user enumeration)
+    // Always return success, but only send email if user exists and is active
+    if (!user || user.status !== 'ACTIVE') {
+      // Log the attempt but return success to prevent user enumeration
+      if (user) {
+        logAudit({
+          actorId: user.id,
+          action: 'USER.PASSWORD_RESET_REQUEST_INACTIVE',
+          targetType: 'User',
+          targetId: user.id,
+          result: 'FAILURE',
+          metadata: { reason: 'Account not active' },
+        });
+      }
+      
+      // Return success message even though no email was sent (security best practice)
+      return {
+        message: 'If an account exists with that email, a password reset link has been sent.',
+      };
     }
 
     // Invalidate any previous unused tokens for this user
@@ -40,8 +53,9 @@ export const passwordResetService = {
 
     const resetLink = buildResetLink(token);
 
+    // Send email asynchronously (fire-and-forget) to avoid blocking the response
     if (isEmailConfigured()) {
-      await sendEmail({
+      sendEmail({
         to: user.email,
         subject: 'Password Reset — Examination Management System',
         html: `
@@ -73,6 +87,9 @@ export const passwordResetService = {
             </p>
           </div>
         `,
+      }).catch((err) => {
+        console.error('[PasswordReset] Failed to send email:', err);
+        // Log but don't fail the request
       });
     }
 
@@ -85,9 +102,7 @@ export const passwordResetService = {
     });
 
     return {
-      message: isEmailConfigured()
-        ? 'A password reset link has been sent to your email.'
-        : 'Password reset link created. Contact your administrator to receive it.',
+      message: 'If an account exists with that email, a password reset link has been sent.',
       ...(isEmailConfigured() ? {} : { resetLink }),
     };
   },
