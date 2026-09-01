@@ -777,13 +777,13 @@ export const ScanPage = () => {
                 </div>
               </div>
             )}
-            {result.venue && (
+            {result.result !== 'REJECTED_VENUE_MISMATCH' && result.venue && (
               <div className="text-sm text-ink-700 mt-2">
                 Venue: <span className="font-medium">{result.venue.name}</span>
                 {result.venue.location ? ` · ${result.venue.location}` : ''}
               </div>
             )}
-            {result.invigilator && (
+            {result.result !== 'REJECTED_VENUE_MISMATCH' && result.invigilator && (
               <div className="text-sm text-ink-700 mt-0.5">
                 {result.invigilator.fullName}
                 {result.invigilator.staffId ? ` · ${result.invigilator.staffId}` : ''}
@@ -814,7 +814,7 @@ export const ScanPage = () => {
               </div>
             )}
             {result.error && <div className="text-sm text-rose-700 mt-1">{result.error}</div>}
-            {result.previewOnly && (
+            {result.previewOnly && result.result !== 'REJECTED_VENUE_MISMATCH' && (
               <div className="text-xs text-ink-500 mt-3">
                 No attendance was recorded. Scan the QR code at your assigned venue.
               </div>
