@@ -3,7 +3,7 @@ import { prisma } from '../../utils/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { sendEmail, isEmailConfigured } from '../../utils/email.js';
 
-const CODE_EXPIRY_MINUTES = 15;
+const CODE_EXPIRY_MINUTES = 1;
 const MAX_ATTEMPTS = 5;
 
 const generateCode = () => {
@@ -49,7 +49,7 @@ export const emailVerificationService = {
               </div>
             </div>
             <p style="color: #64748b; font-size: 13px;">
-              This code will expire in ${CODE_EXPIRY_MINUTES} minutes.<br>
+              This code will expire in ${CODE_EXPIRY_MINUTES} minute${CODE_EXPIRY_MINUTES === 1 ? '' : 's'}.<br>
               If you did not request this verification, you can safely ignore this email.
             </p>
             <p style="color: #64748b; font-size: 13px; margin-top: 20px;">

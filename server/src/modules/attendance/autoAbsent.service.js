@@ -22,10 +22,12 @@ const processMissedScans = async () => {
     const lookbackStart = new Date(now.getTime() - LOOKBACK_HOURS * 60 * 60 * 1000);
 
     // Find assignments whose slot time + duration has passed (exam is over)
-    // but haven't been processed yet.
+    // but haven't been processed yet. Skip demo invigilators — they scan on
+    // their own schedule for demonstration purposes.
     const assignments = await prisma.venueAssignment.findMany({
       where: {
         slotAt: { gte: lookbackStart, lt: now },
+        invigilator: { isDemo: false },
       },
       select: {
         id: true,
@@ -34,7 +36,7 @@ const processMissedScans = async () => {
         invigilatorId: true,
         slotAt: true,
         venue: { select: { id: true, name: true } },
-        invigilator: { select: { id: true, fullName: true, staffId: true } },
+        invigilator: { select: { id: true, fullName: true, staffId: true, isDemo: true } },
         examinationSession: {
           select: {
             id: true,

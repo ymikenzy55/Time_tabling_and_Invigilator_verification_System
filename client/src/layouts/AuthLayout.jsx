@@ -6,7 +6,7 @@ const LOGO_IMAGE = '/assets/images/uenrLogo.png';
 export const AuthLayout = () => {
   return (
     <div className="relative min-h-screen text-white">
-      <div className="absolute inset-0">
+      <div className="fixed inset-0 z-0">
         <img
           src={BACKGROUND_IMAGE}
           alt="Examination hall"

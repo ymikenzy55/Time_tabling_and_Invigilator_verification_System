@@ -46,7 +46,7 @@ const schema = z.object({
 
   // Brevo (Sendinblue) API for emails
   BREVO_API_KEY: z.string().optional(),
-  BREVO_SMTP_USER: z.string().email().optional(), // Brevo login email
+  BREVO_SMTP_USER: z.string().optional(), // Brevo login email or 'apikey'
   
   // Legacy SMTP fallback
   SMTP_HOST: z.string().optional(),

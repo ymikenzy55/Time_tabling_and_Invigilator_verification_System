@@ -7,12 +7,9 @@ let nodemailerTransporter = null;
 const getBrevoTransporter = () => {
   if (!env.BREVO_API_KEY) return null;
 
-  // Use configured email or fallback to SMTP_USER for backward compatibility
-  const brevoUser = env.BREVO_SMTP_USER || env.SMTP_USER;
-  if (!brevoUser) {
-    console.warn('[email] Brevo API key is set but BREVO_SMTP_USER is not configured');
-    return null;
-  }
+  // Brevo SMTP accepts 'apikey' as the username when using an API key.
+  // Fall back to SMTP_USER for backward compatibility.
+  const brevoUser = env.BREVO_SMTP_USER || env.SMTP_USER || 'apikey';
 
   return nodemailer.createTransport({
     host: 'smtp-relay.brevo.com',

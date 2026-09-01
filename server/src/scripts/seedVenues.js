@@ -11,6 +11,8 @@ const VENUE_NAMES = [
   'H1', 'H2', 'H3', 'H4', 'H5',
   'J1', 'J2', 'J3', 'J4', 'J5',
   'K1', 'K2', 'K3', 'K4', 'K5',
+  'L1', 'L2', 'L3', 'L4', 'L5',
+  'L6', 'L7', 'L8', 'L9', 'L10',
 ];
 
 const LOCATIONS = ['Main Campus', 'South Campus', 'North Campus', 'East Wing', 'West Wing'];

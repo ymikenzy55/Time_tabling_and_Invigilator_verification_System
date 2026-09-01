@@ -497,7 +497,7 @@ export const timetableService = {
       skipWeekends = true,
       clearExisting = true,
       assignVenues = true,
-      maxRetries = 10, // New: maximum number of attempts to find complete solution
+      maxRetries = 20, // New: maximum number of attempts to find complete solution
     } = options;
 
     // Resolve the exam period: officer sets a start date and either an end

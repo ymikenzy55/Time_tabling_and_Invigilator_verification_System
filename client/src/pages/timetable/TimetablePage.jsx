@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import {
   Loader2, CalendarRange, AlertCircle, CheckCircle2, Clock, ShieldAlert,
   FileDown, MapPin, User, Building, QrCode, Users, Pencil, Trash2, X, Upload,
+  RefreshCw,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Modal } from '@/components/ui/Modal';
@@ -1159,7 +1160,21 @@ export const TimetablePage = () => {
             </div>
           )}
 
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            {result.unscheduled?.length > 0 && (
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={generateMutation.isPending}
+                onClick={() => {
+                  setResult(null);
+                  openGenerate();
+                }}
+              >
+                {generateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                Regenerate Timetable
+              </button>
+            )}
             <button type="button" className="btn-secondary" onClick={() => setResult(null)}>Dismiss</button>
           </div>
         </div>
