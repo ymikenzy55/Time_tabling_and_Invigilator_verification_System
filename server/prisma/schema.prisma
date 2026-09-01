@@ -8,7 +8,7 @@ datasource db {
 }
 
 model AcademicYear {
-  id        String     @id
+  id        String     @id @default(cuid())
   name      String     @unique
   startDate DateTime
   endDate   DateTime
@@ -17,7 +17,7 @@ model AcademicYear {
 }
 
 model Attendance {
-  id             String           @id
+  id             String           @id @default(cuid())
   invigilationId String
   userId         String?
   result         AttendanceResult
@@ -35,7 +35,7 @@ model Attendance {
 }
 
 model AuditLog {
-  id         String   @id
+  id         String   @id @default(cuid())
   actorId    String?
   action     String
   targetType String?
@@ -55,7 +55,7 @@ model AuditLog {
 }
 
 model Course {
-  id                             String         @id
+  id                             String         @id @default(cuid())
   code                           String
   title                          String
   departmentId                   String
@@ -71,7 +71,7 @@ model Course {
   createdById                    String?
   approvedById                   String?
   createdAt                      DateTime       @default(now())
-  updatedAt                      DateTime
+  updatedAt                      DateTime       @default(now()) @updatedAt
   submittedAt                    DateTime?
   approvedAt                     DateTime?
   instructorName                 String?
@@ -93,12 +93,12 @@ model Course {
 }
 
 model CourseLevel {
-  id           String     @id
+  id           String     @id @default(cuid())
   value        Int
   label        String?
   departmentId String
   createdAt    DateTime   @default(now())
-  updatedAt    DateTime
+  updatedAt    DateTime   @default(now()) @updatedAt
   Department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
 
   @@unique([departmentId, value])
@@ -106,18 +106,18 @@ model CourseLevel {
 }
 
 model Department {
-  id          String        @id
+  id          String        @id @default(cuid())
   name        String
   code        String        @unique
   createdAt   DateTime      @default(now())
-  updatedAt   DateTime
+  updatedAt   DateTime      @default(now()) @updatedAt
   Course      Course[]
   CourseLevel CourseLevel[]
   User        User[]
 }
 
 model EmailVerification {
-  id        String   @id
+  id        String   @id @default(cuid())
   email     String
   code      String
   expiresAt DateTime
@@ -131,14 +131,14 @@ model EmailVerification {
 }
 
 model ExaminationSession {
-  id              String            @id
+  id              String            @id @default(cuid())
   name            String
   semesterId      String
   startDate       DateTime
   endDate         DateTime
   isPublished     Boolean           @default(false)
   createdAt       DateTime          @default(now())
-  updatedAt       DateTime
+  updatedAt       DateTime          @default(now()) @updatedAt
   Semester        Semester          @relation(fields: [semesterId], references: [id])
   Invigilation    Invigilation[]
   VenueAssignment VenueAssignment[]
@@ -146,7 +146,7 @@ model ExaminationSession {
 }
 
 model Invigilation {
-  id                                    String             @id
+  id                                    String             @id @default(cuid())
   examinationSessionId                  String
   courseId                              String
   invigilatorId                         String?
@@ -157,7 +157,7 @@ model Invigilation {
   windowClosesAt                        DateTime?
   gracePeriodMin                        Int                @default(0)
   createdAt                             DateTime           @default(now())
-  updatedAt                             DateTime
+  updatedAt                             DateTime           @default(now()) @updatedAt
   venueId                               String?
   splitRange                            String?
   Attendance                            Attendance[]
@@ -177,7 +177,7 @@ model Invigilation {
 }
 
 model Notification {
-  id        String   @id
+  id        String   @id @default(cuid())
   userId    String
   type      String
   title     String
@@ -194,7 +194,7 @@ model Notification {
 }
 
 model PasswordReset {
-  id        String   @id
+  id        String   @id @default(cuid())
   userId    String
   token     String   @unique
   expiresAt DateTime
@@ -210,14 +210,14 @@ model RegistrationWindow {
   role        Role     @id
   opensAt     DateTime
   closesAt    DateTime
-  updatedAt   DateTime
+  updatedAt   DateTime   @default(now()) @updatedAt
   updatedById String?
 
   @@index([opensAt, closesAt])
 }
 
 model Semester {
-  id                 String               @id
+  id                 String               @id @default(cuid())
   name               String
   academicYearId     String
   startDate          DateTime
@@ -233,11 +233,11 @@ model Semester {
 model Setting {
   key       String   @id
   value     Json
-  updatedAt DateTime
+  updatedAt DateTime @default(now()) @updatedAt
 }
 
 model User {
-  id                                            String            @id
+  id                                            String            @id @default(cuid())
   email                                         String            @unique
   passwordHash                                  String?
   fullName                                      String
@@ -247,7 +247,7 @@ model User {
   status                                        UserStatus        @default(PENDING_APPROVAL)
   departmentId                                  String?
   createdAt                                     DateTime          @default(now())
-  updatedAt                                     DateTime
+  updatedAt                                     DateTime          @default(now()) @updatedAt
   approvedAt                                    DateTime?
   approvedById                                  String?
   departmentName                                String?
@@ -275,13 +275,13 @@ model User {
 }
 
 model Venue {
-  id              String            @id
+  id              String            @id @default(cuid())
   name            String            @unique
   capacity        Int
   location        String?
   isActive        Boolean           @default(true)
   createdAt       DateTime          @default(now())
-  updatedAt       DateTime
+  updatedAt       DateTime          @default(now()) @updatedAt
   Invigilation    Invigilation[]
   VenueAssignment VenueAssignment[]
   VenueScan       VenueScan[]
@@ -290,7 +290,7 @@ model Venue {
 }
 
 model VenueAssignment {
-  id                   String             @id
+  id                   String             @id @default(cuid())
   examinationSessionId String
   venueId              String
   invigilatorId        String
@@ -308,7 +308,7 @@ model VenueAssignment {
 }
 
 model VenueScan {
-  id                   String             @id
+  id                   String             @id @default(cuid())
   venueId              String
   examinationSessionId String
   userId               String

@@ -409,46 +409,6 @@ export const RegisterPage = () => {
       return;
     }
 
-    // Step 0: Check staff ID and email availability before proceeding
-    if (step === 0) {
-      const staffId = watch('staffId')?.trim();
-      const email = watch('email')?.trim();
-
-      if (!staffId) {
-        toast.error('Staff ID is required');
-        return;
-      }
-
-      setStaffIdCheck({ checking: true, available: null, message: '' });
-      setEmailCheck({ checking: true, available: null, message: '' });
-
-      try {
-        const staffIdResult = await registrationApi.checkStaffId(staffId);
-        if (!staffIdResult.available) {
-          setStaffIdCheck({ checking: false, available: false, message: 'This Staff ID is already in use.' });
-          toast.error('This Staff ID is already in use.');
-          return;
-        }
-
-        const emailResult = await registrationApi.checkEmail(email);
-        if (!emailResult.available) {
-          setEmailCheck({ checking: false, available: false, message: 'This email is already registered.' });
-          setStaffIdCheck({ checking: false, available: true, message: 'Staff ID is available.' });
-          toast.error('This email is already registered.');
-          return;
-        }
-
-        setStaffIdCheck({ checking: false, available: true, message: 'Staff ID is available.' });
-        setEmailCheck({ checking: false, available: true, message: 'Email is available.' });
-        toast.success('Staff ID and email are available!');
-      } catch (err) {
-        setStaffIdCheck({ checking: false, available: null, message: '' });
-        setEmailCheck({ checking: false, available: null, message: '' });
-        toast.error(err.message || 'Could not verify availability.');
-        return;
-      }
-    }
-
     // Step 2 (Security): send verification code before advancing to verification step
     if (step === 2) {
       const allValid = await trigger(stepFields[2]);
@@ -746,8 +706,8 @@ export const RegisterPage = () => {
                 <ArrowLeft className="w-4 h-4" /> Back to form
               </button>
             ) : !isLastStep ? (
-              <button type="button" className="btn-primary ml-auto" onClick={handleNext} disabled={staffIdCheck.checking || emailCheck.checking || sendCodeMutation.isPending}>
-                {(staffIdCheck.checking || emailCheck.checking) ? <Loader2 className="w-4 h-4 animate-spin" /> : (step === 2 ? <Mail className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />)}
+              <button type="button" className="btn-primary ml-auto" onClick={handleNext} disabled={sendCodeMutation.isPending}>
+                {sendCodeMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (step === 2 ? <Mail className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />)}
                 {step === 2 ? 'Send Verification Code' : 'Next'}
               </button>
             ) : (
