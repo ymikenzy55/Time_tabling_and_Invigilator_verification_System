@@ -278,23 +278,18 @@ export const ScanPage = () => {
     mutationFn: (token) => attendanceApi.previewVenueScan(token),
     onSuccess: (data, token) => {
       if (data.ok) {
-        // Correct venue: hold the token and ask for confirmation.
+        // Correct venue: automatically submit (no confirmation needed)
+        console.log('[Scan] Verification successful, auto-submitting...');
         setPendingToken(token);
         setVerification(data);
-        return;
-      }
-
-      // Not a venue QR — it may still be a per-invigilation QR, which the
-      // preview endpoint cannot evaluate. Ask for confirmation and let the
-      // legacy endpoint decide.
-      if (data.result === 'REJECTED_INVALID_QR') {
-        setPendingToken(token);
-        setVerification({ ok: false, unverified: true });
+        // Auto-submit immediately
+        setTimeout(() => {
+          scanMutation.mutate(token);
+        }, 100);
         return;
       }
 
       // Wrong venue (or any other rejection): tell the invigilator right away
-      // and never reach the confirmation step.
       const label = RESULT_LABELS[data.result] || data.result;
       toast.error(`${label}${data.message ? ': ' + data.message : ''}`);
       setResult({ ...data, previewOnly: true });
@@ -751,10 +746,22 @@ export const ScanPage = () => {
           </>
         )}
 
-        {verifyMutation.isPending && (
+        {scanMutation.isPending && (
+          <div className="panel p-4 text-center">
+            <Loader2 className="w-8 h-8 mx-auto mb-3 text-primary-600 animate-spin" />
+            <h3 className="text-base font-bold text-ink-900 mb-1">
+              Sending Details to Exam Officer
+            </h3>
+            <p className="text-sm text-ink-600">
+              Recording your attendance and location...
+            </p>
+          </div>
+        )}
+
+        {verifyMutation.isPending && !scanMutation.isPending && (
           <div className="panel p-4 flex items-center justify-center gap-2 text-sm text-ink-600">
             <Loader2 className="w-4 h-4 animate-spin" />
-            Checking whether you are at the right venue…
+            Verifying venue assignment…
           </div>
         )}
 
