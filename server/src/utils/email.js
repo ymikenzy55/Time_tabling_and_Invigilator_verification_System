@@ -7,6 +7,49 @@ let mailerSendClient = null;
 let nodemailerTransporter = null;
 let resendClient = null;
 
+const getBrevoClient = () => {
+  if (!env.BREVO_API_KEY) return null;
+  return {
+    apiKey: env.BREVO_API_KEY,
+    senderEmail: env.BREVO_SENDER_EMAIL || 'noreply@brevo.com',
+    senderName: env.BREVO_SENDER_NAME || 'UENR Exam System',
+  };
+};
+
+const sendViaBrevo = async ({ to, subject, html }) => {
+  const brevo = getBrevoClient();
+  if (!brevo) return null;
+
+  try {
+    console.log('[email] Sending via Brevo to:', to);
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-key': brevo.apiKey,
+      },
+      body: JSON.stringify({
+        sender: { email: brevo.senderEmail, name: brevo.senderName },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error('[email] Brevo error:', response.status, errorBody);
+      return null;
+    }
+
+    console.log('[email] Brevo success');
+    return { success: true, skipped: false, method: 'brevo' };
+  } catch (error) {
+    console.error('[email] Brevo failed:', error.message || error);
+    return null;
+  }
+};
+
 const getResendClient = () => {
   if (resendClient) return resendClient;
   if (!env.RESEND_API_KEY) return null;
@@ -40,6 +83,11 @@ const FROM_EMAIL = env.RESEND_FROM_EMAIL || env.MAILERSEND_FROM_EMAIL || 'onboar
 const FROM_NAME = env.RESEND_FROM_NAME || env.MAILERSEND_FROM_NAME || 'UENR Exam System';
 
 export const sendEmail = async ({ to, subject, html }) => {
+  // 1. Brevo (300 emails/day free, sends to anyone)
+  const brevoResult = await sendViaBrevo({ to, subject, html });
+  if (brevoResult) return brevoResult;
+
+  // 2. Resend (free tier only sends to verified domains or account owner)
   const resend = getResendClient();
   if (resend) {
     try {
@@ -106,4 +154,8 @@ export const sendEmail = async ({ to, subject, html }) => {
   return { success: false, skipped: true, error: 'No email service configured' };
 };
 
-export const isEmailConfigured = () => getResendClient() !== null || getMailerSendClient() !== null || getNodemailerTransporter() !== null;
+export const isEmailConfigured = () =>
+  getBrevoClient() !== null ||
+  getResendClient() !== null ||
+  getMailerSendClient() !== null ||
+  getNodemailerTransporter() !== null;

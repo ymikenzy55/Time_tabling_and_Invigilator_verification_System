@@ -54,6 +54,11 @@ const schema = z.object({
   RESEND_FROM_EMAIL: z.string().optional(),
   RESEND_FROM_NAME: z.string().optional(),
 
+  // Brevo (formerly Sendinblue) — 300 emails/day free, sends to anyone
+  BREVO_API_KEY: z.string().optional(),
+  BREVO_SENDER_EMAIL: z.string().optional(),
+  BREVO_SENDER_NAME: z.string().optional(),
+
   // Legacy SMTP fallback
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().positive().default(587),
