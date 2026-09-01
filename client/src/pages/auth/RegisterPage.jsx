@@ -270,12 +270,25 @@ export const RegisterPage = () => {
   };
 
   const sendCodeMutation = useMutation({
-    mutationFn: (payload) => registrationApi.sendVerificationCode(payload),
+    mutationFn: (payload) => {
+      console.log('[RegisterPage] sendCodeMutation called with:', payload);
+      return registrationApi.sendVerificationCode(payload);
+    },
+    onSuccess: (data) => {
+      console.log('[RegisterPage] sendCodeMutation success:', data);
+    },
+    onError: (err) => {
+      console.error('[RegisterPage] sendCodeMutation error:', err);
+    },
   });
 
   const verifyMutation = useMutation({
-    mutationFn: (payload) => registrationApi.verifyAndRegister(payload),
+    mutationFn: (payload) => {
+      console.log('[RegisterPage] verifyMutation called with:', payload);
+      return registrationApi.verifyAndRegister(payload);
+    },
     onSuccess: () => {
+      console.log('[RegisterPage] verifyMutation success');
       toast.success('Email verified! Your application has been submitted.');
       reset();
     },
@@ -364,8 +377,10 @@ export const RegisterPage = () => {
   const isLastStep = step === totalSteps - 1;
 
   const handleNext = async () => {
+    console.log('[RegisterPage] handleNext called, step:', step);
     // Validate current step fields
     const valid = await trigger(stepFields[step]);
+    console.log('[RegisterPage] validation result:', valid, 'errors:', errors);
     if (!valid) {
       const invalidFields = stepFields[step].filter(field => errors[field]);
       if (invalidFields.length > 0) {

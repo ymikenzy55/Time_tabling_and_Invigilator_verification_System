@@ -18,12 +18,16 @@ export const registrationController = {
   }),
 
   sendVerificationCode: asyncHandler(async (req, res) => {
+    console.log('[registration] sendVerificationCode called with body:', { role: req.body?.role, email: req.body?.email });
     const result = await registrationService.sendVerificationCode(req.body);
+    console.log('[registration] sendVerificationCode success:', result);
     res.json({ success: true, data: result });
   }),
 
   verifyAndRegister: asyncHandler(async (req, res) => {
+    console.log('[registration] verifyAndRegister called for email:', req.body?.email);
     const user = await registrationService.verifyAndRegister(req.body);
+    console.log('[registration] verifyAndRegister success, user created:', user?.id);
     res.status(201).json({ success: true, data: { user } });
   }),
 
