@@ -287,6 +287,16 @@ export const TimetablePage = () => {
   const [generateProgress, setGenerateProgress] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // Check if invigilators are already assigned for this session
+  const existingAssignmentsQuery = useQuery({
+    queryKey: ['venue-assignments', 'session-count', sessionId],
+    queryFn: () => venueAssignmentsApi.assignmentCount(sessionId),
+    enabled: !!sessionId && isAdmin,
+    staleTime: 30_000,
+  });
+
+  const sessionHasAssignments = invigilatorsAssigned || (existingAssignmentsQuery.data || 0) > 0;
+
   const generateMutation = useMutation({
     mutationFn: async (payload) => {
       setIsGenerating(true);
@@ -302,11 +312,17 @@ export const TimetablePage = () => {
       qc.invalidateQueries({ queryKey: ['invigilations'] });
       setResult(data);
       setGenerateOpen(false);
-      // If user chose to assign invigilators during generation, do it now
+      // Defer invigilator assignment — only after timetable is fully saved
       if (generateAssignInvigilators && hasInvigilators) {
-        assignMutation.mutate(sessionId, {
-          onSuccess: () => setInvigilatorsAssigned(true),
-        });
+        // Small delay to ensure timetable entries are committed
+        setTimeout(() => {
+          assignMutation.mutate(sessionId, {
+            onSuccess: () => {
+              setInvigilatorsAssigned(true);
+              qc.invalidateQueries({ queryKey: ['venue-assignments', 'session-count'] });
+            },
+          });
+        }, 500);
       } else {
         setInvigilatorsAssigned(false);
       }
@@ -537,18 +553,32 @@ export const TimetablePage = () => {
 
   const entries = useMemo(() => applyFilters(allEntries), [allEntries, filterDept, filterVenue, sortBy]);
 
-  // Detect clashes: same dept+level in the same slot (day+period)
+  // Detect clashes: same dept+level in the same slot (day+period).
+  // Entries with the same courseId are splits (same course across multiple venues), NOT clashes.
   const clashes = useMemo(() => {
     const clashSet = new Set();
-    const slotMap = new Map(); // slotKey -> Map(deptLevelKey -> count)
+    const slotMap = new Map(); // slotKey -> Map(deptLevelKey -> Map(courseId -> count))
     for (const entry of entries) {
       const slotKey = `${dateKey(entry.scheduledAt)}-${periodIndex(entry.scheduledAt)}`;
       const deptLevelKey = `${entry.course?.department?.id}:${entry.course?.level}`;
       if (!slotMap.has(slotKey)) slotMap.set(slotKey, new Map());
       const deptMap = slotMap.get(slotKey);
-      deptMap.set(deptLevelKey, (deptMap.get(deptLevelKey) || 0) + 1);
-      if (deptMap.get(deptLevelKey) > 1) {
-        clashSet.add(entry.id);
+      if (!deptMap.has(deptLevelKey)) deptMap.set(deptLevelKey, new Set());
+      deptMap.get(deptLevelKey).add(entry.course?.id);
+    }
+    // A clash is when the same dept+level in the same slot has MORE THAN ONE distinct courseId
+    for (const [, deptMap] of slotMap) {
+      for (const [, courseIds] of deptMap) {
+        if (courseIds.size > 1) {
+          // Flag all entries in this dept+level+slot as clashing
+          for (const entry of entries) {
+            const slotKey = `${dateKey(entry.scheduledAt)}-${periodIndex(entry.scheduledAt)}`;
+            const deptLevelKey = `${entry.course?.department?.id}:${entry.course?.level}`;
+            if (slotMap.get(slotKey)?.get(deptLevelKey) === courseIds) {
+              clashSet.add(entry.id);
+            }
+          }
+        }
       }
     }
     return clashSet;
@@ -982,10 +1012,11 @@ export const TimetablePage = () => {
               <button
                 className="btn-secondary"
                 onClick={() => assignMutation.mutate(sessionId)}
-                disabled={assignMutation.isPending}
+                disabled={assignMutation.isPending || sessionHasAssignments}
+                title={sessionHasAssignments ? 'Invigilators already assigned for this session' : ''}
               >
                 {assignMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
-                Assign Invigilators
+                {sessionHasAssignments ? 'Invigilators Assigned' : 'Assign Invigilators'}
               </button>
             )}
             {isAdmin && grid.length > 0 && (

@@ -143,6 +143,21 @@ const scheduleCourses = (courses, slots, venues) => {
   const unscheduled = [];
 
   /**
+   * Check for duplicate dept+level keys within a group.
+   * If the same dept+level appears more than once in a group, those courses
+   * would clash in the same slot. We must split the group.
+   */
+  const hasInternalClash = (group) => {
+    const seen = new Set();
+    for (const c of group) {
+      const k = `${c.departmentId}:${c.level}`;
+      if (seen.has(k)) return true;
+      seen.add(k);
+    }
+    return false;
+  };
+
+  /**
    * Try to place an entire group (1..N same-code courses) into one slot.
    * All members must satisfy dept+level constraints and get a venue,
    * preferring a DIFFERENT venue per member. Atomic: places all or none.
@@ -259,7 +274,8 @@ const scheduleCourses = (courses, slots, venues) => {
   /**
    * Relaxed placement: enforces no same dept+level in the same slot and
    * venue capacity, but allows the same dept+level to sit another exam
-   * on the same day. Used as a last-resort fallback.
+   * on the same day (different period). Used as a last-resort fallback.
+   * Same-slot clashes are NEVER allowed.
    */
   const tryPlaceGroupRelaxed = (group, slot) => {
     const busy = deptLevelBusy.get(slot.key);
@@ -341,45 +357,98 @@ const scheduleCourses = (courses, slots, venues) => {
   };
 
   for (const group of groups) {
-    let placed = false;
+    // If group has internal dept+level clash (duplicate courses),
+    // split into sub-groups by dept+level and place each separately.
+    const subGroups = hasInternalClash(group)
+      ? Object.values(group.reduce((acc, c) => {
+          const k = `${c.departmentId}:${c.level}`;
+          if (!acc[k]) acc[k] = [];
+          acc[k].push(c);
+          return acc;
+        }, {}))
+      : [group];
 
-    // --- Pass 1: with gap soft constraint ---
-    for (const slot of shuffledSlots) {
-      if (tryPlaceGroup(group, slot, true)) { placed = true; break; }
-    }
+    let allPlaced = true;
+    for (const subGroup of subGroups) {
+      let placed = false;
 
-    // --- Pass 2: fallback without gap constraint ---
-    if (!placed) {
+      // --- Pass 1: with gap soft constraint ---
       for (const slot of shuffledSlots) {
-        if (tryPlaceGroup(group, slot, false)) { placed = true; break; }
+        if (tryPlaceGroup(subGroup, slot, true)) { placed = true; break; }
       }
-    }
 
-    // --- Pass 3: relaxed — allow same dept+level on the same day ---
-    if (!placed) {
-      for (const slot of shuffledSlots) {
-        if (tryPlaceGroupRelaxed(group, slot)) { placed = true; break; }
+      // --- Pass 2: fallback without gap constraint ---
+      if (!placed) {
+        for (const slot of shuffledSlots) {
+          if (tryPlaceGroup(subGroup, slot, false)) { placed = true; break; }
+        }
       }
-    }
 
-    if (!placed) {
-      for (const course of group) {
-        unscheduled.push({
-          id: course.id,
-          code: course.code,
-          title: course.title,
-          studentCount: course.studentCount || 0,
-          reason: hasVenues && (course.studentCount || 0) > largestCapacity
-            ? 'Student count exceeds every venue capacity.'
-            : group.length > 1
-              ? 'This course is shared across departments and no single slot had enough venue capacity for all sections together.'
-              : 'No conflict-free slot available in the selected period.',
-        });
+      // --- Pass 3: relaxed — allow same dept+level on the same day (different period) ---
+      // Same-slot clashes are NEVER allowed.
+      if (!placed) {
+        for (const slot of shuffledSlots) {
+          if (tryPlaceGroupRelaxed(subGroup, slot)) { placed = true; break; }
+        }
+      }
+
+      if (!placed) {
+        allPlaced = false;
+        for (const course of subGroup) {
+          unscheduled.push({
+            id: course.id,
+            code: course.code,
+            title: course.title,
+            studentCount: course.studentCount || 0,
+            reason: hasVenues && (course.studentCount || 0) > largestCapacity
+              ? 'Student count exceeds every venue capacity.'
+              : subGroup.length > 1
+                ? 'This course is shared across departments and no single slot had enough venue capacity for all sections together.'
+                : 'No conflict-free slot available in the selected period.',
+          });
+        }
       }
     }
   }
 
-  return { placements, unscheduled };
+  // Verify no clashes exist in placements (same dept+level in same slot).
+  // This is a safety net — the algorithm should never produce clashes,
+  // but if it does, we remove the conflicting entries and mark them unscheduled.
+  const slotDeptLevelMap = new Map();
+  const clashPlacements = new Set();
+  for (const p of placements) {
+    const k = `${p.slot.key}:${p.course.departmentId}:${p.course.level}`;
+    if (!slotDeptLevelMap.has(k)) slotDeptLevelMap.set(k, []);
+    slotDeptLevelMap.get(k).push(p);
+  }
+  for (const [, plist] of slotDeptLevelMap) {
+    // Group by courseId — same courseId in same slot = split, not clash
+    const byCourseId = new Map();
+    for (const p of plist) {
+      if (!byCourseId.has(p.course.id)) byCourseId.set(p.course.id, []);
+      byCourseId.get(p.course.id).push(p);
+    }
+    // If more than one distinct courseId has the same dept+level in the same slot, it's a clash
+    if (byCourseId.size > 1) {
+      for (const p of plist) clashPlacements.add(p);
+    }
+  }
+
+  let finalPlacements = placements;
+  if (clashPlacements.size > 0) {
+    finalPlacements = placements.filter((p) => !clashPlacements.has(p));
+    for (const p of clashPlacements) {
+      unscheduled.push({
+        id: p.course.id,
+        code: p.course.code,
+        title: p.course.title,
+        studentCount: p.course.studentCount || 0,
+        reason: 'Clash detected — could not find a conflict-free slot. Try increasing the exam period duration.',
+      });
+    }
+  }
+
+  return { placements: finalPlacements, unscheduled };
 };
 
 export const timetableService = {

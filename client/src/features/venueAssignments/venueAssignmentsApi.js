@@ -11,4 +11,6 @@ export const venueAssignmentsApi = {
   myAssignments: () => api.get('/venue-assignments/my').then((r) => r.data.assignments),
   invigilatorCount: () => api.get('/venue-assignments/invigilator-count').then((r) => r.data.count),
   todayCount: () => api.get('/venue-assignments/today-count').then((r) => r.data.count),
+  assignmentCount: (examinationSessionId) =>
+    api.get('/venue-assignments', { params: { examinationSessionId, limit: 1 } }).then((r) => r.data.assignments?.length || 0),
 };
