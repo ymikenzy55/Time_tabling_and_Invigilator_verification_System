@@ -235,7 +235,7 @@ export const CourseApprovalsPage = () => {
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <div className="text-sm text-emerald-900">
             <span className="font-bold">All courses approved.</span>{' '}
-            <span className="text-emerald-700">You can now generate the examination timetable from the Timetable page.</span>
+            <span className="text-emerald-700">You can now generate the examination timetable from the All Courses page.</span>
           </div>
         </div>
         <EmptyState

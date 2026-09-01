@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -7,13 +7,12 @@ import { z } from 'zod';
 import toast from 'react-hot-toast';
 import {
   ShieldCheck, Loader2, AlertTriangle, Eye, EyeOff, CheckCircle2, Calendar,
-  ArrowLeft, ArrowRight, Check, Mail, KeyRound, RefreshCw, Timer,
+  ArrowLeft, ArrowRight, Check,
 } from 'lucide-react';
 import { registrationApi } from '@/features/registration/registrationApi';
 import { departmentsApi } from '@/features/academics/departmentsApi';
 import { strongPassword } from '@/lib/passwordRules';
 import { PasswordChecklist, MatchIndicator } from '@/features/users/PasswordChecklist';
-import { authApi } from '@/features/auth/authApi';
 
 const roleLabels = {
   DEPARTMENT_HEAD: 'Department Head',
@@ -91,176 +90,12 @@ const SuccessScreen = ({ onDone }) => {
   );
 };
 
-const VerifyEmailStep = ({ email, onVerified, onBack }) => {
-  const [code, setCode] = useState(['', '', '', '', '', '']);
-  const [verifying, setVerifying] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [verified, setVerified] = useState(false);
-  const [error, setError] = useState('');
-  const [resendCooldown, setResendCooldown] = useState(0);
-  const inputsRef = useRef([]);
-
-  const sendCode = useCallback(async () => {
-    setSending(true);
-    setError('');
-    try {
-      await authApi.sendVerificationCode(email);
-      toast.success('Verification code sent to your email.');
-      setResendCooldown(60);
-    } catch (err) {
-      setError(err.message || 'Failed to send verification code.');
-      toast.error(err.message || 'Failed to send verification code.');
-    } finally {
-      setSending(false);
-    }
-  }, [email]);
-
-  useEffect(() => {
-    sendCode();
-  }, [sendCode]);
-
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const timer = setInterval(() => {
-      setResendCooldown((prev) => Math.max(0, prev - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [resendCooldown]);
-
-  const handleCodeChange = (idx, val) => {
-    if (!/^\d?$/.test(val)) return;
-    const next = [...code];
-    next[idx] = val;
-    setCode(next);
-    setError('');
-    if (val && idx < 5) inputsRef.current[idx + 1]?.focus();
-  };
-
-  const handleKeyDown = (idx, e) => {
-    if (e.key === 'Backspace' && !code[idx] && idx > 0) {
-      inputsRef.current[idx - 1]?.focus();
-    }
-  };
-
-  const handlePaste = (e) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (pasted.length > 0) {
-      const next = pasted.split('');
-      while (next.length < 6) next.push('');
-      setCode(next);
-      inputsRef.current[Math.min(pasted.length, 5)]?.focus();
-    }
-  };
-
-  const handleVerify = async () => {
-    const fullCode = code.join('');
-    if (fullCode.length !== 6) {
-      setError('Please enter all 6 digits.');
-      return;
-    }
-    setVerifying(true);
-    setError('');
-    try {
-      await authApi.verifyEmail(email, fullCode);
-      setVerified(true);
-      toast.success('Email verified successfully!');
-      setTimeout(() => onVerified(fullCode), 1500);
-    } catch (err) {
-      setError(err.message || 'Invalid or expired code.');
-      toast.error(err.message || 'Invalid or expired code.');
-    } finally {
-      setVerifying(false);
-    }
-  };
-
-  if (verified) {
-    return (
-      <div className="text-center py-6">
-        <div className="w-14 h-14 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 grid place-items-center mx-auto mb-4">
-          <CheckCircle2 className="w-7 h-7" />
-        </div>
-        <h3 className="text-lg font-bold text-ink-900">Email Verified!</h3>
-        <p className="mt-2 text-sm text-ink-500">Submitting your registration…</p>
-        <Loader2 className="w-5 h-5 text-primary-600 animate-spin mx-auto mt-3" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-5">
-      <div className="text-center">
-        <div className="w-14 h-14 rounded-lg bg-primary-50 text-primary-600 border border-primary-100 grid place-items-center mx-auto mb-4">
-          <KeyRound className="w-7 h-7" />
-        </div>
-        <h3 className="text-lg font-bold text-ink-900">Verify your email</h3>
-        <p className="mt-2 text-sm text-ink-500">
-          Enter the 6-digit code sent to <strong className="text-ink-700">{email}</strong>
-        </p>
-      </div>
-
-      <div className="flex justify-center gap-2" onPaste={handlePaste}>
-        {code.map((digit, idx) => (
-          <input
-            key={idx}
-            ref={(el) => (inputsRef.current[idx] = el)}
-            type="text"
-            inputMode="numeric"
-            maxLength={1}
-            value={digit}
-            onChange={(e) => handleCodeChange(idx, e.target.value)}
-            onKeyDown={(e) => handleKeyDown(idx, e)}
-            disabled={verifying}
-            className="w-11 h-12 text-center text-xl font-bold border-2 rounded-lg focus:border-primary-600 focus:ring-2 focus:ring-primary-100 outline-none transition-colors"
-            style={{ borderColor: error ? '#fca5a5' : digit ? '#16a34a' : undefined }}
-          />
-        ))}
-      </div>
-
-      {error && <p className="text-center text-sm text-rose-600">{error}</p>}
-
-      <button
-        type="button"
-        onClick={handleVerify}
-        disabled={verifying || code.join('').length !== 6}
-        className="btn-primary w-full"
-      >
-        {verifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-        {verifying ? 'Verifying…' : 'Verify email'}
-      </button>
-
-      <div className="flex items-center justify-center gap-2 text-sm">
-        {resendCooldown > 0 ? (
-          <span className="text-ink-500 flex items-center gap-1">
-            <Timer className="w-3.5 h-3.5" /> Resend in {resendCooldown}s
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={sendCode}
-            disabled={sending}
-            className="text-primary-700 hover:text-primary-800 font-bold flex items-center gap-1"
-          >
-            {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-            Resend code
-          </button>
-        )}
-      </div>
-
-      <button type="button" onClick={onBack} className="btn-ghost w-full text-sm">
-        <ArrowLeft className="w-3.5 h-3.5" /> Back to form
-      </button>
-    </div>
-  );
-};
 
 export const RegisterPage = () => {
   const navigate = useNavigate();
   const [role, setRole] = useState('');
   const [staffIdCheck, setStaffIdCheck] = useState({ checking: false, available: null, message: '' });
   const [emailCheck, setEmailCheck] = useState({ checking: false, available: null, message: '' });
-  const [verificationCode, setVerificationCode] = useState('');
-  const [showVerifyStep, setShowVerifyStep] = useState(false);
 
   const statusQuery = useQuery({
     queryKey: ['registration', 'status'],
@@ -341,7 +176,6 @@ export const RegisterPage = () => {
         phone: values.phone || undefined,
         password: values.password,
         departmentName: values.departmentName,
-        verificationCode,
       });
     },
     onSuccess: () => {
@@ -350,22 +184,6 @@ export const RegisterPage = () => {
     },
     onError: (err) => toast.error(err.message || 'Registration failed. Please check your details and try again.'),
   });
-
-  const handleVerified = (code) => {
-    setVerificationCode(code);
-    setShowVerifyStep(false);
-    // Auto-submit after verification
-    const values = {
-      role,
-      email: emailValue,
-      fullName: watch('fullName'),
-      staffId: staffIdValue,
-      phone: watch('phone'),
-      password: watch('password'),
-      departmentName: watch('departmentName'),
-    };
-    submitMutation.mutate(values);
-  };
 
   if (statusQuery.isLoading) {
     return (
@@ -506,28 +324,6 @@ export const RegisterPage = () => {
 
   const handleBack = () => setStep((s) => Math.max(s - 1, 0));
 
-  if (showVerifyStep) {
-    return (
-      <div>
-        <div className="mb-6 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-primary-50 text-primary-600 border border-primary-100 grid place-items-center">
-            <Mail className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-ink-900">Email Verification</h2>
-            <p className="text-sm text-ink-500">Final step before submitting your registration.</p>
-          </div>
-        </div>
-        <VerifyEmailStep
-          email={emailValue}
-          onVerified={handleVerified}
-          onBack={() => setShowVerifyStep(false)}
-        />
-        <Link to="/login" className="btn-ghost mt-6 inline-flex w-full">Back to sign in</Link>
-      </div>
-    );
-  }
-
   return (
     <div>
       <div className="mb-6 flex items-center gap-3">
@@ -569,7 +365,7 @@ export const RegisterPage = () => {
         <p className="text-sm text-ink-500 text-center">Select a role to continue.</p>
       ) : (
         <form onSubmit={handleSubmit(async (v) => {
-          // Validate ALL steps before proceeding to verification
+          // Validate ALL steps before submitting
           const allFields = stepFields.flat();
           const valid = await trigger(allFields);
           if (!valid) {
@@ -583,7 +379,7 @@ export const RegisterPage = () => {
             toast.error(`Please fix these issues:\n${errorMessages.join('\n')}`);
             return;
           }
-          // Re-check staff ID and email before proceeding to verification
+          // Re-check staff ID and email before submitting
           try {
             const staffIdResult = await registrationApi.checkStaffId(v.staffId);
             if (!staffIdResult.available) {
@@ -601,8 +397,8 @@ export const RegisterPage = () => {
             toast.error('Could not verify availability. Please try again.');
             return;
           }
-          // Proceed to email verification step
-          setShowVerifyStep(true);
+          // Submit registration directly
+          submitMutation.mutate(v);
         })} className="space-y-4" noValidate>
           <input type="hidden" value={role} {...rf('role')} />
 
@@ -758,9 +554,9 @@ export const RegisterPage = () => {
                 {submitMutation.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <Mail className="w-4 h-4" />
+                  <CheckCircle2 className="w-4 h-4" />
                 )}
-                {submitMutation.isPending ? 'Submitting…' : 'Verify & Submit'}
+                {submitMutation.isPending ? 'Submitting…' : 'Submit Registration'}
               </button>
             )}
           </div>

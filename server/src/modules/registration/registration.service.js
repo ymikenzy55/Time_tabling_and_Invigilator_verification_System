@@ -122,7 +122,7 @@ export const registrationService = {
   /** PUBLIC: create a self-registered user. */
   async register(payload) {
     const {
-      role, email, fullName, staffId, phone, password, departmentName, departmentId, verificationCode,
+      role, email, fullName, staffId, phone, password, departmentName, departmentId,
     } = payload;
 
     if (!OPEN_ROLES.includes(role)) {
@@ -132,30 +132,6 @@ export const registrationService = {
     const window = await prisma.registrationWindow.findUnique({ where: { role } });
     if (!isOpen(window)) {
       throw ApiError.badRequest('Registration for this role is not currently open. Please try again during the registration window.');
-    }
-
-    // Email verification is required — user must verify before registering
-    if (!verificationCode) {
-      throw ApiError.badRequest('Email verification is required. Please verify your email before submitting.');
-    }
-
-    const verification = await prisma.emailVerification.findFirst({
-      where: {
-        email,
-        code: verificationCode,
-        verified: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!verification) {
-      throw ApiError.badRequest('Invalid or expired verification code. Please verify your email first.');
-    }
-
-    // Check if verification is recent (within 24 hours)
-    const hoursSinceVerification = (Date.now() - verification.createdAt.getTime()) / (1000 * 60 * 60);
-    if (hoursSinceVerification > 24) {
-      throw ApiError.badRequest('Verification code has expired. Please verify your email again.');
     }
 
     const existingEmail = await prisma.user.findUnique({ where: { email } });

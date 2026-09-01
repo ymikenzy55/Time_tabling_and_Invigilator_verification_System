@@ -23,7 +23,6 @@ export const registerSchema = z.object({
   password: strongPassword,
   departmentName: z.string().trim().optional(),
   departmentId: z.string().trim().optional(),
-  verificationCode: z.string().length(6, 'Verification code must be 6 digits.').optional(),
 }).superRefine((value, ctx) => {
   if (value.role === 'DEPARTMENT_HEAD' && !value.departmentName) {
     ctx.addIssue({

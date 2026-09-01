@@ -40,9 +40,9 @@ const processMissedScans = async () => {
         examinationSession: {
           select: {
             id: true,
-            timetableEntries: {
-              where: { venueId: undefined },
-              select: { examDurationMinutes: true },
+            invigilations: {
+              where: { venueId: assignment.venueId },
+              select: { windowClosesAt: true, windowOpensAt: true },
               take: 1,
             },
           },
