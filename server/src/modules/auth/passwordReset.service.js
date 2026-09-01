@@ -55,8 +55,8 @@ export const passwordResetService = {
 
     // Send email asynchronously (fire-and-forget) to avoid blocking the response
     if (isEmailConfigured()) {
-      // Use setImmediate to ensure email sending happens after response is sent
-      setImmediate(() => {
+      // Use Promise.resolve().then() for better compatibility
+      Promise.resolve().then(() => {
         sendEmail({
           to: user.email,
           subject: 'Password Reset — Examination Management System',
