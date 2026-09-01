@@ -389,7 +389,18 @@ export const RegisterPage = () => {
     // Step 2 (Security): send verification code before advancing to verification step
     if (step === 2) {
       const allValid = await trigger(stepFields[2]);
-      if (!allValid) return;
+      if (!allValid) {
+        const invalidFields = stepFields[2].filter(field => errors[field]);
+        if (invalidFields.length > 0) {
+          const labels = {
+            password: 'Password',
+            confirm: 'Confirm password',
+          };
+          const fieldNames = invalidFields.map(f => labels[f] || f);
+          toast.error(`Please fix: ${fieldNames.join(', ')}`);
+        }
+        return;
+      }
       const values = watch();
       try {
         await sendCodeMutation.mutateAsync({
