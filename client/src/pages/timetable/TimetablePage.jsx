@@ -996,6 +996,14 @@ export const TimetablePage = () => {
                 <CalendarRange className="w-4 h-4" /> Regenerate Timetable
               </button>
             )}
+            {isAdmin && grid.length === 0 && isReady && (
+              <button
+                className="btn-primary"
+                onClick={openGenerate}
+              >
+                <CalendarRange className="w-4 h-4" /> Generate Timetable
+              </button>
+            )}
             {isAdmin && grid.length > 0 && (
               <button
                 className="btn-secondary text-rose-600 hover:text-rose-700"
@@ -1236,9 +1244,20 @@ export const TimetablePage = () => {
             icon={CalendarRange}
             title="No timetable yet"
             description={isAdmin
-              ? 'Generate a timetable for this session using the button above.'
+              ? 'Click the button below to generate a timetable for this examination session.'
               : 'The examination timetable has not been generated yet.'}
           />
+          {isAdmin && (
+            <div className="flex justify-center mt-6">
+              <button
+                className="btn-primary"
+                onClick={openGenerate}
+                disabled={!isReady}
+              >
+                <CalendarRange className="w-4 h-4" /> Generate Timetable
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="bg-white border border-slate-300 w-full print:border-none print:shadow-none" style={{ fontFamily: "'Times New Roman', Cambria, Calibri, serif" }}>
