@@ -51,8 +51,13 @@ export const Sidebar = ({ open = true }) => {
   const courseLevelsQuery = useQuery({
     queryKey: ['course-levels', { scope: 'sidebar' }],
     queryFn: async () => {
-      const { levels = [] } = await courseLevelsApi.list();
-      return levels;
+      try {
+        const data = await courseLevelsApi.list();
+        return data?.levels || [];
+      } catch (error) {
+        console.error('Failed to load course levels:', error);
+        return [];
+      }
     },
     enabled: user?.role === 'DEPARTMENT_HEAD',
     staleTime: 5 * 60_000,
