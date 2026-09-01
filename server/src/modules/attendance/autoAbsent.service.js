@@ -37,16 +37,6 @@ const processMissedScans = async () => {
         slotAt: true,
         venue: { select: { id: true, name: true } },
         invigilator: { select: { id: true, fullName: true, staffId: true, isDemo: true } },
-        examinationSession: {
-          select: {
-            id: true,
-            invigilations: {
-              where: { venueId: assignment.venueId },
-              select: { windowClosesAt: true, windowOpensAt: true },
-              take: 1,
-            },
-          },
-        },
       },
     });
 
