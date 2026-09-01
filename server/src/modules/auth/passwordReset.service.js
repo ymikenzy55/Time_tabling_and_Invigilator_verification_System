@@ -55,8 +55,8 @@ export const passwordResetService = {
 
     // Send email asynchronously (fire-and-forget) to avoid blocking the response
     if (isEmailConfigured()) {
-      // Use Promise.resolve().then() for better compatibility
-      Promise.resolve().then(() => {
+      // Use setImmediate to ensure the response is sent before email sending starts
+      setImmediate(() => {
         sendEmail({
           to: user.email,
           subject: 'Password Reset — Examination Management System',
@@ -89,10 +89,14 @@ export const passwordResetService = {
               </p>
             </div>
           `,
+        }).then(() => {
+          console.log('[PasswordReset] Reset email sent successfully to', user.email);
         }).catch((err) => {
-          console.error('[PasswordReset] Failed to send email:', err);
+          console.error('[PasswordReset] Failed to send email:', err.message || err);
         });
       });
+    } else {
+      console.warn('[PasswordReset] Email not configured — reset link will be returned in response');
     }
 
     logAudit({

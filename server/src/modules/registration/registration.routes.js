@@ -10,6 +10,7 @@ const router = Router();
 // Public endpoints used by the login/register page.
 router.get('/status', registrationController.status);
 router.get('/check-staff-id', registrationController.checkStaffId);
+router.get('/check-email', registrationController.checkEmail);
 router.post('/', validate(registerSchema), registrationController.register);
 
 // Admin-only management of the windows.

@@ -12,6 +12,11 @@ export const registrationController = {
     res.json({ success: true, data });
   }),
 
+  checkEmail: asyncHandler(async (req, res) => {
+    const data = await registrationService.checkEmail(req.query.email);
+    res.json({ success: true, data });
+  }),
+
   register: asyncHandler(async (req, res) => {
     const user = await registrationService.register(req.body);
     res.status(201).json({ success: true, data: { user } });

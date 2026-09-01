@@ -46,7 +46,7 @@ export const venueAssignmentsService = {
 
     const invigilators = await prisma.user.findMany({
       where: { role: 'INVIGILATOR', status: 'ACTIVE' },
-      select: { id: true, fullName: true, email: true, staffId: true, departmentId: true },
+      select: { id: true, fullName: true, email: true, staffId: true, departmentId: true, isDemo: true },
       orderBy: { fullName: 'asc' },
     });
 
@@ -133,6 +133,52 @@ export const venueAssignmentsService = {
           invigilatorId: invigilator.id,
           slotAt: group.slotAt,
         });
+      }
+    }
+
+    // ── Demo invigilator auto-assignment ──────────────────────────────
+    // Demo invigilators get assigned to 3 different venues per day (one per
+    // time slot: 8AM, 11AM, 2PM) so they can scan at any time for demos.
+    const demoInvigilators = invigilators.filter((i) => i.isDemo);
+
+    if (demoInvigilators.length > 0 && venueSlotGroups.size > 0) {
+      // Group venue slots by day
+      const dayGroups = new Map(); // dateStr -> [{ venueId, slotAt }]
+      for (const [, group] of venueSlotGroups) {
+        const dateStr = new Date(group.slotAt).toDateString();
+        if (!dayGroups.has(dateStr)) dayGroups.set(dateStr, []);
+        dayGroups.get(dateStr).push(group);
+      }
+
+      for (const demoInv of demoInvigilators) {
+        for (const [, daySlots] of dayGroups) {
+          // Sort slots by time
+          daySlots.sort((a, b) => new Date(a.slotAt) - new Date(b.slotAt));
+
+          // Pick up to 3 different venues for this day (one per time slot)
+          const usedVenues = new Set();
+          let picked = 0;
+          for (const slot of daySlots) {
+            if (picked >= 3) break;
+            if (usedVenues.has(slot.venueId)) continue;
+            usedVenues.add(slot.venueId);
+
+            // Check no conflict
+            const existingSlots = invigilatorSlots.get(demoInv.id) || [];
+            const hasConflict = existingSlots.some((s) => isSameTimeSlot(s.slotAt, slot.slotAt));
+            if (hasConflict) continue;
+
+            assignmentRows.push({
+              examinationSessionId,
+              venueId: slot.venueId,
+              invigilatorId: demoInv.id,
+              slotAt: slot.slotAt,
+            });
+            existingSlots.push({ slotAt: slot.slotAt, venueId: slot.venueId });
+            invigilatorSlots.set(demoInv.id, existingSlots);
+            picked++;
+          }
+        }
       }
     }
 

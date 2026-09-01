@@ -131,20 +131,31 @@ export const RegisterPage = () => {
   const confirm = watch('confirm');
 
   const submitMutation = useMutation({
-    mutationFn: (values) => registrationApi.register({
-      role: values.role,
-      email: values.email,
-      fullName: values.fullName,
-      staffId: values.staffId,
-      phone: values.phone || undefined,
-      password: values.password,
-      departmentName: values.departmentName,
-    }),
+    mutationFn: async (values) => {
+      // Re-check staff ID and email availability right before submitting
+      const staffIdResult = await registrationApi.checkStaffId(values.staffId);
+      if (!staffIdResult.available) {
+        throw new Error('This Staff ID is already in use. Please go back and change it.');
+      }
+      const emailResult = await registrationApi.checkEmail(values.email);
+      if (!emailResult.available) {
+        throw new Error('This email is already registered. Please go back and change it.');
+      }
+      return registrationApi.register({
+        role: values.role,
+        email: values.email,
+        fullName: values.fullName,
+        staffId: values.staffId,
+        phone: values.phone || undefined,
+        password: values.password,
+        departmentName: values.departmentName,
+      });
+    },
     onSuccess: () => {
       toast.success('Account submitted. Awaiting Exam Officer approval.');
       reset();
     },
-    onError: (err) => toast.error(err.message || 'Registration failed.'),
+    onError: (err) => toast.error(err.message || 'Registration failed. Please check your details and try again.'),
   });
 
   if (statusQuery.isLoading) {
@@ -219,23 +230,64 @@ export const RegisterPage = () => {
   const isLastStep = step === totalSteps - 1;
 
   const handleNext = async () => {
+    // Validate current step fields
     const valid = await trigger(stepFields[step]);
-    if (!valid) return;
+    if (!valid) {
+      // Show which fields are invalid
+      const invalidFields = stepFields[step].filter(field => errors[field]);
+      if (invalidFields.length > 0) {
+        const fieldNames = invalidFields.map(f => {
+          const labels = {
+            fullName: 'Full name',
+            email: 'Email address',
+            staffId: 'Staff ID',
+            phone: 'Phone',
+            departmentName: 'Department',
+            password: 'Password',
+            confirm: 'Confirm password',
+          };
+          return labels[f] || f;
+        });
+        toast.error(`Please fix the following: ${fieldNames.join(', ')}`);
+      }
+      return;
+    }
 
+    // Step 0: Check staff ID and email availability
     if (step === 0) {
       const staffId = watch('staffId')?.trim();
-      if (staffId) {
-        setStaffIdCheck({ checking: true, available: null, message: '' });
-        try {
-          const result = await registrationApi.checkStaffId(staffId);
-          if (!result.available) {
-            setStaffIdCheck({ checking: false, available: false, message: 'This Staff ID is already in use.' });
-            return;
-          }
-          setStaffIdCheck({ checking: false, available: true, message: 'Staff ID is available.' });
-        } catch {
-          setStaffIdCheck({ checking: false, available: null, message: '' });
+      const email = watch('email')?.trim();
+      
+      if (!staffId) {
+        toast.error('Staff ID is required');
+        return;
+      }
+
+      setStaffIdCheck({ checking: true, available: null, message: '' });
+      
+      try {
+        // Check staff ID
+        const staffIdResult = await registrationApi.checkStaffId(staffId);
+        if (!staffIdResult.available) {
+          setStaffIdCheck({ checking: false, available: false, message: 'This Staff ID is already registered or pending approval.' });
+          toast.error('This Staff ID is already in use. Please use a different Staff ID.');
+          return;
         }
+
+        // Check email
+        const emailResult = await registrationApi.checkEmail(email);
+        if (!emailResult.available) {
+          setStaffIdCheck({ checking: false, available: null, message: '' });
+          toast.error('This email address is already registered or pending approval. Please use a different email.');
+          return;
+        }
+
+        setStaffIdCheck({ checking: false, available: true, message: 'Staff ID is available.' });
+        toast.success('Staff ID and email are available!');
+      } catch (err) {
+        setStaffIdCheck({ checking: false, available: null, message: '' });
+        toast.error(err.message || 'Could not verify availability. Please try again.');
+        return;
       }
     }
 
@@ -284,7 +336,23 @@ export const RegisterPage = () => {
       {!role ? (
         <p className="text-sm text-ink-500 text-center">Select a role to continue.</p>
       ) : (
-        <form onSubmit={handleSubmit((v) => submitMutation.mutate(v))} className="space-y-4" noValidate>
+        <form onSubmit={handleSubmit(async (v) => {
+          // Validate ALL steps before submitting
+          const allFields = stepFields.flat();
+          const valid = await trigger(allFields);
+          if (!valid) {
+            const errorMessages = [];
+            if (errors.fullName) errorMessages.push('Full name is required');
+            if (errors.email) errorMessages.push('Valid email is required');
+            if (errors.staffId) errorMessages.push('Staff ID is required');
+            if (errors.departmentName) errorMessages.push('Department is required');
+            if (errors.password) errorMessages.push('Password does not meet requirements');
+            if (errors.confirm) errorMessages.push(errors.confirm.message || 'Passwords do not match');
+            toast.error(`Please fix these issues before submitting:\n${errorMessages.join('\n')}`);
+            return;
+          }
+          submitMutation.mutate(v);
+        })} className="space-y-4" noValidate>
           <input type="hidden" value={role} {...rf('role')} />
 
           {/* Step indicator */}

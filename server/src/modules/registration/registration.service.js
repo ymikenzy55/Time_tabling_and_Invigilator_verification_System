@@ -112,6 +112,13 @@ export const registrationService = {
     return { available: !existing };
   },
 
+  /** PUBLIC: check if an email is already taken. */
+  async checkEmail(email) {
+    if (!email || !email.trim()) return { available: false };
+    const existing = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    return { available: !existing };
+  },
+
   /** PUBLIC: create a self-registered user. */
   async register(payload) {
     const {
@@ -127,28 +134,26 @@ export const registrationService = {
       throw ApiError.badRequest('Registration for this role is not currently open. Please try again during the registration window.');
     }
 
-    // Check email verification
-    if (!verificationCode) {
-      throw ApiError.badRequest('Please verify your email address first.');
-    }
+    // Check email verification (optional — only if code is provided)
+    if (verificationCode) {
+      const verification = await prisma.emailVerification.findFirst({
+        where: {
+          email,
+          code: verificationCode,
+          verified: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
 
-    const verification = await prisma.emailVerification.findFirst({
-      where: {
-        email,
-        code: verificationCode,
-        verified: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+      if (!verification) {
+        throw ApiError.badRequest('Invalid or expired verification code. Please verify your email first.');
+      }
 
-    if (!verification) {
-      throw ApiError.badRequest('Invalid or expired verification code. Please verify your email first.');
-    }
-
-    // Check if verification is recent (within 24 hours)
-    const hoursSinceVerification = (Date.now() - verification.createdAt.getTime()) / (1000 * 60 * 60);
-    if (hoursSinceVerification > 24) {
-      throw ApiError.badRequest('Verification code has expired. Please verify your email again.');
+      // Check if verification is recent (within 24 hours)
+      const hoursSinceVerification = (Date.now() - verification.createdAt.getTime()) / (1000 * 60 * 60);
+      if (hoursSinceVerification > 24) {
+        throw ApiError.badRequest('Verification code has expired. Please verify your email again.');
+      }
     }
 
     const existingEmail = await prisma.user.findUnique({ where: { email } });
