@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { registrationController } from './registration.controller.js';
-import { setWindowSchema, registerSchema, sendVerificationCodeSchema, verifyAndRegisterSchema } from './registration.validators.js';
+import { setWindowSchema, sendVerificationCodeSchema, verifyAndRegisterSchema } from './registration.validators.js';
 import { validate } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { requireRole } from '../../middleware/rbac.js';
@@ -13,7 +13,6 @@ router.get('/check-staff-id', registrationController.checkStaffId);
 router.get('/check-email', registrationController.checkEmail);
 router.post('/send-code', validate(sendVerificationCodeSchema), registrationController.sendVerificationCode);
 router.post('/verify', validate(verifyAndRegisterSchema), registrationController.verifyAndRegister);
-router.post('/', validate(registerSchema), registrationController.register);
 
 // Admin-only management of the windows.
 router.use(requireAuth, requireRole('SUPER_ADMIN'));

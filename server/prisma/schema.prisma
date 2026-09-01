@@ -13,7 +13,7 @@ model AcademicYear {
   startDate DateTime
   endDate   DateTime
   isActive  Boolean    @default(false)
-  Semester  Semester[]
+  semesters Semester[]
 }
 
 model Attendance {
@@ -25,8 +25,8 @@ model Attendance {
   ipAddress      String?
   userAgent      String?
   notes          String?
-  Invigilation   Invigilation     @relation(fields: [invigilationId], references: [id], onDelete: Cascade)
-  User           User?            @relation(fields: [userId], references: [id])
+  invigilation   Invigilation     @relation(fields: [invigilationId], references: [id], onDelete: Cascade)
+  user           User?            @relation(fields: [userId], references: [id])
 
   @@index([invigilationId])
   @@index([invigilationId, userId])
@@ -45,7 +45,7 @@ model AuditLog {
   ipAddress  String?
   userAgent  String?
   createdAt  DateTime @default(now())
-  User       User?    @relation(fields: [actorId], references: [id])
+  actor      User?    @relation(fields: [actorId], references: [id])
 
   @@index([action])
   @@index([actorId, createdAt])
@@ -76,11 +76,11 @@ model Course {
   approvedAt                     DateTime?
   instructorName                 String?
   isPractical                    Boolean        @default(false)
-  User_Course_approvedByIdToUser User?          @relation("Course_approvedByIdToUser", fields: [approvedById], references: [id])
-  User_Course_createdByIdToUser  User?          @relation("Course_createdByIdToUser", fields: [createdById], references: [id])
-  Department                     Department     @relation(fields: [departmentId], references: [id])
-  Semester                       Semester       @relation(fields: [semesterId], references: [id])
-  Invigilation                   Invigilation[]
+  approvedBy                     User?          @relation("Course_approvedByIdToUser", fields: [approvedById], references: [id])
+  createdBy                      User?          @relation("Course_createdByIdToUser", fields: [createdById], references: [id])
+  department                     Department     @relation(fields: [departmentId], references: [id])
+  semester                       Semester       @relation(fields: [semesterId], references: [id])
+  invigilations                  Invigilation[]
 
   @@unique([code, semesterId])
   @@index([createdById, status])
@@ -99,7 +99,7 @@ model CourseLevel {
   departmentId String
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @default(now()) @updatedAt
-  Department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
 
   @@unique([departmentId, value])
   @@index([departmentId, value])
@@ -111,9 +111,9 @@ model Department {
   code        String        @unique
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @default(now()) @updatedAt
-  Course      Course[]
-  CourseLevel CourseLevel[]
-  User        User[]
+  courses     Course[]
+  courseLevels CourseLevel[]
+  users       User[]
 }
 
 model EmailVerification {
@@ -139,10 +139,10 @@ model ExaminationSession {
   isPublished     Boolean           @default(false)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @default(now()) @updatedAt
-  Semester        Semester          @relation(fields: [semesterId], references: [id])
-  Invigilation    Invigilation[]
-  VenueAssignment VenueAssignment[]
-  VenueScan       VenueScan[]
+  semester        Semester          @relation(fields: [semesterId], references: [id])
+  invigilations   Invigilation[]
+  venueAssignments VenueAssignment[]
+  venueScans      VenueScan[]
 }
 
 model Invigilation {
@@ -160,12 +160,12 @@ model Invigilation {
   updatedAt                             DateTime           @default(now()) @updatedAt
   venueId                               String?
   splitRange                            String?
-  Attendance                            Attendance[]
-  Course                                Course             @relation(fields: [courseId], references: [id])
-  ExaminationSession                    ExaminationSession @relation(fields: [examinationSessionId], references: [id], onDelete: Cascade)
-  User_Invigilation_invigilatorIdToUser User?              @relation("Invigilation_invigilatorIdToUser", fields: [invigilatorId], references: [id])
-  User_Invigilation_replacementIdToUser User?              @relation("Invigilation_replacementIdToUser", fields: [replacementId], references: [id])
-  Venue                                 Venue?             @relation(fields: [venueId], references: [id])
+  attendance                            Attendance[]
+  course                                Course             @relation(fields: [courseId], references: [id])
+  examinationSession                    ExaminationSession @relation(fields: [examinationSessionId], references: [id], onDelete: Cascade)
+  invigilator                           User?              @relation("Invigilation_invigilatorIdToUser", fields: [invigilatorId], references: [id])
+  replacement                           User?              @relation("Invigilation_replacementIdToUser", fields: [replacementId], references: [id])
+  venue                                 Venue?             @relation(fields: [venueId], references: [id])
 
   @@index([courseId])
   @@index([examinationSessionId, scheduledAt])
@@ -186,7 +186,7 @@ model Notification {
   data      Json?
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
-  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([type])
   @@index([userId, createdAt])
@@ -200,7 +200,7 @@ model PasswordReset {
   expiresAt DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
-  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
   @@index([userId])
@@ -223,9 +223,9 @@ model Semester {
   startDate          DateTime
   endDate            DateTime
   isActive           Boolean              @default(false)
-  Course             Course[]
-  ExaminationSession ExaminationSession[]
-  AcademicYear       AcademicYear         @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  courses            Course[]
+  examinationSessions ExaminationSession[]
+  academicYear       AcademicYear         @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
 
   @@unique([academicYearId, name])
 }
@@ -253,19 +253,19 @@ model User {
   departmentName                                String?
   createdById                                   String?
   isDemo                                        Boolean           @default(false)
-  Attendance                                    Attendance[]
-  AuditLog                                      AuditLog[]
-  Course_Course_approvedByIdToUser              Course[]          @relation("Course_approvedByIdToUser")
-  Course_Course_createdByIdToUser               Course[]          @relation("Course_createdByIdToUser")
-  Invigilation_Invigilation_invigilatorIdToUser Invigilation[]    @relation("Invigilation_invigilatorIdToUser")
-  Invigilation_Invigilation_replacementIdToUser Invigilation[]    @relation("Invigilation_replacementIdToUser")
-  Notification                                  Notification[]
-  PasswordReset                                 PasswordReset[]
-  User                                          User?             @relation("UserToUser", fields: [createdById], references: [id])
-  other_User                                    User[]            @relation("UserToUser")
-  Department                                    Department?       @relation(fields: [departmentId], references: [id])
-  VenueAssignment                               VenueAssignment[]
-  VenueScan                                     VenueScan[]
+  attendance                                    Attendance[]
+  auditLogs                                     AuditLog[]
+  approvedCourses                               Course[]          @relation("Course_approvedByIdToUser")
+  createdCourses                                Course[]          @relation("Course_createdByIdToUser")
+  invigilations                                 Invigilation[]    @relation("Invigilation_invigilatorIdToUser")
+  replacements                                  Invigilation[]    @relation("Invigilation_replacementIdToUser")
+  notifications                                 Notification[]
+  passwordResets                                PasswordReset[]
+  createdBy                                     User?             @relation("UserToUser", fields: [createdById], references: [id])
+  createdUsers                                  User[]            @relation("UserToUser")
+  department                                    Department?       @relation(fields: [departmentId], references: [id])
+  venueAssignments                              VenueAssignment[]
+  venueScans                                    VenueScan[]
 
   @@index([departmentId])
   @@index([email])
@@ -282,9 +282,9 @@ model Venue {
   isActive        Boolean           @default(true)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @default(now()) @updatedAt
-  Invigilation    Invigilation[]
-  VenueAssignment VenueAssignment[]
-  VenueScan       VenueScan[]
+  invigilations    Invigilation[]
+  venueAssignments VenueAssignment[]
+  venueScans       VenueScan[]
 
   @@index([isActive])
 }
@@ -296,9 +296,9 @@ model VenueAssignment {
   invigilatorId        String
   slotAt               DateTime
   createdAt            DateTime           @default(now())
-  ExaminationSession   ExaminationSession @relation(fields: [examinationSessionId], references: [id], onDelete: Cascade)
-  User                 User               @relation(fields: [invigilatorId], references: [id], onDelete: Cascade)
-  Venue                Venue              @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  examinationSession   ExaminationSession @relation(fields: [examinationSessionId], references: [id], onDelete: Cascade)
+  invigilator          User               @relation(fields: [invigilatorId], references: [id], onDelete: Cascade)
+  venue                Venue              @relation(fields: [venueId], references: [id], onDelete: Cascade)
 
   @@unique([examinationSessionId, venueId, slotAt, invigilatorId])
   @@index([examinationSessionId, venueId])
@@ -320,9 +320,9 @@ model VenueScan {
   locationAccuracy     Float?
   longitude            Float?
   locationAddress      String?
-  ExaminationSession   ExaminationSession @relation(fields: [examinationSessionId], references: [id], onDelete: Cascade)
-  User                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  Venue                Venue              @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  examinationSession   ExaminationSession @relation(fields: [examinationSessionId], references: [id], onDelete: Cascade)
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  venue                Venue              @relation(fields: [venueId], references: [id], onDelete: Cascade)
 
   @@index([examinationSessionId, venueId])
   @@index([examinationSessionId, venueId, scannedAt])

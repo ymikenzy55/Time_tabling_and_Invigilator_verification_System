@@ -292,25 +292,6 @@ export const RegisterPage = () => {
     },
   });
 
-  const submitMutation = useMutation({
-    mutationFn: async (values) => {
-      return registrationApi.register({
-        role: values.role,
-        email: values.email,
-        fullName: values.fullName,
-        staffId: values.staffId,
-        phone: values.phone || undefined,
-        password: values.password,
-        departmentName: values.departmentName,
-      });
-    },
-    onSuccess: () => {
-      toast.success('Account submitted. Awaiting Exam Officer approval.');
-      reset();
-    },
-    onError: (err) => toast.error(err.message || 'Registration failed. Please check your details and try again.'),
-  });
-
   if (statusQuery.isLoading) {
     return (
       <div className="py-10 flex flex-col items-center text-ink-500">
@@ -344,10 +325,6 @@ export const RegisterPage = () => {
   const nextOpen = roles.find((r) => !r.open && r.opensAt && new Date(r.opensAt) > new Date());
 
   if (verifyMutation.isSuccess) {
-    return <SuccessScreen onDone={() => navigate('/login', { replace: true })} />;
-  }
-
-  if (submitMutation.isSuccess) {
     return <SuccessScreen onDone={() => navigate('/login', { replace: true })} />;
   }
 

@@ -6,7 +6,6 @@ export const registrationApi = {
   checkEmail: (email) => api.get('/registration/check-email', { params: { email } }).then((r) => r.data),
   sendVerificationCode: (payload) => api.post('/registration/send-code', payload).then((r) => r.data),
   verifyAndRegister: (payload) => api.post('/registration/verify', payload).then((r) => r.data.user),
-  register: (payload) => api.post('/registration', payload).then((r) => r.data.user),
   listWindows: () => api.get('/registration/windows').then((r) => r.data.windows),
   setWindow: (role, payload) =>
     api.put(`/registration/windows/${role}`, payload).then((r) => r.data.window),
