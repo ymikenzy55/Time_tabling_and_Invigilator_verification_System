@@ -7,13 +7,13 @@
 # connection string. See DEPLOYMENT.md for the full walkthrough.
 
 services:
-  # ── Single service: Backend + Frontend ──────────────────────
+  # ── Backend: Express + Socket.IO API ──────────────────────────
   - type: web
     name: exam-management-server
     env: node
-    rootDir: .
-    buildCommand: cd server && npm install && npx prisma generate && cd ../client && npm install && npm run build
-    startCommand: cd server && npx prisma migrate deploy && npm start
+    rootDir: server
+    buildCommand: npm install && npx prisma generate
+    startCommand: npx prisma migrate deploy; npm start
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
@@ -27,7 +27,7 @@ services:
       - key: QR_SIGNING_SECRET
         sync: false  # set manually in Render dashboard (min 16 chars)
       - key: CLIENT_ORIGIN
-        sync: false  # set to your Render URL
+        sync: false  # set to your Vercel frontend URL
       - key: SUPER_ADMIN_EMAIL
         sync: false
       - key: SUPER_ADMIN_PASSWORD
