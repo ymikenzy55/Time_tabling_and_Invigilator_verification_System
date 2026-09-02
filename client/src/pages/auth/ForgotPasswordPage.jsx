@@ -30,7 +30,7 @@ export const ForgotPasswordPage = () => {
       setSent(true);
       toast.success(data.message || 'Password reset link sent.');
     },
-    onError: (err) => toast.error(err.message || 'Could not process request.'),
+    onError: (err) => toast.error(err.message || 'Could not send reset link.'),
   });
 
   if (sent) {
