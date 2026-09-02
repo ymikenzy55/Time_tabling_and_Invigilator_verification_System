@@ -536,7 +536,7 @@ export const CoursesPage = () => {
             {listError}
           </div>
         ) : isLoading ? (
-          <SkeletonTable rows={8} cols={5} />
+          <SkeletonTable rows={8} cols={5} label="Loading courses…" />
         ) : courses.length === 0 ? (
           <div className="p-10">
             <EmptyState

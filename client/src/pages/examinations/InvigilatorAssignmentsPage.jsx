@@ -273,7 +273,7 @@ export const InvigilatorAssignmentsPage = () => {
       {selectedSession && activeTab === 'assignments' && (
         <>
           {assignmentsQuery.isLoading ? (
-            <SkeletonCardGrid count={4} lines={3} />
+            <SkeletonCardGrid count={4} lines={3} label="Loading assignments…" />
           ) : assignments.length === 0 ? (
             <EmptyState
               icon={ClipboardList}
@@ -398,7 +398,7 @@ export const InvigilatorAssignmentsPage = () => {
           </div>
 
           {scansQuery.isLoading ? (
-            <SkeletonCardGrid count={4} lines={3} />
+            <SkeletonCardGrid count={4} lines={3} label="Loading check-ins…" />
           ) : scans.length === 0 ? (
             <EmptyState
               icon={CheckCircle2}

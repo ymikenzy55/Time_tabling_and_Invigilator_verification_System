@@ -86,7 +86,7 @@ export const AttendanceRecordsPage = () => {
       </div>
 
       {query.isLoading ? (
-        <SkeletonTable rows={6} cols={5} />
+        <SkeletonTable rows={6} cols={5} label="Loading attendance records…" />
       ) : records.length === 0 ? (
         <EmptyState
           icon={ClipboardList}

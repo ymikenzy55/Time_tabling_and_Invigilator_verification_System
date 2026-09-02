@@ -248,6 +248,10 @@ export const ExaminationsPage = () => {
 
           {isLoading ? (
             <div className="p-4 space-y-3">
+              <div className="flex items-center gap-2 text-sm text-ink-400">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Loading examination sessions…
+              </div>
               {Array.from({ length: 4 }).map((_, i) => (
                 <SkeletonCard key={i} lines={2} />
               ))}
@@ -323,7 +327,7 @@ export const ExaminationsPage = () => {
 
               {invigilationsQuery.isLoading ? (
                 <div className="p-4">
-                  <SkeletonTable rows={4} cols={4} />
+                  <SkeletonTable rows={4} cols={4} label="Loading invigilators…" />
                 </div>
               ) : invigilations.length === 0 ? (
                 <div className="p-10">

@@ -14,6 +14,15 @@ export const venuesService = {
       prisma.venue.findMany({
         where: activeOnly ? { isActive: true } : undefined,
         orderBy: [{ createdAt: 'desc' }],
+        select: {
+          id: true,
+          name: true,
+          capacity: true,
+          location: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+        },
       })
     );
   },

@@ -13,6 +13,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Badge } from '@/components/ui/Badge';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { coursesApi } from '@/features/courses/coursesApi';
 import { semestersApi } from '@/features/academics/semestersApi';
@@ -299,9 +300,7 @@ export const CoursesByLevelPage = () => {
       ) : (
         <div className="panel overflow-hidden">
           {coursesQuery.isLoading ? (
-            <div className="p-10 grid place-items-center text-ink-500">
-              <Loader2 className="w-5 h-5 animate-spin" />
-            </div>
+            <SkeletonTable rows={6} cols={5} label="Loading courses…" />
           ) : courses.length === 0 ? (
             <div className="p-10">
               <EmptyState

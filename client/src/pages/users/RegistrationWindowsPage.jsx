@@ -314,7 +314,7 @@ export const RegistrationWindowsPage = () => {
       />
 
       {listQuery.isLoading ? (
-        <SkeletonCardGrid count={4} lines={3} />
+        <SkeletonCardGrid count={4} lines={3} label="Loading registration windows…" />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {windows.map((w) => (

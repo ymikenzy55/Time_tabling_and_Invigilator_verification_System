@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { courseLevelsApi } from '@/features/courses/courseLevelsApi';
 import { departmentsApi } from '@/features/academics/departmentsApi';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 import { useConfirm } from '@/components/ui/ConfirmDialog';
 import { useAuth } from '@/context/AuthContext';
 
@@ -195,9 +196,7 @@ export const CourseLevelsPage = () => {
               Select a department to view and manage its course levels.
             </div>
           ) : levelsQuery.isLoading ? (
-            <div className="p-8 grid place-items-center text-ink-400">
-              <Loader2 className="w-5 h-5 animate-spin" />
-            </div>
+            <SkeletonTable rows={4} cols={4} label="Loading course levels…" />
           ) : levels.length === 0 ? (
             <div className="p-8">
               <EmptyState

@@ -342,7 +342,7 @@ export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
       )}
 
       {query.isLoading && (
-        <SkeletonTable rows={6} cols={7} />
+        <SkeletonTable rows={6} cols={7} label="Loading users…" />
       )}
 
       {query.isError && (

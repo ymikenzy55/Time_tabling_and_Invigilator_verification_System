@@ -228,7 +228,7 @@ export const CourseApprovalsPage = () => {
       )}
 
       {listQuery.isLoading ? (
-        <SkeletonCardGrid count={6} lines={2} />
+        <SkeletonCardGrid count={6} lines={2} label="Loading pending course approvals…" />
       ) : courses.length === 0 ? (
         <>
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 mb-4 flex items-center gap-2.5">

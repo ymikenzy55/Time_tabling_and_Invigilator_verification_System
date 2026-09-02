@@ -105,7 +105,7 @@ export const MyDepartmentHeadsPage = () => {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] items-start">
         <div className="panel overflow-hidden">
           {headsQuery.isLoading ? (
-            <SkeletonTable rows={4} cols={3} />
+            <SkeletonTable rows={4} cols={3} label="Loading department heads…" />
           ) : heads.length === 0 ? (
             <div className="p-10">
               <EmptyState

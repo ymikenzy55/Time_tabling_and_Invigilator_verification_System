@@ -260,7 +260,7 @@ export const VenuesPage = () => {
           </div>
         </div>
         {listQuery.isLoading ? (
-          <SkeletonTable rows={6} cols={4} />
+          <SkeletonTable rows={6} cols={4} label="Loading venues…" />
         ) : venues.length === 0 ? (
           <EmptyState
             icon={Building}

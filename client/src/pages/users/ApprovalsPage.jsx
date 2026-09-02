@@ -137,7 +137,7 @@ export const ApprovalsPage = () => {
       />
 
       {listQuery.isLoading ? (
-        <SkeletonCardGrid count={4} lines={3} />
+        <SkeletonCardGrid count={4} lines={3} label="Loading pending approvals…" />
       ) : users.length === 0 ? (
         <EmptyState
           icon={ShieldCheck}

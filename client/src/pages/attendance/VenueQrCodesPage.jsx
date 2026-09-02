@@ -230,7 +230,7 @@ export const VenueQrCodesPage = () => {
           description="Choose a session to view venue QR codes and invigilator assignments."
         />
       ) : entriesQuery.isLoading ? (
-        <SkeletonCardGrid count={6} lines={4} />
+        <SkeletonCardGrid count={6} lines={4} label="Loading venue QR codes…" />
       ) : filteredVenueSlots.length === 0 ? (
         <EmptyState
           icon={QrCode}

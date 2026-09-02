@@ -70,7 +70,7 @@ export const AttendanceHistoryPage = () => {
       </div>
 
       {query.isLoading ? (
-        <SkeletonTable rows={6} cols={4} />
+        <SkeletonTable rows={6} cols={4} label="Loading attendance history…" />
       ) : records.length === 0 ? (
         <EmptyState
           icon={ClipboardList}

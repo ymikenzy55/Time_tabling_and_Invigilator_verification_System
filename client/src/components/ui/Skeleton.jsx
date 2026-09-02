@@ -1,4 +1,5 @@
 import { cn } from '@/lib/cn';
+import { Loader2 } from 'lucide-react';
 
 /** Base shimmer block */
 export const Skeleton = ({ className }) => (
@@ -16,30 +17,46 @@ export const SkeletonCard = ({ lines = 3, className }) => (
 );
 
 /** Grid of skeleton cards */
-export const SkeletonCardGrid = ({ count = 6, lines = 3, className }) => (
-  <div className={cn('grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4', className)}>
-    {Array.from({ length: count }).map((_, i) => (
-      <SkeletonCard key={i} lines={lines} />
-    ))}
+export const SkeletonCardGrid = ({ count = 6, lines = 3, label, className }) => (
+  <div className={cn('space-y-3', className)}>
+    {label && (
+      <div className="flex items-center gap-2 text-sm text-ink-400">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        {label}
+      </div>
+    )}
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <SkeletonCard key={i} lines={lines} />
+      ))}
+    </div>
   </div>
 );
 
 /** Table-shaped skeleton: header row + N body rows */
-export const SkeletonTable = ({ rows = 6, cols = 4, className }) => (
-  <div className={cn('panel overflow-hidden', className)}>
-    <div className="border-b border-surface-border bg-surface-subtle px-4 py-3 flex gap-4">
-      {Array.from({ length: cols }).map((_, i) => (
-        <Skeleton key={i} className="h-3.5 flex-1" />
-      ))}
-    </div>
-    <div className="divide-y divide-surface-divider">
-      {Array.from({ length: rows }).map((_, r) => (
-        <div key={r} className="px-4 py-3.5 flex gap-4 items-center">
-          {Array.from({ length: cols }).map((_, c) => (
-            <Skeleton key={c} className={cn('h-3', c === 0 ? 'flex-[1.4]' : 'flex-1')} />
-          ))}
-        </div>
-      ))}
+export const SkeletonTable = ({ rows = 6, cols = 4, label, className }) => (
+  <div className={cn('space-y-3', className)}>
+    {label && (
+      <div className="flex items-center gap-2 text-sm text-ink-400">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        {label}
+      </div>
+    )}
+    <div className="panel overflow-hidden">
+      <div className="border-b border-surface-border bg-surface-subtle px-4 py-3 flex gap-4">
+        {Array.from({ length: cols }).map((_, i) => (
+          <Skeleton key={i} className="h-3.5 flex-1" />
+        ))}
+      </div>
+      <div className="divide-y divide-surface-divider">
+        {Array.from({ length: rows }).map((_, r) => (
+          <div key={r} className="px-4 py-3.5 flex gap-4 items-center">
+            {Array.from({ length: cols }).map((_, c) => (
+              <Skeleton key={c} className={cn('h-3', c === 0 ? 'flex-[1.4]' : 'flex-1')} />
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   </div>
 );
