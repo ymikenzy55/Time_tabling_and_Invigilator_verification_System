@@ -228,6 +228,7 @@ export const VenuesPage = () => {
             description="Add examination venues with their seating capacities to enable timetable generation."
           />
         ) : (
+          <>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-surface-subtle text-ink-500 text-xs uppercase">
@@ -290,8 +291,9 @@ export const VenuesPage = () => {
             pageSize={PAGE_SIZE}
             onPageChange={setPage}
           />
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
       <Modal
         open={modalOpen}

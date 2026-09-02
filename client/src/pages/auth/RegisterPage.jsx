@@ -684,7 +684,7 @@ export const RegisterPage = () => {
                 {sendCodeMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : (step === 2 ? <Mail className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />)}
                 {step === 2 ? 'Send Verification Code' : 'Next'}
               </button>
-            : null}
+            ) : null}
           </div>
         </form>
       )}
