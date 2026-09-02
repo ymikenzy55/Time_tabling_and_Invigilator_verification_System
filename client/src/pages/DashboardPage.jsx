@@ -7,7 +7,7 @@ import { dashboardApi } from '@/features/dashboard/dashboardApi';
 import { venueAssignmentsApi } from '@/features/venueAssignments/venueAssignmentsApi';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Activity, Clock, ClipboardList, ScanLine, Calendar, CheckCircle2, AlertCircle, ArrowRight, BookOpen, Layers, Users } from 'lucide-react';
+import { Activity, Clock, ClipboardList, ScanLine, Calendar, CheckCircle2, AlertCircle, ArrowRight, BookOpen, Layers } from 'lucide-react';
 
 const ROLE_LABEL = {
   SUPER_ADMIN: 'Super Admin',
@@ -337,8 +337,7 @@ const AdminDashboard = ({ stats, recentActivity, department, isDeptHead }) => (
             </p>
           </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <DeptOverviewCard icon={Users} label="Department Heads" value={department.headCount} />
+        <div className="grid gap-3 sm:grid-cols-2">
           <DeptOverviewCard icon={BookOpen} label="Courses" value={department.courseCount} />
           <DeptOverviewCard icon={Layers} label="Course Levels" value={department.courseLevelCount} />
         </div>

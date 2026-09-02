@@ -22,6 +22,7 @@ import { CourseLevelsPage } from '@/pages/courses/CourseLevelsPage';
 import { CourseApprovalsPage } from '@/pages/courses/CourseApprovalsPage';
 import { ExaminationsPage } from '@/pages/examinations/ExaminationsPage';
 import { InvigilatorAssignmentsPage } from '@/pages/examinations/InvigilatorAssignmentsPage';
+import { InvigilatorAssignmentDetailPage } from '@/pages/examinations/InvigilatorAssignmentDetailPage';
 import { MyAssignmentsPage } from '@/pages/examinations/MyAssignmentsPage';
 import { TimetablePage } from '@/pages/timetable/TimetablePage';
 import { VenuesPage } from '@/pages/venues/VenuesPage';
@@ -90,6 +91,7 @@ export const AppRoutes = () => (
       {/* Examinations */}
       <Route path="/examinations" element={<ProtectedRoute roles={SUPER_ADMIN}><ExaminationsPage /></ProtectedRoute>} />
       <Route path="/invigilator-assignments" element={<ProtectedRoute roles={SUPER_ADMIN}><InvigilatorAssignmentsPage /></ProtectedRoute>} />
+      <Route path="/invigilator-assignments/:invigilatorId" element={<ProtectedRoute roles={SUPER_ADMIN}><InvigilatorAssignmentDetailPage /></ProtectedRoute>} />
       <Route path="/my-assignments" element={<ProtectedRoute roles={INVIGILATOR}><MyAssignmentsPage /></ProtectedRoute>} />
 
       {/* Attendance */}

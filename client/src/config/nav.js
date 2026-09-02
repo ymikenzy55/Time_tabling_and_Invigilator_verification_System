@@ -41,13 +41,12 @@ export const navConfig = [
     ],
   },
   {
-    kind: 'group',
+    kind: 'item',
     label: 'Department Team',
+    shortLabel: 'Team',
+    to: '/my-department-heads',
     icon: Users,
     roles: ['DEPARTMENT_HEAD'],
-    items: [
-      { label: 'Department Heads', to: '/my-department-heads', icon: GraduationCap, roles: ['DEPARTMENT_HEAD'] },
-    ],
   },
   {
     kind: 'group',
@@ -82,14 +81,21 @@ export const navConfig = [
     ],
   },
   {
+    kind: 'item',
+    label: 'Attendance',
+    shortLabel: 'Records',
+    to: '/attendance',
+    icon: ScanLine,
+    roles: ['SUPER_ADMIN'],
+  },
+  {
     kind: 'group',
     label: 'Attendance',
     icon: ScanLine,
-    roles: ['SUPER_ADMIN', 'INVIGILATOR'],
+    roles: ['INVIGILATOR'],
     items: [
       { label: 'Scan QR', to: '/scan', icon: ScanLine, roles: ['INVIGILATOR'] },
       { label: 'My History', to: '/attendance/history', icon: CalendarDays, roles: ['INVIGILATOR'] },
-      { label: 'All Records', shortLabel: 'Records', to: '/attendance', icon: ClipboardList, roles: ['SUPER_ADMIN'] },
     ],
   },
   {

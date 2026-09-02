@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -90,8 +90,34 @@ const SuccessScreen = ({ onDone }) => {
   );
 };
 
+const VERIFICATION_COUNTDOWN_SECONDS = 60;
+
 const VerificationStep = ({ email, code, setCode, onVerify, onResend, isVerifying, isResending, error, attemptsLeft }) => {
   const inputs = [0, 1, 2, 3, 4, 5];
+  const [secondsLeft, setSecondsLeft] = useState(VERIFICATION_COUNTDOWN_SECONDS);
+  const [expired, setExpired] = useState(false);
+  const resendRef = useRef(onResend);
+  resendRef.current = onResend;
+
+  useEffect(() => {
+    setSecondsLeft(VERIFICATION_COUNTDOWN_SECONDS);
+    setExpired(false);
+  }, [email]);
+
+  useEffect(() => {
+    if (secondsLeft <= 0) {
+      setExpired(true);
+      return;
+    }
+    const id = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [secondsLeft]);
+
+  const handleResend = () => {
+    onResend();
+    setSecondsLeft(VERIFICATION_COUNTDOWN_SECONDS);
+    setExpired(false);
+  };
 
   const handleChange = (index, value) => {
     if (!/^\d?$/.test(value)) return;
@@ -166,18 +192,37 @@ const VerificationStep = ({ email, code, setCode, onVerify, onResend, isVerifyin
         <span className="text-ink-500">Didn't receive a code?</span>
         <button
           type="button"
-          onClick={onResend}
-          disabled={isResending}
+          onClick={handleResend}
+          disabled={isResending || (!expired && secondsLeft > 0)}
           className="text-primary-600 font-semibold hover:text-primary-700 disabled:opacity-50"
         >
-          {isResending ? 'Sending…' : 'Resend code'}
+          {isResending ? 'Sending…' : expired ? 'Resend code' : `Resend in ${String(Math.floor(secondsLeft / 60)).padStart(2, '0')}:${String(secondsLeft % 60).padStart(2, '0')}`}
         </button>
+      </div>
+
+      {expired && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-center">
+          <div className="flex items-center justify-center gap-2 text-sm font-medium text-rose-700">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            Your verification code has expired. Please request a new code.
+          </div>
+        </div>
+      )}
+
+      <div className={`text-center text-sm ${expired ? 'text-rose-600' : secondsLeft <= 15 ? 'text-amber-600' : 'text-ink-500'}`}>
+        {expired ? (
+          'Code expired'
+        ) : (
+          <span className="tabular-nums">
+            Code expires in {String(Math.floor(secondsLeft / 60)).padStart(2, '0')}:{String(secondsLeft % 60).padStart(2, '0')}
+          </span>
+        )}
       </div>
 
       <button
         type="button"
         onClick={onVerify}
-        disabled={isVerifying || code.length !== 6}
+        disabled={isVerifying || code.length !== 6 || expired}
         className="btn-primary w-full"
       >
         {isVerifying ? (

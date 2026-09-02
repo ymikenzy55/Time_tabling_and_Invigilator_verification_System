@@ -194,7 +194,8 @@ const evaluateVenueScan = async (token, actor) => {
 
     let message;
     if (todayAssignments.length > 0) {
-      message = `This is not your assigned venue. Please move to your assigned venue and scan again.`;
+      const venueList = todayAssignments.map((a) => `${a.venue.name}`).join(', ');
+      message = `You scanned ${venue.name} but you are not assigned here. Your assigned venue${todayAssignments.length > 1 ? 's are' : ' is'}: ${venueList}. Please go to your assigned venue and scan the QR code there.`;
     } else {
       message = `You are not assigned to ${venue.name}. Please check your assignments or contact the exam officer.`;
     }
@@ -538,7 +539,7 @@ export const attendanceService = {
     const locationStr = address
       ? ` (Location: ${address}${!isOnCampus ? ' - OFF CAMPUS' : ''})`
       : latitude != null && longitude != null
-      ? ` (Location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}${!isOnCampus ? ' - OFF CAMPUS' : ''})`
+      ? ` (Approximate location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}${!isOnCampus ? ' - OFF CAMPUS' : ''} — exact address unavailable)`
       : '';
     
     // Notify with warning if off-campus

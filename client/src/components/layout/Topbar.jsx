@@ -84,6 +84,16 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
       qc.setQueryData(['notifications', 'unread-count'], (prev = 0) => prev + 1);
     };
 
+    const handleVenueAssignmentUpdated = () => {
+      qc.invalidateQueries({ queryKey: ['myVenueAssignments'] });
+      qc.invalidateQueries({ queryKey: ['venue-assignments', 'today-count'] });
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+      qc.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+    };
+
+    // Handlers for exam officer (SUPER_ADMIN) only
+    const isExamOfficer = user?.role === 'SUPER_ADMIN';
+
     const handlePendingAccount = (data) => {
       if (data?.fullName) {
         toast.success(`${data.fullName} registered and is awaiting approval.`, { duration: 3500 });
@@ -138,26 +148,35 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
       qc.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
     };
 
+    // Always-on handlers
     socket.on('notification.created', handleNotification);
-    socket.on('pending-account', handlePendingAccount);
-    socket.on('course-submitted', handleCourseSubmitted);
-    socket.on('course-updated', handleCourseUpdated);
-    socket.on('course-approved', handleCourseApproved);
-    socket.on('course-rejected', handleCourseRejected);
-    socket.on('invigilator-checkin', handleInvigilatorCheckin);
+    socket.on('venue-assignment-updated', handleVenueAssignmentUpdated);
+
+    // Exam officer only handlers
+    if (isExamOfficer) {
+      socket.on('pending-account', handlePendingAccount);
+      socket.on('course-submitted', handleCourseSubmitted);
+      socket.on('course-updated', handleCourseUpdated);
+      socket.on('course-approved', handleCourseApproved);
+      socket.on('course-rejected', handleCourseRejected);
+      socket.on('invigilator-checkin', handleInvigilatorCheckin);
+    }
 
     return () => {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.off('notification.created', handleNotification);
-      socket.off('pending-account', handlePendingAccount);
-      socket.off('course-submitted', handleCourseSubmitted);
-      socket.off('course-updated', handleCourseUpdated);
-      socket.off('course-approved', handleCourseApproved);
-      socket.off('course-rejected', handleCourseRejected);
-      socket.off('invigilator-checkin', handleInvigilatorCheckin);
+      socket.off('venue-assignment-updated', handleVenueAssignmentUpdated);
+      if (isExamOfficer) {
+        socket.off('pending-account', handlePendingAccount);
+        socket.off('course-submitted', handleCourseSubmitted);
+        socket.off('course-updated', handleCourseUpdated);
+        socket.off('course-approved', handleCourseApproved);
+        socket.off('course-rejected', handleCourseRejected);
+        socket.off('invigilator-checkin', handleInvigilatorCheckin);
+      }
     };
-  }, [qc, user?.id]);
+  }, [qc, user?.id, user?.role]);
 
   const handleLogout = async () => {
     const ok = await confirm({

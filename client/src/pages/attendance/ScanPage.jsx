@@ -76,6 +76,8 @@ export const ScanPage = () => {
   }, []);
 
   // Scan window: opens at exam start, closes at exam end.
+  // When no specific assignment is passed (general scan from sidebar),
+  // the scanner is always available — the backend validates time window and venue.
   const examStart = fromAssignment ? new Date(fromAssignment.slotAt) : null;
   const examEnd = fromAssignment
     ? new Date(new Date(fromAssignment.slotAt).getTime() + (fromAssignment.examDurationMinutes || 180) * 60 * 1000)
@@ -83,7 +85,7 @@ export const ScanPage = () => {
 
   const isScanAvailable = fromAssignment
     ? isDemoUser || fromAssignment.isDemo || (now >= examStart && now <= examEnd)
-    : false;
+    : true;
 
   const formatCountdown = useCallback((ms) => {
     if (ms <= 0) return null;
@@ -91,9 +93,7 @@ export const ScanPage = () => {
     const h = Math.floor(totalSec / 3600);
     const m = Math.floor((totalSec % 3600) / 60);
     const s = totalSec % 60;
-    if (h > 0) return `${h}h ${m}m ${s}s`;
-    if (m > 0) return `${m}m ${s}s`;
-    return `${s}s`;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   }, []);
 
   const timeUntilScan = fromAssignment && examStart
@@ -736,11 +736,23 @@ export const ScanPage = () => {
               <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-center">
                 <div className="flex items-center justify-center gap-2 text-sm font-bold text-amber-800">
                   <AlertTriangle className="w-5 h-5 text-amber-600" />
-                  This is not the venue you are supposed to scan.
+                  Wrong Venue
                 </div>
-                <div className="text-sm text-amber-700 mt-2">
-                  Please move to your assigned venue and scan again.
-                </div>
+                {result.message && (
+                  <div className="text-sm text-amber-700 mt-2 text-left">
+                    {result.message}
+                  </div>
+                )}
+                {result.allAssignedVenues && result.allAssignedVenues.length > 0 && (
+                  <div className="mt-3 space-y-1">
+                    <div className="text-xs font-medium text-amber-800">Your assigned venue{result.allAssignedVenues.length > 1 ? 's' : ''}:</div>
+                    {result.allAssignedVenues.map((v, i) => (
+                      <div key={i} className="text-xs text-amber-700">
+                        {v.name}{v.slotAt ? ` — ${new Date(v.slotAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}` : ''}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             {result.result !== 'REJECTED_VENUE_MISMATCH' && result.venue && (

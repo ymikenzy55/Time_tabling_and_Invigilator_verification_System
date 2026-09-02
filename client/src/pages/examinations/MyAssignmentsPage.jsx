@@ -4,8 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ClipboardList, MapPin, Clock, CheckCircle2,
   Building, BookOpen, Download, UserPlus, Send, Loader2, AlertCircle,
-  ScanLine,
+  ScanLine, Bell,
 } from 'lucide-react';
+import { getSocket } from '@/lib/socket';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonCardGrid } from '@/components/ui/Skeleton';
@@ -52,6 +53,7 @@ export const MyAssignmentsPage = () => {
     queryKey: ['myVenueAssignments'],
     queryFn: venueAssignmentsApi.myAssignments,
     staleTime: 30_000,
+    refetchInterval: 60_000,
     placeholderData: (prev) => prev,
   });
 
@@ -97,6 +99,24 @@ export const MyAssignmentsPage = () => {
     localStorage.setItem('invigilator-last-seen-duties', today);
     qc.invalidateQueries({ queryKey: ['venue-assignments', 'today-count'] });
   }, [qc]);
+
+  // Real-time: listen for venue assignment updates via socket
+  useEffect(() => {
+    if (!user?.id) return;
+    const socket = getSocket();
+    if (!socket) return;
+
+    const handleAssignmentUpdate = () => {
+      qc.invalidateQueries({ queryKey: ['myVenueAssignments'] });
+      qc.invalidateQueries({ queryKey: ['venue-assignments', 'today-count'] });
+    };
+
+    socket.on('venue-assignment-updated', handleAssignmentUpdate);
+
+    return () => {
+      socket.off('venue-assignment-updated', handleAssignmentUpdate);
+    };
+  }, [qc, user?.id]);
 
   // Delegate mutation: create invigilator + send notification to exam officer
   const delegateMutation = useMutation({
@@ -265,23 +285,38 @@ export const MyAssignmentsPage = () => {
                               ) : (
                                 <Badge variant="info">Pending</Badge>
                               )}
-                              {!scanned && !isPast && (
-                                <button
-                                  className="btn-primary btn-sm"
-                                  onClick={() => navigate('/scan', {
-                                    state: {
-                                      fromAssignment: {
-                                        ...a,
-                                        examDurationMinutes: 180,
-                                        isDemo: isDemoUser,
+                              {!scanned && !isPast && (() => {
+                                const slotStart = new Date(a.slotAt);
+                                const slotEnd = new Date(slotStart.getTime() + (a.examDurationMinutes || 180) * 60 * 1000);
+                                const windowStart = new Date(slotStart.getTime() - 15 * 60 * 1000);
+                                const windowEnd = new Date(slotEnd.getTime() + 30 * 60 * 1000);
+                                const now = new Date();
+                                const isWindowOpen = isDemoUser || (now >= windowStart && now <= windowEnd);
+
+                                if (!isWindowOpen) {
+                                  return (
+                                    <span className="text-xs text-ink-400 italic">Scan opens 15 min before slot</span>
+                                  );
+                                }
+
+                                return (
+                                  <button
+                                    className="btn-primary btn-sm"
+                                    onClick={() => navigate('/scan', {
+                                      state: {
+                                        fromAssignment: {
+                                          ...a,
+                                          examDurationMinutes: 180,
+                                          isDemo: isDemoUser,
+                                        },
                                       },
-                                    },
-                                  })}
-                                >
-                                  <ScanLine className="w-3.5 h-3.5" />
-                                  Scan
-                                </button>
-                              )}
+                                    })}
+                                  >
+                                    <ScanLine className="w-3.5 h-3.5" />
+                                    Scan
+                                  </button>
+                                );
+                              })()}
                             </div>
                           </div>
                         );

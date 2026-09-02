@@ -4,13 +4,14 @@ import { logAudit } from '../../utils/auditLog.js';
 import { createNotification } from '../notifications/notifications.service.js';
 import { sendEmail } from '../../utils/email.js';
 import { primaryClientOrigin } from '../../config/env.js';
+import { broadcast } from '../../utils/broadcast.js';
 
 const publicSelect = {
   id: true,
   slotAt: true,
   createdAt: true,
   venue: { select: { id: true, name: true, capacity: true, location: true } },
-  invigilator: { select: { id: true, fullName: true, email: true, staffId: true } },
+  invigilator: { select: { id: true, fullName: true, email: true, staffId: true, departmentName: true } },
   examinationSession: { select: { id: true, name: true } },
 };
 
@@ -263,6 +264,11 @@ export const venueAssignmentsService = {
     // Execute all notifications in parallel
     await Promise.all(notificationPromises);
 
+    // Broadcast real-time update to each assigned invigilator
+    for (const invigilatorId of notified) {
+      broadcast.toUser(invigilatorId, 'venue-assignment-updated', { examinationSessionId });
+    }
+
     logAudit({
       actorId: actor.id,
       action: 'VENUE_ASSIGNMENT.GENERATE',
@@ -378,6 +384,9 @@ export const venueAssignmentsService = {
       data: { examinationSessionId, venueId },
     }).catch(() => {});
 
+    // Broadcast real-time update to the assigned invigilator
+    broadcast.toUser(invigilatorId, 'venue-assignment-updated', { examinationSessionId });
+
     // Send email notification
     if (assignment.invigilator?.email) {
       sendEmail({
@@ -447,6 +456,9 @@ export const venueAssignmentsService = {
 
     await prisma.venueAssignment.delete({ where: { id: assignmentId } });
 
+    // Broadcast real-time update to the affected invigilator
+    broadcast.toUser(assignment.invigilatorId, 'venue-assignment-updated', {});
+
     logAudit({
       actorId: actor.id,
       action: 'VENUE_ASSIGNMENT.REMOVE',
@@ -475,10 +487,14 @@ export const venueAssignmentsService = {
       select: publicSelect,
     });
 
-    if (assignments.length === 0 || !examinationSessionId) return assignments;
+    if (assignments.length === 0) return assignments;
+
+    // Derive examinationSessionId from assignments if not explicitly provided
+    const sessionId = examinationSessionId || assignments[0]?.examinationSession?.id;
+    if (!sessionId) return assignments;
 
     const invigilations = await prisma.invigilation.findMany({
-      where: { examinationSessionId },
+      where: { examinationSessionId: sessionId },
       select: {
         venueId: true,
         scheduledAt: true,

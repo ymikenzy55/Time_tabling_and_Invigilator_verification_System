@@ -73,7 +73,7 @@ export const dashboardController = {
       const baseWhere = { createdById: userId };
       const deptId = departmentId || null;
 
-      const [drafts, submitted, approved, rejected, recent, deptHeadCount, deptCourseCount, deptCourseLevelCount, department] = await Promise.all([
+      const [drafts, submitted, approved, rejected, recent, deptCourseCount, deptCourseLevelCount, department] = await Promise.all([
         prisma.course.count({ where: { ...baseWhere, status: 'DRAFT' } }),
         prisma.course.count({ where: { ...baseWhere, status: 'SUBMITTED' } }),
         prisma.course.count({ where: { ...baseWhere, status: 'APPROVED' } }),
@@ -84,7 +84,6 @@ export const dashboardController = {
           take: 6,
           select: { id: true, code: true, title: true, status: true, updatedAt: true },
         }),
-        deptId ? prisma.user.count({ where: { role: 'DEPARTMENT_HEAD', departmentId: deptId } }) : Promise.resolve(0),
         deptId ? prisma.course.count({ where: { departmentId: deptId } }) : Promise.resolve(0),
         deptId ? prisma.courseLevel.count({ where: { departmentId: deptId } }) : Promise.resolve(0),
         deptId ? prisma.department.findUnique({ where: { id: deptId }, select: { id: true, name: true, code: true } }) : Promise.resolve(null),
@@ -100,7 +99,6 @@ export const dashboardController = {
         department: department ? {
           name: department.name,
           code: department.code,
-          headCount: deptHeadCount,
           courseCount: deptCourseCount,
           courseLevelCount: deptCourseLevelCount,
         } : null,

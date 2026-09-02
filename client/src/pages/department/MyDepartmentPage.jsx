@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Award, BookOpen, GraduationCap, Layers, Users } from 'lucide-react';
+import { Award, BookOpen, GraduationCap, Layers } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useMyDepartment } from '@/features/academics/useMyDepartment';
@@ -28,7 +28,6 @@ export const MyDepartmentPage = () => {
   const stats = useMemo(() => {
     if (!department?._count) return [];
     return [
-      { icon: Users, label: 'Department heads', value: department._count.users || 0 },
       { icon: BookOpen, label: 'Courses', value: department._count.courses || 0 },
       { icon: Layers, label: 'Course levels', value: department._count.courseLevels || 0 },
     ];

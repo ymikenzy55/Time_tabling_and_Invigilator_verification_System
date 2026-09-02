@@ -187,6 +187,7 @@ export const TimetablePage = () => {
   const [sortBy, setSortBy] = useState('date'); // date | venue | time
   const [generateOpen, setGenerateOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [exportStatus, setExportStatus] = useState('provisional'); // 'provisional' | 'final'
   const [result, setResult] = useState(null);
   const [venueQrData, setVenueQrData] = useState(null);
   const [venueQrLoading, setVenueQrLoading] = useState(null);
@@ -198,11 +199,11 @@ export const TimetablePage = () => {
   const [coursePreview, setCoursePreview] = useState(null);
 
   const location = useLocation();
-  const pendingGenerate = useRef(false);
+  const [pendingGenerate, setPendingGenerate] = useState(false);
 
   useEffect(() => {
     if (location.state?.generate && isAdmin) {
-      pendingGenerate.current = true;
+      setPendingGenerate(true);
     }
   }, [location.state, isAdmin]);
 
@@ -469,12 +470,12 @@ export const TimetablePage = () => {
 
   // Auto-open generate modal when navigated with location.state.generate
   useEffect(() => {
-    if (!pendingGenerate.current || !isAdmin) return;
+    if (!pendingGenerate || !isAdmin) return;
     if (sessionsQuery.isLoading || !sessionsQuery.data?.length) return;
     if (!sessionId) return;
     openGenerate();
-    pendingGenerate.current = false;
-  }, [isAdmin, sessionId, sessionsQuery.isLoading, sessionsQuery.data]);
+    setPendingGenerate(false);
+  }, [pendingGenerate, isAdmin, sessionId, sessionsQuery.isLoading, sessionsQuery.data]);
 
   const sessions = sessionsQuery.data || [];
   const allEntries = entriesQuery.data || [];
@@ -649,7 +650,7 @@ export const TimetablePage = () => {
 
   const deptGrids = useMemo(() => buildDeptGrids(entries), [entries]);
 
-  const exportPdf = async (grouping = 'department') => {
+  const exportPdf = async (grouping = 'department', status = exportStatus) => {
     if (!grid.length) {
       toast.error('Nothing to export yet.');
       return;
@@ -944,7 +945,7 @@ export const TimetablePage = () => {
       <div class="document">
         <div class="head-block institution">${INSTITUTION_NAME}, SUNYANI</div>
         <div class="head-block doc-title">
-          <span class="provisional">PROVISIONAL</span> TIMETABLE FOR
+          <span class="provisional">${status === 'final' ? 'FINAL' : 'PROVISIONAL'}</span> TIMETABLE FOR
           <span class="highlight">END OF ${esc(semLabel)}</span> EXAMINATIONS${ayName ? `, ${esc(ayName)} ACADEMIC YEAR` : ''}
         </div>
         ${rangeStart && rangeEnd ? `<div class="head-block date-range">${fmtLong(rangeStart)} &nbsp;-&nbsp; ${fmtLong(rangeEnd)}</div>` : ''}
@@ -1044,6 +1045,7 @@ export const TimetablePage = () => {
       />
 
       {/* Filters */}
+      {!pendingGenerate && (
       <div className="panel p-4 mb-6 flex flex-wrap items-end gap-3">
         <div className="w-full sm:w-72">
           <label className="label">Examination session</label>
@@ -1089,6 +1091,7 @@ export const TimetablePage = () => {
           </div>
         )}
       </div>
+      )}
 
       {/* Readiness banner (admin) */}
       {isAdmin && sessionId && readiness && !isReady && (
@@ -1127,7 +1130,7 @@ export const TimetablePage = () => {
             </div>
             {generateProgress && generateProgress.length > 0 && (
               <div className="w-full max-h-32 overflow-y-auto bg-surface-subtle rounded-lg p-3 space-y-1">
-                {generateProgress.slice(-6).map((msg, i) => (
+                {generateProgress.slice(-8).map((msg, i) => (
                   <div key={i} className="text-xs text-ink-600 flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-primary-500 shrink-0" />
                     {msg}
@@ -1152,7 +1155,14 @@ export const TimetablePage = () => {
         <div className="panel p-5 mb-6 space-y-4">
           <div className="flex items-center gap-2 text-emerald-700 font-bold text-sm">
             <CheckCircle2 className="w-5 h-5" /> Timetable Generation Complete
+            {result.clashCount > 0 && (
+              <span className="text-rose-600 font-medium">· {result.clashCount} clash{result.clashCount === 1 ? '' : 'es'} resolved</span>
+            )}
           </div>
+
+          {result.message && (
+            <p className="text-sm text-ink-600">{result.message}</p>
+          )}
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-surface-subtle p-3 rounded-lg text-center">
@@ -1176,11 +1186,11 @@ export const TimetablePage = () => {
           </div>
 
           {result.unscheduled?.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-amber-800 font-medium text-sm mb-2">
-                <AlertCircle className="w-4 h-4" /> {result.unscheduled.length} course{result.unscheduled.length === 1 ? '' : 's'} could not be scheduled
+            <div className={`border rounded-lg p-4 ${result.clashCount > 0 ? 'bg-rose-50 border-rose-200' : 'bg-amber-50 border-amber-200'}`}>
+              <div className={`flex items-center gap-2 font-medium text-sm mb-2 ${result.clashCount > 0 ? 'text-rose-800' : 'text-amber-800'}`}>
+                <AlertCircle className="w-4 h-4" /> {result.unscheduled.length} course{result.unscheduled.length === 1 ? '' : 's'} could not be scheduled{result.clashCount > 0 ? ` (${result.clashCount} due to clashes)` : ''}
               </div>
-              <ul className="list-disc list-inside text-xs text-amber-700 space-y-1">
+              <ul className={`list-disc list-inside text-xs space-y-1 ${result.clashCount > 0 ? 'text-rose-700' : 'text-amber-700'}`}>
                 {result.unscheduled.map((c) => (
                   <li key={c.id}>{c.code} — {c.title} {c.reason ? `(${c.reason})` : ''}</li>
                 ))}
@@ -1257,7 +1267,12 @@ export const TimetablePage = () => {
       )}
 
       {/* Timetable grid */}
-      {!sessionId && initialQuery.isLoading ? (
+      {pendingGenerate ? (
+        <div className="card flex flex-col items-center justify-center py-20 gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
+          <p className="text-sm text-ink-500">Preparing timetable generation…</p>
+        </div>
+      ) : !sessionId && initialQuery.isLoading ? (
         <SkeletonTimetable />
       ) : !sessionId ? (
         <div className="card">
@@ -1377,29 +1392,53 @@ export const TimetablePage = () => {
         open={exportOpen}
         onClose={() => setExportOpen(false)}
         title="Export timetable PDF"
-        description="Choose how the timetable should be arranged in the PDF."
+        description="Choose the timetable status and how it should be arranged in the PDF."
       >
-        <div className="space-y-3">
-          <button
-            type="button"
-            className="w-full text-left rounded-lg border border-surface-border hover:border-primary-400 hover:bg-primary-50/40 transition-colors p-4"
-            onClick={() => exportPdf('department')}
-          >
-            <div className="font-bold text-ink-900 text-sm">Sorted by department</div>
-            <div className="text-xs text-ink-500 mt-1">
-              Each department gets its own section, broken down by level with practical and theory courses separated.
+        <div className="space-y-4">
+          <div>
+            <label className="label">Timetable status</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className={`flex-1 rounded-lg border p-3 text-sm font-bold transition-colors ${exportStatus === 'provisional' ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-surface-border text-ink-600 hover:border-primary-300'}`}
+                onClick={() => setExportStatus('provisional')}
+              >
+                PROVISIONAL
+              </button>
+              <button
+                type="button"
+                className={`flex-1 rounded-lg border p-3 text-sm font-bold transition-colors ${exportStatus === 'final' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-surface-border text-ink-600 hover:border-emerald-300'}`}
+                onClick={() => setExportStatus('final')}
+              >
+                FINAL
+              </button>
             </div>
-          </button>
-          <button
-            type="button"
-            className="w-full text-left rounded-lg border border-surface-border hover:border-primary-400 hover:bg-primary-50/40 transition-colors p-4"
-            onClick={() => exportPdf('combined')}
-          >
-            <div className="font-bold text-ink-900 text-sm">All together</div>
-            <div className="text-xs text-ink-500 mt-1">
-              One combined chronological timetable with every department's exams listed day by day.
-            </div>
-          </button>
+            <p className="text-xs text-ink-400 mt-1">
+              {exportStatus === 'provisional' ? 'The timetable will be marked as PROVISIONAL (subject to change).' : 'The timetable will be marked as FINAL.'}
+            </p>
+          </div>
+          <div className="space-y-3">
+            <button
+              type="button"
+              className="w-full text-left rounded-lg border border-surface-border hover:border-primary-400 hover:bg-primary-50/40 transition-colors p-4"
+              onClick={() => exportPdf('department')}
+            >
+              <div className="font-bold text-ink-900 text-sm">Sorted by department</div>
+              <div className="text-xs text-ink-500 mt-1">
+                Each department gets its own section, broken down by level with practical and theory courses separated.
+              </div>
+            </button>
+            <button
+              type="button"
+              className="w-full text-left rounded-lg border border-surface-border hover:border-primary-400 hover:bg-primary-50/40 transition-colors p-4"
+              onClick={() => exportPdf('combined')}
+            >
+              <div className="font-bold text-ink-900 text-sm">All together</div>
+              <div className="text-xs text-ink-500 mt-1">
+                One combined chronological timetable with every department's exams listed day by day.
+              </div>
+            </button>
+          </div>
         </div>
       </Modal>
 

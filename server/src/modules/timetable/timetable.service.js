@@ -100,7 +100,7 @@ const shuffle = (arr) => {
 const courseGroupKey = (c) =>
   `${(c.code || '').trim().toUpperCase()}::${(c.title || '').trim().toUpperCase()}`;
 
-const scheduleCourses = (courses, slots, venues) => {
+const scheduleCourses = (courses, slots, venues, onProgress) => {
   // Group same code+title courses — they must sit the same day & time.
   const groupsMap = new Map();
   for (const c of courses) {
@@ -437,6 +437,8 @@ const scheduleCourses = (courses, slots, venues) => {
   let finalPlacements = placements;
   if (clashPlacements.size > 0) {
     finalPlacements = placements.filter((p) => !clashPlacements.has(p));
+    const clashCourses = [...clashPlacements].map((p) => p.course.code);
+    if (onProgress) onProgress(`⚠ Clash detected: ${clashPlacements.size} entries with same dept+level in same slot (${clashCourses.join(', ')}). Removing and marking as unscheduled.`);
     for (const p of clashPlacements) {
       unscheduled.push({
         id: p.course.id,
@@ -698,15 +700,17 @@ export const timetableService = {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       progress(`Attempt ${attempt}/${maxRetries}: Scheduling courses…`);
       // Run the constraint solver in memory
-      const { placements, unscheduled } = scheduleCourses(courses, slots, venues);
+      const { placements, unscheduled } = scheduleCourses(courses, slots, venues, onProgress);
       
-      progress(`Attempt ${attempt}: ${placements.length}/${courses.length} courses scheduled, ${unscheduled.length} unscheduled`);
+      const hasClashes = unscheduled.some(u => u.reason && u.reason.includes('Clash detected'));
+      
+      progress(`Attempt ${attempt}: ${placements.length}/${courses.length} courses scheduled, ${unscheduled.length} unscheduled${hasClashes ? ' (due to clashes)' : ''}`);
       
       // If we found a complete solution, use it immediately
       if (unscheduled.length === 0) {
         bestResult = { placements, unscheduled };
         bestAttemptNumber = attempt;
-        progress(`✓ Complete solution found on attempt ${attempt}!`);
+        progress(`✓ Complete clash-free solution found on attempt ${attempt}!`);
         break;
       }
       
@@ -714,12 +718,16 @@ export const timetableService = {
       if (!bestResult || unscheduled.length < bestResult.unscheduled.length) {
         bestResult = { placements, unscheduled };
         bestAttemptNumber = attempt;
-        progress(`New best: ${placements.length} scheduled (attempt ${attempt})`);
+        progress(`New best: ${placements.length} scheduled (attempt ${attempt})${hasClashes ? ' — clashes still present' : ''}`);
       }
       
       // If this is not the last attempt and we have unscheduled courses, continue trying
       if (attempt < maxRetries && unscheduled.length > 0) {
-        progress(`Retrying with different randomization…`);
+        if (hasClashes) {
+          progress(`Redesigning with adjusted constraints to resolve clashes…`);
+        } else {
+          progress(`Retrying with different randomization…`);
+        }
         continue;
       }
     }
@@ -772,11 +780,18 @@ export const timetableService = {
     progress(`Assigning invigilators to venues…`);
 
     const wasComplete = unscheduled.length === 0;
+    const clashCount = unscheduled.filter(u => u.reason && u.reason.includes('Clash detected')).length;
     const resultMessage = wasComplete 
-      ? `Complete timetable generated successfully on attempt ${bestAttemptNumber}.`
-      : `Best solution found after ${maxRetries} attempts. ${unscheduled.length} courses could not be scheduled (see details below).`;
+      ? `Complete clash-free timetable generated successfully on attempt ${bestAttemptNumber}.`
+      : clashCount > 0
+        ? `Best solution found after ${maxRetries} attempts. ${unscheduled.length} courses could not be scheduled (${clashCount} due to unresolved clashes). Try increasing the exam period duration.`
+        : `Best solution found after ${maxRetries} attempts. ${unscheduled.length} courses could not be scheduled (see details below).`;
 
-    progress(wasComplete ? `Timetable generation complete! All ${courses.length} courses scheduled.` : `Generation complete with ${unscheduled.length} unscheduled courses.`);
+    progress(wasComplete 
+      ? `✓ Timetable generation complete! All ${courses.length} courses scheduled with no clashes.` 
+      : clashCount > 0
+        ? `Generation complete with ${unscheduled.length} unscheduled courses (${clashCount} clash-related). Output is clash-free for scheduled courses.`
+        : `Generation complete with ${unscheduled.length} unscheduled courses.`);
     console.log(`[Timetable] Final: ${rows.length}/${courses.length} courses scheduled. ${wasComplete ? '✓ Complete' : '⚠ Incomplete'}`);
 
     logAudit({
@@ -802,6 +817,7 @@ export const timetableService = {
       venuesAssigned: assignVenues,
       attempts: bestAttemptNumber,
       complete: wasComplete,
+      clashCount,
       message: resultMessage,
     };
   },

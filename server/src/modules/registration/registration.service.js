@@ -12,7 +12,7 @@ import { primaryClientOrigin } from '../../config/env.js';
 import crypto from 'crypto';
 
 const OPEN_ROLES = ['DEPARTMENT_HEAD', 'INVIGILATOR'];
-const VERIFICATION_CODE_EXPIRY_MINUTES = 10;
+const VERIFICATION_CODE_EXPIRY_MINUTES = 1;
 const MAX_VERIFICATION_ATTEMPTS = 5;
 
 const generate6DigitCode = () => {
@@ -182,7 +182,7 @@ export const registrationService = {
                 </div>
               </div>
               <p style="color: #6b7280; font-size: 13px; text-align: center;">
-                This code expires in ${VERIFICATION_CODE_EXPIRY_MINUTES} minutes.<br>
+                This code expires in ${VERIFICATION_CODE_EXPIRY_MINUTES} minute.<br>
                 If you did not request this, you can safely ignore this email.
               </p>
             </div>
