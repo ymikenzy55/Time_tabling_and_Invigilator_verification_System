@@ -34,6 +34,7 @@ export const VenuesPage = () => {
   const [deleting, setDeleting] = useState(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [bulkSelected, setBulkSelected] = useState(new Set());
   const fileInputRef = useRef(null);
   const [importing, setImporting] = useState(false);
   const [previewRows, setPreviewRows] = useState(null);
@@ -99,6 +100,22 @@ export const VenuesPage = () => {
       toast.success('Venue deleted.');
       setDeleting(null);
     },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids) => {
+      const results = await Promise.allSettled(ids.map((id) => venuesApi.remove(id)));
+      const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+      const failed = results.length - succeeded;
+      if (failed > 0) throw new Error(`${failed} deletion(s) failed.`);
+      return succeeded;
+    },
+    onSuccess: (count) => {
+      toast.success(`${count} venue(s) deleted.`);
+      setBulkSelected(new Set());
+      qc.invalidateQueries({ queryKey: ['venues'] });
+    },
+    onError: (err) => toast.error(err.message || 'Bulk deletion failed.'),
   });
 
   const handleImport = async (e) => {
@@ -207,6 +224,29 @@ export const VenuesPage = () => {
         </div>
       )}
 
+      {bulkSelected.size > 0 && (
+        <div className="panel p-3 flex items-center gap-3 flex-wrap bg-primary-50/50 border-primary-200 mb-4">
+          <span className="text-sm font-medium text-primary-800">{bulkSelected.size} selected</span>
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              className="btn btn-sm text-rose-700 border border-rose-200 hover:bg-rose-50 disabled:opacity-50"
+              disabled={bulkDeleteMutation.isPending}
+              onClick={() => {
+                setDeleting({ bulk: true, ids: [...bulkSelected] });
+              }}
+            >
+              <Trash2 className="w-4 h-4" /> Delete Selected
+            </button>
+            <button
+              className="btn btn-sm btn-secondary"
+              onClick={() => setBulkSelected(new Set())}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="panel overflow-hidden">
         <div className="px-4 py-3 border-b border-surface-border">
           <div className="relative max-w-md">
@@ -233,6 +273,26 @@ export const VenuesPage = () => {
             <table className="w-full text-sm">
               <thead className="bg-surface-subtle text-ink-500 text-xs uppercase">
                 <tr>
+                  <th className="text-left font-medium px-4 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      className="rounded border-surface-border text-primary-600 focus:ring-primary-500"
+                      checked={paginatedVenues.length > 0 && paginatedVenues.every((v) => bulkSelected.has(v.id))}
+                      onChange={() => {
+                        setBulkSelected((prev) => {
+                          const allIds = paginatedVenues.map((v) => v.id);
+                          const allSelected = allIds.every((id) => prev.has(id));
+                          const next = new Set(prev);
+                          if (allSelected) {
+                            allIds.forEach((id) => next.delete(id));
+                          } else {
+                            allIds.forEach((id) => next.add(id));
+                          }
+                          return next;
+                        });
+                      }}
+                    />
+                  </th>
                   <th className="text-left font-medium px-4 py-3">Venue</th>
                   <th className="text-left font-medium px-4 py-3">Location</th>
                   <th className="text-left font-medium px-4 py-3">Capacity</th>
@@ -243,6 +303,21 @@ export const VenuesPage = () => {
               <tbody className="divide-y divide-surface-divider">
                 {paginatedVenues.map((venue) => (
                   <tr key={venue.id} className="hover:bg-surface-subtle/60">
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        className="rounded border-surface-border text-primary-600 focus:ring-primary-500"
+                        checked={bulkSelected.has(venue.id)}
+                        onChange={() => {
+                          setBulkSelected((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(venue.id)) next.delete(venue.id);
+                            else next.add(venue.id);
+                            return next;
+                          });
+                        }}
+                      />
+                    </td>
                     <td className="px-4 py-3 font-medium text-ink-900">{venue.name}</td>
                     <td className="px-4 py-3 text-ink-700">
                       {venue.location ? (
@@ -333,8 +408,10 @@ export const VenuesPage = () => {
       <Modal
         open={!!deleting}
         onClose={() => setDeleting(null)}
-        title="Delete venue"
-        description={`Are you sure you want to delete "${deleting?.name}"? This cannot be undone.`}
+        title={deleting?.bulk ? 'Delete selected venues' : 'Delete venue'}
+        description={deleting?.bulk
+          ? `Are you sure you want to delete ${deleting?.ids?.length} venue(s)? This cannot be undone.`
+          : `Are you sure you want to delete "${deleting?.name}"? This cannot be undone.`}
         size="sm"
       >
         <div className="flex justify-end gap-2 pt-2">
@@ -342,10 +419,16 @@ export const VenuesPage = () => {
           <button
             type="button"
             className="btn bg-rose-600 text-white hover:bg-rose-700 btn-md"
-            onClick={() => deleteMutation.mutate(deleting.id)}
-            disabled={deleteMutation.isPending}
+            onClick={() => {
+              if (deleting?.bulk) {
+                bulkDeleteMutation.mutate(deleting.ids);
+              } else {
+                deleteMutation.mutate(deleting.id);
+              }
+            }}
+            disabled={deleteMutation.isPending || bulkDeleteMutation.isPending}
           >
-            {deleteMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+            {(deleteMutation.isPending || bulkDeleteMutation.isPending) && <Loader2 className="w-4 h-4 animate-spin" />}
             Delete
           </button>
         </div>

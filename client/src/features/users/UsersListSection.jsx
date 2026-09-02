@@ -31,6 +31,7 @@ export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
   const [q, setQ] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState(new Set());
   const qc = useQueryClient();
   const confirm = useConfirm();
   const { user: me } = useAuth();
@@ -79,6 +80,39 @@ export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
     onError: (err) => toast.error(err.message || 'Failed to update user status.'),
   });
 
+  const bulkStatusMutation = useMutation({
+    mutationFn: async ({ ids, status }) => {
+      const results = await Promise.allSettled(ids.map((id) => usersApi.setStatus(id, { status })));
+      const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+      const failed = results.length - succeeded;
+      if (failed > 0) throw new Error(`${failed} operation(s) failed.`);
+      return succeeded;
+    },
+    onSuccess: (count, { status }) => {
+      toast.success(`${count} user(s) ${status === 'ACTIVE' ? 'enabled' : 'suspended'}.`);
+      setSelected(new Set());
+      qc.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (err) => toast.error(err.message || 'Bulk operation failed.'),
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids) => {
+      const results = await Promise.allSettled(ids.map((id) => usersApi.remove(id)));
+      const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+      const failed = results.length - succeeded;
+      if (failed > 0) throw new Error(`${failed} deletion(s) failed.`);
+      return succeeded;
+    },
+    onSuccess: (count) => {
+      toast.success(`${count} user(s) deleted.`);
+      setSelected(new Set());
+      qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: ['approvals'] });
+    },
+    onError: (err) => toast.error(err.message || 'Bulk deletion failed.'),
+  });
+
   const users = query.data || [];
 
   const filtered = useMemo(() => {
@@ -101,8 +135,40 @@ export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
     return filtered.slice(start, start + PAGE_SIZE);
   }, [filtered, page]);
 
+  const toggleSelect = (id) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelected((prev) => {
+      const allIds = paginatedFiltered.map((u) => u.id);
+      const allSelected = allIds.every((id) => prev.has(id));
+      const next = new Set(prev);
+      if (allSelected) {
+        allIds.forEach((id) => next.delete(id));
+      } else {
+        allIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
   const renderRow = (u, isSub) => (
     <tr key={u.id} className={`hover:bg-surface-subtle/50 ${isSub ? 'bg-surface-subtle/30' : ''}`}>
+      <td className="px-4 py-3">
+        <input
+          type="checkbox"
+          className="rounded border-surface-border text-primary-600 focus:ring-primary-500"
+          checked={selected.has(u.id)}
+          onChange={() => toggleSelect(u.id)}
+          disabled={u.id === me?.id}
+        />
+      </td>
       <td className="px-4 py-3">
         <div className={`flex items-center gap-3 ${isSub ? 'pl-6' : ''}`}>
           <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-700 grid place-items-center text-xs font-bold shrink-0">
@@ -224,6 +290,57 @@ export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
         </div>
       </div>
 
+      {selected.size > 0 && (
+        <div className="panel p-3 flex items-center gap-3 flex-wrap bg-primary-50/50 border-primary-200">
+          <span className="text-sm font-medium text-primary-800">{selected.size} selected</span>
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              className="btn btn-sm text-emerald-700 border border-emerald-200 hover:bg-emerald-50 disabled:opacity-50"
+              disabled={bulkStatusMutation.isPending || bulkDeleteMutation.isPending}
+              onClick={() => bulkStatusMutation.mutate({ ids: [...selected], status: 'ACTIVE' })}
+            >
+              <CheckCircle className="w-4 h-4" /> Enable Selected
+            </button>
+            <button
+              className="btn btn-sm text-amber-700 border border-amber-200 hover:bg-amber-50 disabled:opacity-50"
+              disabled={bulkStatusMutation.isPending || bulkDeleteMutation.isPending}
+              onClick={() => {
+                confirm({
+                  title: 'Suspend selected users?',
+                  description: `${selected.size} user(s) will be suspended and unable to sign in.`,
+                  confirmText: 'Suspend All',
+                  tone: 'warning',
+                  onConfirm: () => bulkStatusMutation.mutate({ ids: [...selected], status: 'SUSPENDED' }),
+                });
+              }}
+            >
+              <Ban className="w-4 h-4" /> Suspend Selected
+            </button>
+            <button
+              className="btn btn-sm text-rose-700 border border-rose-200 hover:bg-rose-50 disabled:opacity-50"
+              disabled={bulkStatusMutation.isPending || bulkDeleteMutation.isPending}
+              onClick={() => {
+                confirm({
+                  title: 'Delete selected users?',
+                  description: `${selected.size} user(s) will be permanently removed. This cannot be undone.`,
+                  confirmText: 'Delete All',
+                  tone: 'danger',
+                  onConfirm: () => bulkDeleteMutation.mutate([...selected]),
+                });
+              }}
+            >
+              <Trash2 className="w-4 h-4" /> Delete Selected
+            </button>
+            <button
+              className="btn btn-sm btn-secondary"
+              onClick={() => setSelected(new Set())}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
       {query.isLoading && (
         <SkeletonTable rows={6} cols={7} />
       )}
@@ -250,6 +367,14 @@ export const UsersListSection = ({ role, emptyTitle, emptyDescription }) => {
             <table className="w-full text-sm">
               <thead className="bg-surface-subtle text-ink-500 text-xs uppercase">
                 <tr>
+                  <th className="text-left font-medium px-4 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      className="rounded border-surface-border text-primary-600 focus:ring-primary-500"
+                      checked={paginatedFiltered.length > 0 && paginatedFiltered.every((u) => selected.has(u.id))}
+                      onChange={toggleSelectAll}
+                    />
+                  </th>
                   <th className="text-left font-medium px-4 py-3">Name</th>
                   <th className="text-left font-medium px-4 py-3">Email</th>
                   <th className="text-left font-medium px-4 py-3">Staff ID</th>

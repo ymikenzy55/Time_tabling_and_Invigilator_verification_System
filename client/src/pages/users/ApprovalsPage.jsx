@@ -30,8 +30,8 @@ export const ApprovalsPage = () => {
   const qc = useQueryClient();
   const confirm = useConfirm();
   const [rejecting, setRejecting] = useState(null);
-  // Which user is currently being approved, so only that card shows progress.
   const [approvingId, setApprovingId] = useState(null);
+  const [selected, setSelected] = useState(new Set());
 
   const listQuery = useQuery({
     queryKey: ['approvals', 'pending'],
@@ -68,8 +68,8 @@ export const ApprovalsPage = () => {
   });
 
   const approveAllMutation = useMutation({
-    mutationFn: async () => {
-      const results = await Promise.allSettled(users.map((u) => usersApi.approveUser(u.id)));
+    mutationFn: async (ids) => {
+      const results = await Promise.allSettled(ids.map((id) => usersApi.approveUser(id)));
       const succeeded = results.filter((r) => r.status === 'fulfilled').length;
       const failed = results.length - succeeded;
       if (failed > 0) throw new Error(`${failed} approval(s) failed.`);
@@ -77,6 +77,7 @@ export const ApprovalsPage = () => {
     },
     onSuccess: (count) => {
       toast.success(`${count} account(s) approved.`);
+      setSelected(new Set());
       qc.invalidateQueries({ queryKey: ['approvals', 'pending'] });
       qc.invalidateQueries({ queryKey: ['users'] });
     },
@@ -95,24 +96,43 @@ export const ApprovalsPage = () => {
         title="Pending Approvals"
         description="Review and activate newly registered accounts."
         actions={users.length > 0 ? (
-          <button
-            className="btn-primary"
-            onClick={async () => {
-              const ok = await confirm({
-                title: 'Approve all pending accounts?',
-                description: `${users.length} account(s) will be activated and able to sign in.`,
-                confirmText: 'Approve All',
-                tone: 'primary',
-              });
-              if (ok) approveAllMutation.mutate();
-            }}
-            disabled={approveAllMutation.isPending || approveMutation.isPending}
-          >
-            {approveAllMutation.isPending
-              ? <Loader2 className="w-4 h-4 animate-spin" />
-              : <CheckCheck className="w-4 h-4" />}
-            Approve All ({users.length})
-          </button>
+          <div className="flex items-center gap-2">
+            {selected.size > 0 && (
+              <button
+                className="btn-primary"
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: 'Approve selected accounts?',
+                    description: `${selected.size} account(s) will be activated and able to sign in.`,
+                    confirmText: 'Approve Selected',
+                    tone: 'primary',
+                  });
+                  if (ok) approveAllMutation.mutate([...selected]);
+                }}
+                disabled={approveAllMutation.isPending || approveMutation.isPending}
+              >
+                {approveAllMutation.isPending
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <CheckCheck className="w-4 h-4" />}
+                Approve Selected ({selected.size})
+              </button>
+            )}
+            <button
+              className="btn-secondary"
+              onClick={async () => {
+                const ok = await confirm({
+                  title: 'Approve all pending accounts?',
+                  description: `${users.length} account(s) will be activated and able to sign in.`,
+                  confirmText: 'Approve All',
+                  tone: 'primary',
+                });
+                if (ok) approveAllMutation.mutate(users.map((u) => u.id));
+              }}
+              disabled={approveAllMutation.isPending || approveMutation.isPending}
+            >
+              Approve All ({users.length})
+            </button>
+          </div>
         ) : undefined}
       />
 
@@ -132,6 +152,20 @@ export const ApprovalsPage = () => {
               <table className="w-full text-sm">
                 <thead className="bg-surface-subtle text-ink-500 text-xs uppercase">
                   <tr>
+                    <th className="text-left font-medium px-4 py-3 w-10">
+                      <input
+                        type="checkbox"
+                        className="rounded border-surface-border text-primary-600 focus:ring-primary-500"
+                        checked={users.length > 0 && users.every((u) => selected.has(u.id))}
+                        onChange={() => {
+                          if (users.every((u) => selected.has(u.id))) {
+                            setSelected(new Set());
+                          } else {
+                            setSelected(new Set(users.map((u) => u.id)));
+                          }
+                        }}
+                      />
+                    </th>
                     <th className="text-left font-medium px-4 py-3">Name</th>
                     <th className="text-left font-medium px-4 py-3">Role</th>
                     <th className="text-left font-medium px-4 py-3">Staff ID</th>
@@ -145,6 +179,21 @@ export const ApprovalsPage = () => {
                     const isApproving = approvingId === u.id;
                     return (
                       <tr key={u.id} className={`hover:bg-surface-subtle/30 ${isApproving ? 'opacity-60' : ''}`}>
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            className="rounded border-surface-border text-primary-600 focus:ring-primary-500"
+                            checked={selected.has(u.id)}
+                            onChange={() => {
+                              setSelected((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(u.id)) next.delete(u.id);
+                                else next.add(u.id);
+                                return next;
+                              });
+                            }}
+                          />
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2.5">
                             <div className="w-8 h-8 rounded-full bg-primary-600 text-white grid place-items-center text-xs font-bold shrink-0">
