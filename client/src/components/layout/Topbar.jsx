@@ -47,10 +47,9 @@ export const Topbar = ({ onToggleSidebar, sidebarOpen = true }) => {
   const markAllReadMutation = useMutation({
     mutationFn: () => notificationsApi.markAllRead(),
     onSuccess: () => {
-      qc.setQueryData(['notifications'], (prev) =>
-        (prev || []).map((n) => ({ ...n, isRead: true }))
-      );
-      qc.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+      qc.setQueryData(['notifications'], () => []);
+      qc.setQueryData(['notifications', 'unread-count'], () => 0);
+      setNotifOpen(false);
     },
   });
 

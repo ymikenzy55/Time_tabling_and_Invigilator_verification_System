@@ -62,9 +62,7 @@ export const NotificationsPage = () => {
     mutationFn: () => notificationsApi.markAllRead(),
     onSuccess: () => {
       qc.setQueriesData({ queryKey: ['notifications'] }, () => []);
-      qc.setQueriesData({ queryKey: ['notifications', { view: 'unread' }] }, () => []);
-      qc.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
-      notificationsQuery.refetch();
+      qc.setQueryData(['notifications', 'unread-count'], () => 0);
     },
   });
 

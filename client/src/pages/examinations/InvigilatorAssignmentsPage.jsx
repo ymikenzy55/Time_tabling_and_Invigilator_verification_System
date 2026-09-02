@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ClipboardList, Loader2, Trash2, UserPlus, Users, Building, Clock,
-  AlertCircle, CheckCircle2, Settings,
+  AlertCircle, CheckCircle2, Settings, MapPin, Search,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -48,6 +48,7 @@ export const InvigilatorAssignmentsPage = () => {
   const [manualModalOpen, setManualModalOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState(null);
   const [activeTab, setActiveTab] = useState('assignments');
+  const [scanSearch, setScanSearch] = useState('');
 
   // Fetch semesters and filter to only First/Second, sorted with First first
   const semestersQuery = useQuery({
@@ -164,8 +165,20 @@ export const InvigilatorAssignmentsPage = () => {
   }, {});
   const sortedDates = Object.keys(grouped).sort((a, b) => new Date(a) - new Date(b));
 
+  // Filter scans by search query
+  const filteredScans = useMemo(() => {
+    if (!scanSearch.trim()) return scans;
+    const q = scanSearch.toLowerCase();
+    return scans.filter((s) =>
+      s.user?.fullName?.toLowerCase().includes(q) ||
+      s.user?.staffId?.toLowerCase().includes(q) ||
+      s.user?.email?.toLowerCase().includes(q) ||
+      s.venue?.name?.toLowerCase().includes(q)
+    );
+  }, [scans, scanSearch]);
+
   // Group scans by date
-  const scansGrouped = scans.reduce((acc, s) => {
+  const scansGrouped = filteredScans.reduce((acc, s) => {
     const dateKey = new Date(s.scannedAt).toDateString();
     if (!acc[dateKey]) acc[dateKey] = [];
     acc[dateKey].push(s);
@@ -393,15 +406,32 @@ export const InvigilatorAssignmentsPage = () => {
               description="Invigilator check-ins will appear here once they scan venue QR codes."
             />
           ) : (
-            <div className="space-y-6">
-              {scanDates.map((dateKey) => {
-                const dayScans = scansGrouped[dateKey];
-                const isToday = new Date().toDateString() === dateKey;
-                const recordedCount = dayScans.filter((s) => s.result === 'RECORDED').length;
+            <div className="space-y-4">
+              <div className="relative max-w-md">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
+                <input
+                  className="input pl-9"
+                  placeholder="Search by name, staff ID, email, or venue..."
+                  value={scanSearch}
+                  onChange={(e) => setScanSearch(e.target.value)}
+                />
+              </div>
+              {scanDates.length === 0 ? (
+                <EmptyState
+                  icon={Search}
+                  title="No matches"
+                  description="No check-ins match your search."
+                />
+              ) : (
+                <div className="space-y-6">
+                  {scanDates.map((dateKey) => {
+                    const dayScans = scansGrouped[dateKey];
+                    const isToday = new Date().toDateString() === dateKey;
+                    const recordedCount = dayScans.filter((s) => s.result === 'RECORDED').length;
 
-                return (
-                  <div key={dateKey}>
-                    <div className="flex items-center gap-2 mb-3">
+                    return (
+                      <div key={dateKey}>
+                        <div className="flex items-center gap-2 mb-3">
                       <div className={`w-2 h-2 rounded-full ${isToday ? 'bg-emerald-500' : 'bg-ink-300'}`} />
                       <h3 className="text-sm font-bold text-ink-900">
                         {isToday ? 'Today' : formatDate(dateKey)}
@@ -420,6 +450,7 @@ export const InvigilatorAssignmentsPage = () => {
                             <th className="px-4 py-2.5 text-left text-xs font-bold text-ink-600">Venue</th>
                             <th className="px-4 py-2.5 text-left text-xs font-bold text-ink-600">Time Slot</th>
                             <th className="px-4 py-2.5 text-left text-xs font-bold text-ink-600">Check-in Time</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-bold text-ink-600">Location</th>
                             <th className="px-4 py-2.5 text-left text-xs font-bold text-ink-600">Status</th>
                           </tr>
                         </thead>
@@ -443,6 +474,22 @@ export const InvigilatorAssignmentsPage = () => {
                               </td>
                               <td className="px-4 py-3 text-sm text-ink-500">
                                 {new Date(s.scannedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              </td>
+                              <td className="px-4 py-3 text-xs text-ink-500">
+                                {s.latitude != null && s.longitude != null ? (
+                                  <a
+                                    href={`https://www.google.com/maps?q=${s.latitude},${s.longitude}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-primary-700 hover:text-primary-800"
+                                  >
+                                    <MapPin className="w-3 h-3" />
+                                    {s.latitude.toFixed(6)}, {s.longitude.toFixed(6)}
+                                  </a>
+                                ) : '—'}
+                                {s.locationAddress && (
+                                  <div className="text-ink-400 mt-0.5">{s.locationAddress}</div>
+                                )}
                               </td>
                               <td className="px-4 py-3">
                                 {s.result === 'RECORDED' ? (
@@ -485,6 +532,20 @@ export const InvigilatorAssignmentsPage = () => {
                                 <CheckCircle2 className="w-3 h-3" />
                                 {new Date(s.scannedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                               </div>
+                              {s.latitude != null && s.longitude != null && (
+                                <a
+                                  href={`https://www.google.com/maps?q=${s.latitude},${s.longitude}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 text-xs text-primary-700 mt-0.5"
+                                >
+                                  <MapPin className="w-3 h-3" />
+                                  {s.latitude.toFixed(6)}, {s.longitude.toFixed(6)}
+                                </a>
+                              )}
+                              {s.locationAddress && (
+                                <div className="text-xs text-ink-400 mt-0.5">{s.locationAddress}</div>
+                              )}
                             </div>
                             {s.result === 'RECORDED' ? (
                               <Badge variant="success" className="shrink-0">Checked In</Badge>
@@ -498,6 +559,8 @@ export const InvigilatorAssignmentsPage = () => {
                   </div>
                 );
               })}
+                </div>
+              )}
             </div>
           )}
         </>

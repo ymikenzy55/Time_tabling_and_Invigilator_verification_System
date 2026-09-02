@@ -22,7 +22,7 @@ export const semestersService = {
 
     let semesters = await prisma.semester.findMany({
       where,
-      orderBy: { startDate: 'desc' },
+      orderBy: { startDate: 'asc' },
       select: publicSelect,
     });
 
@@ -32,7 +32,7 @@ export const semestersService = {
       await prisma.$transaction((tx) => ensureDefaultSemesters(tx, { academicYearId }));
       semesters = await prisma.semester.findMany({
         where,
-        orderBy: { startDate: 'desc' },
+        orderBy: { startDate: 'asc' },
         select: publicSelect,
       });
     }
