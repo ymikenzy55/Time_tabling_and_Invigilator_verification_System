@@ -293,7 +293,7 @@ export const ScanPage = () => {
         scanHistoryQuery.refetch();
       } else {
         const label = RESULT_LABELS[data.result] || data.result;
-        toast.error(label);
+        toast.error(data.message || label);
         allowRescan();
       }
       setResult(data);
@@ -736,7 +736,7 @@ export const ScanPage = () => {
               <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-center">
                 <div className="flex items-center justify-center gap-2 text-sm font-bold text-amber-800">
                   <AlertTriangle className="w-5 h-5 text-amber-600" />
-                  Wrong Venue
+                  Go to your assigned venue
                 </div>
                 {result.message && (
                   <div className="text-sm text-amber-700 mt-2 text-left">

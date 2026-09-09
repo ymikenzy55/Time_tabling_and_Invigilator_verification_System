@@ -48,6 +48,9 @@ const EXAM_TIME_SLOTS = [
   { startHour: 14, endHour: 17, label: '2:00 PM – 5:00 PM' },
 ];
 
+// Every exam slot lasts three hours. Scanning is permitted only inside it.
+const SLOT_DURATION_MINUTES = 180;
+
 const getCurrentTimeSlot = (date) => {
   const hour = date.getHours();
   return EXAM_TIME_SLOTS.find((s) => hour >= s.startHour && hour < s.endHour) || null;
@@ -138,53 +141,32 @@ const evaluateVenueScan = async (token, actor) => {
   const now = new Date();
   const isDemo = invigilator.isDemo;
 
-  // Enforce exam period — QR only valid during the session date range.
-  // Demo invigilators bypass this check.
-  if (!isDemo && !isWithinExamPeriod(session, now)) {
-    return {
-      result: 'REJECTED_WINDOW',
-      payload,
-      venue,
-      invigilator,
-      message: `This QR code is only valid during the exam period (${new Date(session.startDate).toLocaleDateString()} – ${new Date(session.endDate).toLocaleDateString()}). Scanning is not available outside this period.`,
-    };
-  }
+  // Local day boundaries — `slotAt` is written with local hours by the
+  // scheduler, so the day must be derived the same way to avoid a UTC/local
+  // mismatch rejecting a correctly assigned invigilator.
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
 
-  // Verify the invigilator is assigned to THIS venue.
-  // Demo invigilators: search any assignment to this venue in the session (no day restriction).
-  // Regular invigilators: only search assignments for today.
-  let assignment;
-  if (isDemo) {
-    assignment = await prisma.venueAssignment.findFirst({
+  // ── Step 1: venue correctness ───────────────────────────────────────────
+  // Any assignment of this invigilator to THIS venue in this session proves
+  // the scanned venue is the right one. Day and time are validated later, so
+  // a right-venue/wrong-time scan never reports "wrong venue".
+  const venueAssignments = await prisma.venueAssignment.findMany({
+    where: {
+      invigilatorId: actor.id,
+      venueId: payload.venueId,
+      examinationSessionId: payload.examinationSessionId,
+    },
+    orderBy: { slotAt: 'asc' },
+  });
+
+  if (venueAssignments.length === 0) {
+    // Genuinely the wrong venue — point them at where they ARE assigned.
+    const otherAssignments = await prisma.venueAssignment.findMany({
       where: {
         invigilatorId: actor.id,
-        venueId: payload.venueId,
         examinationSessionId: payload.examinationSessionId,
       },
-    });
-  } else {
-    const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-    assignment = await prisma.venueAssignment.findFirst({
-      where: {
-        invigilatorId: actor.id,
-        venueId: payload.venueId,
-        examinationSessionId: payload.examinationSessionId,
-        slotAt: { gte: dayStart, lt: dayEnd },
-      },
-    });
-  }
-
-  if (!assignment) {
-    // Find where the invigilator IS assigned so we can point them there.
-    // Demo invigilators: search all assignments in the session.
-    // Regular invigilators: search only today's assignments.
-    const fallbackWhere = isDemo
-      ? { invigilatorId: actor.id, examinationSessionId: payload.examinationSessionId }
-      : { invigilatorId: actor.id, examinationSessionId: payload.examinationSessionId, slotAt: { gte: dayStart, lt: dayEnd } };
-
-    const todayAssignments = await prisma.venueAssignment.findMany({
-      where: fallbackWhere,
       orderBy: { slotAt: 'asc' },
       select: {
         slotAt: true,
@@ -192,12 +174,20 @@ const evaluateVenueScan = async (token, actor) => {
       },
     });
 
+    const todayAssignments = otherAssignments.filter(
+      (a) => new Date(a.slotAt) >= dayStart && new Date(a.slotAt) < dayEnd
+    );
+    const relevant = todayAssignments.length > 0 ? todayAssignments : otherAssignments;
+
     let message;
     if (todayAssignments.length > 0) {
-      const venueList = todayAssignments.map((a) => `${a.venue.name}`).join(', ');
-      message = `You scanned ${venue.name} but you are not assigned here. Your assigned venue${todayAssignments.length > 1 ? 's are' : ' is'}: ${venueList}. Please go to your assigned venue and scan the QR code there.`;
+      const venueList = todayAssignments.map((a) => a.venue.name).join(', ');
+      message = `Wrong venue. You scanned ${venue.name} but you are not assigned here. Today you are assigned to: ${venueList}. Please go to your assigned venue and scan the QR code posted there.`;
+    } else if (otherAssignments.length > 0) {
+      const venueList = [...new Set(otherAssignments.map((a) => a.venue.name))].join(', ');
+      message = `Wrong venue. You are not assigned to ${venue.name}. Your assigned venue${otherAssignments.length > 1 ? 's are' : ' is'}: ${venueList}. Check your invigilation schedule for the exact date and time.`;
     } else {
-      message = `You are not assigned to ${venue.name}. Please check your assignments or contact the exam officer.`;
+      message = `Wrong venue. You are not assigned to ${venue.name}, and you have no invigilation duties in this examination session. Contact the exam officer.`;
     }
 
     return {
@@ -205,19 +195,66 @@ const evaluateVenueScan = async (token, actor) => {
       payload,
       venue,
       invigilator,
-      assignedVenue: todayAssignments[0]
-        ? { ...todayAssignments[0].venue, slotAt: todayAssignments[0].slotAt }
-        : null,
-      allAssignedVenues: todayAssignments.map((a) => ({ ...a.venue, slotAt: a.slotAt })),
+      assignedVenue: relevant[0] ? { ...relevant[0].venue, slotAt: relevant[0].slotAt } : null,
+      allAssignedVenues: relevant.map((a) => ({ ...a.venue, slotAt: a.slotAt })),
       message,
     };
   }
 
-  // Check for duplicate scan — same venue, same invigilator, same time slot, already recorded.
-  // Only block if a RECORDED scan already exists for this venue + slot.
+  // ── Step 2: pick the assignment this scan refers to ─────────────────────
+  const withinExactWindow = (slotAt) => {
+    const start = new Date(slotAt);
+    const end = new Date(start.getTime() + SLOT_DURATION_MINUTES * 60 * 1000);
+    return now >= start && now <= end;
+  };
+
+  const todaysAtVenue = venueAssignments.filter(
+    (a) => new Date(a.slotAt) >= dayStart && new Date(a.slotAt) < dayEnd
+  );
+
+  let assignment;
+  if (isDemo) {
+    assignment = venueAssignments.find((a) => withinExactWindow(a.slotAt)) || venueAssignments[0];
+  } else {
+    assignment =
+      todaysAtVenue.find((a) => withinExactWindow(a.slotAt)) ||
+      todaysAtVenue[0] ||
+      null;
+  }
+
+  // Right venue, but nothing scheduled here today.
+  if (!assignment) {
+    const upcoming =
+      venueAssignments.find((a) => new Date(a.slotAt) >= now) ||
+      venueAssignments[venueAssignments.length - 1];
+    const when = new Date(upcoming.slotAt);
+    return {
+      result: 'REJECTED_WINDOW',
+      payload,
+      venue,
+      invigilator,
+      message: `Correct venue, wrong day. Your duty at ${venue.name} is on ${when.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} at ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Scanning is only possible during that exam window.`,
+    };
+  }
+
+  // ── Step 3: exam period guard ──────────────────────────────────────────
+  if (!isDemo && !isWithinExamPeriod(session, now)) {
+    return {
+      result: 'REJECTED_WINDOW',
+      payload,
+      venue,
+      invigilator,
+      assignment,
+      message: `This QR code is only valid during the exam period (${new Date(session.startDate).toLocaleDateString()} – ${new Date(session.endDate).toLocaleDateString()}). Scanning is not available outside this period.`,
+    };
+  }
+
+  const slotHour = new Date(assignment.slotAt).getHours();
+  const slotLabel =
+    EXAM_TIME_SLOTS.find((s) => slotHour >= s.startHour && slotHour < s.endHour)?.label || 'Exam Session';
+
+  // ── Step 4: duplicate check ────────────────────────────────────────────
   if (!isDemo) {
-    const slotHour = new Date(assignment.slotAt).getHours();
-    const slotLabel = EXAM_TIME_SLOTS.find((s) => slotHour >= s.startHour && slotHour < s.endHour)?.label || 'Exam Session';
     const existingScan = await prisma.venueScan.findFirst({
       where: {
         userId: actor.id,
@@ -225,8 +262,8 @@ const evaluateVenueScan = async (token, actor) => {
         examinationSessionId: payload.examinationSessionId,
         result: 'RECORDED',
         scannedAt: {
-          gte: new Date(new Date(assignment.slotAt).getTime() - 60 * 60 * 1000),
-          lte: new Date(new Date(assignment.slotAt).getTime() + 4 * 60 * 60 * 1000),
+          gte: new Date(assignment.slotAt),
+          lte: new Date(new Date(assignment.slotAt).getTime() + SLOT_DURATION_MINUTES * 60 * 1000),
         },
       },
     });
@@ -236,36 +273,33 @@ const evaluateVenueScan = async (token, actor) => {
         payload,
         venue,
         invigilator,
+        assignment,
         message: `You have already checked in at ${venue.name} for this time slot (${slotLabel}). Duplicate scans for the same venue and time are not allowed.`,
       };
     }
   }
 
-  // Time window check for regular invigilators: must be within the exam time slot.
-  // Demo invigilators bypass this check.
+  // ── Step 5: exact assigned window ──────────────────────────────────────
+  // Scanning is allowed only between slot start and slot end — no early
+  // grace before the slot and no grace after it closes.
   if (!isDemo) {
     const slotStart = new Date(assignment.slotAt);
-    const slotEnd = new Date(slotStart.getTime() + (assignment.examDurationMinutes || 180) * 60 * 1000);
-    // Allow scanning 15 minutes before slot start and up to 30 minutes after slot end.
-    const windowStart = new Date(slotStart.getTime() - 15 * 60 * 1000);
-    const windowEnd = new Date(slotEnd.getTime() + 30 * 60 * 1000);
-    if (now < windowStart || now > windowEnd) {
-      const sHour = slotStart.getHours();
-      const sLabel = EXAM_TIME_SLOTS.find((s) => sHour >= s.startHour && sHour < s.endHour)?.label || 'Exam Session';
+    const slotEnd = new Date(slotStart.getTime() + SLOT_DURATION_MINUTES * 60 * 1000);
+    if (now < slotStart || now > slotEnd) {
+      const early = now < slotStart;
       return {
         result: 'REJECTED_WINDOW',
         payload,
         venue,
         invigilator,
         assignment,
-        message: `Scanning for ${venue.name} is only allowed during your assigned exam time (${slotStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – ${slotEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}). Please come back during your exam window.`,
+        message: early
+          ? `Too early. Scanning for ${venue.name} opens at ${slotStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} and closes at ${slotEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (${slotLabel}).`
+          : `Scan window closed. Your slot at ${venue.name} ran from ${slotStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} to ${slotEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (${slotLabel}).`,
       };
     }
   }
 
-  // Determine the time slot label from the assignment's scheduled time.
-  const slotHour = new Date(assignment.slotAt).getHours();
-  const slotLabel = EXAM_TIME_SLOTS.find((s) => slotHour >= s.startHour && slotHour < s.endHour)?.label || 'Exam Session';
   return { result: 'RECORDED', payload, venue, invigilator, assignment, timeSlot: slotLabel };
 };
 
@@ -536,11 +570,20 @@ export const attendanceService = {
 
     // Successful scan - notify exam officer
     const checkInTime = new Date(scan.scannedAt || Date.now()).toLocaleString();
-    const locationStr = address
-      ? ` (Location: ${address}${!isOnCampus ? ' - OFF CAMPUS' : ''})`
-      : latitude != null && longitude != null
-      ? ` (Approximate location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}${!isOnCampus ? ' - OFF CAMPUS' : ''} — exact address unavailable)`
-      : '';
+    // Report the exact fix the device returned — full-precision coordinates,
+    // reported accuracy, and the resolved street address when available.
+    const locationParts = [];
+    if (address) locationParts.push(address);
+    if (latitude != null && longitude != null) {
+      locationParts.push(`${Number(latitude).toFixed(6)}, ${Number(longitude).toFixed(6)}`);
+    }
+    if (locationAccuracy != null) {
+      locationParts.push(`±${Math.round(locationAccuracy)}m accuracy`);
+    }
+    if (isOnCampus === false) locationParts.push('OFF CAMPUS');
+    const locationStr = locationParts.length
+      ? ` (Location: ${locationParts.join(' · ')})`
+      : ' (Location: not provided)';
     
     // Notify with warning if off-campus
     const notificationTitle = isOnCampus === false 
@@ -558,6 +601,8 @@ export const attendanceService = {
         scanId: scan.id, 
         latitude, 
         longitude,
+        locationAccuracy: locationAccuracy || null,
+        address: address || null,
         isOnCampus,
       },
     }).catch(() => {});
@@ -575,6 +620,7 @@ export const attendanceService = {
       examinationSessionId: payload.examinationSessionId,
       latitude: latitude || null,
       longitude: longitude || null,
+      locationAccuracy: locationAccuracy || null,
       address: address || null,
       isOnCampus,
       timeSlot: timeSlot || null,

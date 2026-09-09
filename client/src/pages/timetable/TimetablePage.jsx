@@ -308,28 +308,28 @@ export const TimetablePage = () => {
         setGenerateProgress((prev) => [...prev, msg]);
       });
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       const venueMsg = data.venuesAssigned ? ' with venues' : ' without venues';
       toast.success(`Timetable generated${venueMsg}: ${data.created}/${data.total} courses scheduled.`);
-      qc.invalidateQueries({ queryKey: ['timetable'] });
-      qc.invalidateQueries({ queryKey: ['invigilations'] });
-      setResult(data);
-      setGenerateOpen(false);
-      // Defer invigilator assignment — only after timetable is fully saved
-      if (generateAssignInvigilators && hasInvigilators) {
-        // Small delay to ensure timetable entries are committed
-        setTimeout(() => {
-          assignMutation.mutate(sessionId, {
-            onSuccess: () => {
-              setInvigilatorsAssigned(true);
-              qc.invalidateQueries({ queryKey: ['venue-assignments', 'session-count'] });
-            },
-          });
-        }, 500);
-      } else {
-        setInvigilatorsAssigned(false);
+
+      // Invigilators are assigned by the backend inside the same generation
+      // request, so every venue+slot already has its invigilators.
+      setInvigilatorsAssigned((data.invigilatorsAssigned || 0) > 0);
+      if (data.invigilatorsAssigned > 0) {
+        toast.success(`${data.invigilatorsAssigned} invigilator slots assigned across ${data.invigilatorSlots} time slots.`);
+      } else if (data.invigilatorAssignmentError) {
+        toast.error(`Invigilators not assigned: ${data.invigilatorAssignmentError}`);
       }
-      setGenerateAssignInvigilators(false);
+
+      setGenerateOpen(false);
+
+      // Pull the new timetable before the grid is shown again so the previous
+      // timetable is never rendered next to the new generation result.
+      qc.invalidateQueries({ queryKey: ['invigilations'] });
+      qc.invalidateQueries({ queryKey: ['venue-assignments'] });
+      await qc.refetchQueries({ queryKey: ['timetable'], type: 'active' });
+
+      setResult(data);
     },
     onError: (err) => toast.error(err.message || 'Failed to generate timetable.'),
     onSettled: () => {
@@ -337,8 +337,6 @@ export const TimetablePage = () => {
       setGenerateProgress(null);
     },
   });
-
-  const [generateAssignInvigilators, setGenerateAssignInvigilators] = useState(false);
 
   const invigilatorCountQuery = useQuery({
     queryKey: ['venue-assignments', 'invigilator-count'],
@@ -523,13 +521,12 @@ export const TimetablePage = () => {
   };
 
   const onGenerate = (values) => {
-    const { assignInvigilators: assignNow, assignVenues, durationWeeks, ...rest } = values;
+    const { assignInvigilators: _ignored, assignVenues, durationWeeks, ...rest } = values;
     // Compute endDate from startDate + durationWeeks
     const start = new Date(rest.startDate);
     const end = new Date(start);
     end.setDate(end.getDate() + (durationWeeks * 7) - 1);
     const options = { ...rest, endDate: dateKey(end), assignVenues };
-    setGenerateAssignInvigilators(assignNow);
     generateMutation.mutate({ examinationSessionId: sessionId, options });
   };
 
@@ -1211,22 +1208,29 @@ export const TimetablePage = () => {
             </div>
           ))}
 
-          {invigilatorsAssigned || assignMutation.isPending ? (
+          {assignMutation.isPending ? (
             <div className="flex items-center gap-2 text-sm text-emerald-700">
-              {assignMutation.isPending ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Assigning invigilators to venues…</>
-              ) : (
-                <><CheckCircle2 className="w-4 h-4" /> Invigilators have been assigned to venues.</>
-              )}
+              <Loader2 className="w-4 h-4 animate-spin" /> Assigning invigilators to venues…
+            </div>
+          ) : result.invigilatorsAssigned > 0 ? (
+            <div className="flex items-center gap-2 text-sm text-emerald-700">
+              <CheckCircle2 className="w-4 h-4" />
+              {result.invigilatorsAssigned} invigilator slot{result.invigilatorsAssigned === 1 ? '' : 's'} assigned across {result.invigilatorSlots} time slot{result.invigilatorSlots === 1 ? '' : 's'} — invigilators can scan during their window.
+            </div>
+          ) : invigilatorsAssigned ? (
+            <div className="flex items-center gap-2 text-sm text-emerald-700">
+              <CheckCircle2 className="w-4 h-4" /> Invigilators have been assigned to venues.
             </div>
           ) : (
             <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
               <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
               <div className="text-sm text-amber-900">
-                <span className="font-bold">No invigilators assigned yet.</span>{' '}
-                {hasInvigilators
-                  ? 'Click "Assign Invigilators" above to auto-assign invigilators to venues.'
-                  : 'No invigilators are registered in the system. Register invigilators first, then assign them.'}
+                <span className="font-bold">No invigilators assigned.</span>{' '}
+                {result.invigilatorAssignmentError
+                  ? result.invigilatorAssignmentError
+                  : hasInvigilators
+                    ? 'Invigilators are assigned automatically when venues are assigned. Use "Assign Invigilators" above to retry.'
+                    : 'No invigilators are registered in the system. Register invigilators first, then regenerate.'}
               </div>
             </div>
           )}
@@ -1252,7 +1256,7 @@ export const TimetablePage = () => {
       )}
 
       {/* Clash warning banner */}
-      {hasClashes && grid.length > 0 && (
+      {hasClashes && grid.length > 0 && !isGenerating && (
         <div className="mb-6 rounded-lg border-2 border-rose-500 bg-rose-50 px-4 py-3 flex items-start gap-2">
           <AlertCircle className="w-5 h-5 text-rose-600 mt-0.5 shrink-0" />
           <div>
@@ -1267,10 +1271,12 @@ export const TimetablePage = () => {
       )}
 
       {/* Timetable grid */}
-      {pendingGenerate ? (
+      {pendingGenerate || isGenerating ? (
         <div className="card flex flex-col items-center justify-center py-20 gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
-          <p className="text-sm text-ink-500">Preparing timetable generation…</p>
+          <p className="text-sm text-ink-500">
+            {isGenerating ? 'Building the new timetable — it will appear once generation completes…' : 'Preparing timetable generation…'}
+          </p>
         </div>
       ) : !sessionId && initialQuery.isLoading ? (
         <SkeletonTimetable />
@@ -1569,24 +1575,19 @@ export const TimetablePage = () => {
               )}
             </div>
 
-            {/* Invigilator assignment */}
+            {/* Invigilator assignment — automatic */}
             <div className="space-y-2 border-t border-surface-border pt-3">
-              <div className="text-sm font-medium text-ink-800">Assign invigilators to venues?</div>
-              <div className="flex items-center gap-3">
-                <label className={`flex items-center gap-2 text-sm cursor-pointer px-3 py-1.5 rounded-lg border transition-colors ${watchGen('assignInvigilators') ? 'border-primary-300 bg-primary-50 text-primary-800' : 'border-surface-border bg-white text-ink-600 hover:bg-surface-subtle'} ${!hasInvigilators ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  <input type="radio" value="true" checked={watchGen('assignInvigilators') === true} disabled={!hasInvigilators} onChange={() => setGenValue('assignInvigilators', true)} className="sr-only" />
-                  <Users className="w-4 h-4" /> Yes, assign invigilators
-                </label>
-                <label className={`flex items-center gap-2 text-sm cursor-pointer px-3 py-1.5 rounded-lg border transition-colors ${!watchGen('assignInvigilators') ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-surface-border bg-white text-ink-600 hover:bg-surface-subtle'}`}>
-                  <input type="radio" value="false" checked={watchGen('assignInvigilators') === false} onChange={() => setGenValue('assignInvigilators', false)} className="sr-only" />
-                  No, assign later
-                </label>
+              <div className="flex items-start gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2.5">
+                <Users className="w-4 h-4 text-primary-600 mt-0.5 shrink-0" />
+                <div className="text-xs text-primary-900">
+                  <span className="font-bold">Invigilators are assigned automatically.</span>{' '}
+                  {watchAssignVenues
+                    ? hasInvigilators
+                      ? `Every venue and time slot gets its invigilators as soon as the timetable is generated, so they can scan straight away. ${invigilatorCountQuery.data} active invigilator${invigilatorCountQuery.data === 1 ? '' : 's'} registered — nobody is assigned to their own department's exams.`
+                      : 'No invigilators are registered yet, so none can be assigned. Register invigilators, then regenerate.'
+                    : 'Enable venue assignment above so invigilators can be assigned to venues.'}
+                </div>
               </div>
-              <p className="text-xs text-ink-500">
-                {hasInvigilators
-                  ? `${invigilatorCountQuery.data} active invigilator${invigilatorCountQuery.data === 1 ? '' : 's'} registered. Invigilators will not be assigned to their own department's exams.`
-                  : 'No invigilators registered. You can assign them later after registration.'}
-              </p>
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">

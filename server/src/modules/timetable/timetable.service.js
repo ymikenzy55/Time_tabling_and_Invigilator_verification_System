@@ -1,6 +1,7 @@
 import { prisma } from '../../utils/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { logAudit } from '../../utils/auditLog.js';
+import { venueAssignmentsService } from '../venueAssignments/venueAssignments.service.js';
 
 // Fixed daily exam periods: 8-11am, 11am-2pm, 2-5pm.
 const EXAM_PERIODS = [
@@ -776,8 +777,25 @@ export const timetableService = {
       await prisma.invigilation.createMany({ data: rows });
     }
     progress(`Saved ${rows.length} timetable entries to database.`);
-    
-    progress(`Assigning invigilators to venues…`);
+
+    // Assign invigilators to every venue+slot in the same operation so an
+    // invigilator has a venue the moment the timetable exists.
+    let invigilatorAssignment = null;
+    let invigilatorAssignmentError = null;
+    if (assignVenues && rows.length > 0) {
+      progress(`Assigning invigilators to venues…`);
+      try {
+        invigilatorAssignment = await venueAssignmentsService.assignForSession(
+          examinationSessionId,
+          {},
+          actor
+        );
+        progress(`Assigned ${invigilatorAssignment.assigned} invigilator slots across ${invigilatorAssignment.slots} time slots.`);
+      } catch (err) {
+        invigilatorAssignmentError = err.message || 'Invigilator assignment failed.';
+        progress(`Invigilator assignment skipped: ${invigilatorAssignmentError}`);
+      }
+    }
 
     const wasComplete = unscheduled.length === 0;
     const clashCount = unscheduled.filter(u => u.reason && u.reason.includes('Clash detected')).length;
@@ -819,6 +837,9 @@ export const timetableService = {
       complete: wasComplete,
       clashCount,
       message: resultMessage,
+      invigilatorsAssigned: invigilatorAssignment?.assigned || 0,
+      invigilatorSlots: invigilatorAssignment?.slots || 0,
+      invigilatorAssignmentError,
     };
   },
 

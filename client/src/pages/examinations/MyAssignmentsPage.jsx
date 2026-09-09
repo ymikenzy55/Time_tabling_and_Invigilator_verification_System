@@ -21,6 +21,7 @@ import toast from 'react-hot-toast';
 
 const INSTITUTION_NAME = 'University of Energy and Natural Resources';
 const LOGO_IMAGE = '/assets/images/uenrLogo.png';
+const SLOT_DURATION_MINUTES = 180;
 
 const formatDate = (v) => {
   if (!v) return '—';
@@ -66,6 +67,14 @@ export const MyAssignmentsPage = () => {
 
   const assignments = assignmentsQuery.data || [];
   const scans = scansQuery.data || [];
+
+  // Live clock so the scan button becomes available the moment the assigned
+  // window opens, without the invigilator refreshing the page.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Group assignments by date
   const grouped = assignments.reduce((acc, a) => {
@@ -274,47 +283,53 @@ export const MyAssignmentsPage = () => {
                               )}
                             </div>
 
-                            <div className="shrink-0 flex items-center gap-2">
-                              {scanned ? (
-                                <Badge variant="success">
-                                  <CheckCircle2 className="w-3 h-3 mr-1" />
-                                  Checked In
-                                </Badge>
-                              ) : isPast ? (
-                                <Badge variant="neutral">Missed</Badge>
-                              ) : (
-                                <Badge variant="info">Pending</Badge>
-                              )}
-                              {!scanned && !isPast && (() => {
+                            <div className="shrink-0 flex flex-wrap items-center gap-2">
+                              {(() => {
                                 const slotStart = new Date(a.slotAt);
-                                const slotEnd = new Date(slotStart.getTime() + (a.examDurationMinutes || 180) * 60 * 1000);
-                                const windowStart = new Date(slotStart.getTime() - 15 * 60 * 1000);
-                                const windowEnd = new Date(slotEnd.getTime() + 30 * 60 * 1000);
-                                const now = new Date();
-                                const isWindowOpen = isDemoUser || (now >= windowStart && now <= windowEnd);
+                                const slotEnd = new Date(slotStart.getTime() + SLOT_DURATION_MINUTES * 60 * 1000);
+                                // Scanning is allowed only inside the assigned
+                                // slot — no grace before it opens or after it closes.
+                                const isWindowOpen = isDemoUser || (now >= slotStart && now <= slotEnd);
+                                const windowClosed = now > slotEnd;
+                                const startLabel = slotStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-                                if (!isWindowOpen) {
+                                if (scanned) {
                                   return (
-                                    <span className="text-xs text-ink-400 italic">Scan opens 15 min before slot</span>
+                                    <Badge variant="success">
+                                      <CheckCircle2 className="w-3 h-3 mr-1" />
+                                      Checked In
+                                    </Badge>
                                   );
                                 }
 
-                                return (
-                                  <button
-                                    className="btn-primary btn-sm"
-                                    onClick={() => navigate('/scan', {
-                                      state: {
-                                        fromAssignment: {
-                                          ...a,
-                                          examDurationMinutes: 180,
-                                          isDemo: isDemoUser,
+                                if (isWindowOpen) {
+                                  return (
+                                    <button
+                                      className="btn-primary btn-sm"
+                                      onClick={() => navigate('/scan', {
+                                        state: {
+                                          fromAssignment: {
+                                            ...a,
+                                            examDurationMinutes: SLOT_DURATION_MINUTES,
+                                            isDemo: isDemoUser,
+                                          },
                                         },
-                                      },
-                                    })}
-                                  >
-                                    <ScanLine className="w-3.5 h-3.5" />
-                                    Scan
-                                  </button>
+                                      })}
+                                    >
+                                      <ScanLine className="w-3.5 h-3.5" />
+                                      Scan Now
+                                    </button>
+                                  );
+                                }
+
+                                if (isPast || windowClosed) {
+                                  return <Badge variant="neutral">Missed</Badge>;
+                                }
+
+                                return (
+                                  <span className="text-xs text-ink-500 whitespace-nowrap">
+                                    Scan opens {startLabel}
+                                  </span>
                                 );
                               })()}
                             </div>
