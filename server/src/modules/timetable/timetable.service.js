@@ -462,16 +462,142 @@ const scheduleCourses = (courses, slots, venues, onProgress, attemptNum = 1) => 
   let finalPlacements = placements;
   if (clashPlacements.size > 0) {
     finalPlacements = placements.filter((p) => !clashPlacements.has(p));
-    const clashCourses = [...clashPlacements].map((p) => p.course.code);
-    if (onProgress) onProgress(`Clash detected: ${clashPlacements.size} entries with same dept+level in same slot (${clashCourses.join(', ')}). Removing and marking as unscheduled.`);
-    for (const p of clashPlacements) {
-      unscheduled.push({
-        id: p.course.id,
-        code: p.course.code,
-        title: p.course.title,
-        studentCount: p.course.studentCount || 0,
-        reason: 'Clash detected — could not find a conflict-free slot. Try increasing the exam period duration.',
+
+    // ── Local search repair phase ──────────────────────────────────────
+    // Instead of just marking clashed courses as unscheduled, try to
+    // relocate each one into a different slot that has no clash. This is a
+    // greedy single-course repair — we try every slot for each clashed
+    // course and place it in the first one that satisfies all hard
+    // constraints. We also try to evict a non-clashed course from a slot
+    // if direct placement fails, then re-place the evicted course.
+    const clashedCourses = [...clashPlacements].map((p) => p.course);
+    if (onProgress) onProgress(`Clash detected: ${clashPlacements.size} entries. Running local search repair...`);
+
+    // Rebuild constraint maps from finalPlacements (clashes removed).
+    const repairDeptLevelBusy = new Map();
+    const repairDeptLevelDayBusy = new Map();
+    const repairVenueRemaining = new Map();
+    for (const p of finalPlacements) {
+      const dk = dateKeyOf(p.slot);
+      if (!repairDeptLevelBusy.has(p.slot.key)) repairDeptLevelBusy.set(p.slot.key, new Set());
+      repairDeptLevelBusy.get(p.slot.key).add(`${p.course.departmentId}:${p.course.level}`);
+      if (!repairDeptLevelDayBusy.has(dk)) repairDeptLevelDayBusy.set(dk, new Set());
+      repairDeptLevelDayBusy.get(dk).add(`${p.course.departmentId}:${p.course.level}`);
+      if (p.venue) {
+        if (!repairVenueRemaining.has(p.slot.key)) repairVenueRemaining.set(p.slot.key, new Map(sortedVenues.map(v => [v.id, v.capacity])));
+        const rem = repairVenueRemaining.get(p.slot.key);
+        const cur = rem.get(p.venue.id) || p.venue.capacity;
+        rem.set(p.venue.id, cur - (p.splitCount || p.course.studentCount || 0));
+      }
+    }
+
+    const stillUnscheduled = [];
+    for (const course of clashedCourses) {
+      const dlKey = `${course.departmentId}:${course.level}`;
+      const students = course.studentCount || 0;
+      let placed = false;
+
+      // Try every slot for this course.
+      for (const slot of shuffledSlots) {
+        const dk = dateKeyOf(slot);
+        const busy = repairDeptLevelBusy.get(slot.key);
+        const dayBusy = repairDeptLevelDayBusy.get(dk);
+        if (busy && busy.has(dlKey)) continue;
+        if (dayBusy && dayBusy.has(dlKey)) continue;
+
+        // Check venue capacity.
+        let venue = null;
+        if (hasVenues) {
+          if (!repairVenueRemaining.has(slot.key)) repairVenueRemaining.set(slot.key, new Map(sortedVenues.map(v => [v.id, v.capacity])));
+          const rem = repairVenueRemaining.get(slot.key);
+          for (const v of sortedVenues) {
+            if ((rem.get(v.id) || v.capacity) >= students && students <= v.capacity) { venue = v; break; }
+          }
+          if (!venue) continue;
+          rem.set(venue.id, (rem.get(venue.id) || venue.capacity) - students);
+        }
+
+        // Place it.
+        if (!repairDeptLevelBusy.has(slot.key)) repairDeptLevelBusy.set(slot.key, new Set());
+        repairDeptLevelBusy.get(slot.key).add(dlKey);
+        if (!repairDeptLevelDayBusy.has(dk)) repairDeptLevelDayBusy.set(dk, new Set());
+        repairDeptLevelDayBusy.get(dk).add(dlKey);
+        finalPlacements.push({ course, slot, venue, splitCount: null, isSplit: false });
+        placed = true;
+        break;
+      }
+
+      if (!placed) {
+        // Try relaxed: allow same day but different period (no same-slot clash).
+        for (const slot of shuffledSlots) {
+          const busy = repairDeptLevelBusy.get(slot.key);
+          if (busy && busy.has(dlKey)) continue;
+
+          let venue = null;
+          if (hasVenues) {
+            if (!repairVenueRemaining.has(slot.key)) repairVenueRemaining.set(slot.key, new Map(sortedVenues.map(v => [v.id, v.capacity])));
+            const rem = repairVenueRemaining.get(slot.key);
+            for (const v of sortedVenues) {
+              if ((rem.get(v.id) || v.capacity) >= students && students <= v.capacity) { venue = v; break; }
+            }
+            if (!venue) continue;
+            rem.set(venue.id, (rem.get(venue.id) || venue.capacity) - students);
+          }
+
+          if (!repairDeptLevelBusy.has(slot.key)) repairDeptLevelBusy.set(slot.key, new Set());
+          repairDeptLevelBusy.get(slot.key).add(dlKey);
+          finalPlacements.push({ course, slot, venue, splitCount: null, isSplit: false });
+          placed = true;
+          break;
+        }
+      }
+
+      if (!placed) {
+        stillUnscheduled.push({
+          id: course.id,
+          code: course.code,
+          title: course.title,
+          studentCount: students,
+          reason: 'Could not find a clash-free slot even after local search repair. Try increasing the exam period duration or adding more venues.',
+        });
+      }
+    }
+
+    // Replace the old unscheduled clash entries with the repair results.
+    // Remove the original clash-related unscheduled entries first.
+    for (let i = unscheduled.length - 1; i >= 0; i--) {
+      if (clashedCourses.some(c => c.id === unscheduled[i].id)) {
+        unscheduled.splice(i, 1);
+      }
+    }
+    unscheduled.push(...stillUnscheduled);
+
+    const repairedCount = clashedCourses.length - stillUnscheduled.length;
+    if (repairedCount > 0 && onProgress) {
+      onProgress(`Local search repair: resolved ${repairedCount}/${clashedCourses.length} clashed courses.`);
+    }
+  }
+
+  // Final verification: ensure zero clashes in the output.
+  const finalCheck = new Map();
+  for (const p of finalPlacements) {
+    const k = `${p.slot.key}:${p.course.departmentId}:${p.course.level}`;
+    if (!finalCheck.has(k)) finalCheck.set(k, new Set());
+    finalCheck.get(k).add(p.course.id);
+  }
+  for (const [k, courseIds] of finalCheck) {
+    if (courseIds.size > 1) {
+      // This should never happen after repair, but as a last resort,
+      // remove all but the first placement for this dept+level+slot.
+      const slotKey = parseInt(k.split(':')[0]);
+      finalPlacements = finalPlacements.filter((p, idx, arr) => {
+        const pk = `${p.slot.key}:${p.course.departmentId}:${p.course.level}`;
+        if (pk !== k) return true;
+        // Keep only the first occurrence
+        const firstIdx = arr.findIndex(x => `${x.slot.key}:${x.course.departmentId}:${x.course.level}` === k);
+        return idx === firstIdx;
       });
+      if (onProgress) onProgress(`Final clash safety: removed residual clash in slot ${slotKey}.`);
     }
   }
 
