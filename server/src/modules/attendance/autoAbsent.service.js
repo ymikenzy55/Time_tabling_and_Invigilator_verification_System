@@ -29,6 +29,7 @@ const processMissedScans = async () => {
       where: {
         slotAt: { gte: lookbackStart, lt: slotMustStartBefore },
         invigilator: { isDemo: false },
+        isDemo: false,
       },
       select: {
         id: true,

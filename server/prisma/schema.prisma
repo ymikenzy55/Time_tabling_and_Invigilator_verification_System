@@ -295,6 +295,7 @@ model VenueAssignment {
   venueId              String
   invigilatorId        String
   slotAt               DateTime
+  isDemo               Boolean            @default(false)
   createdAt            DateTime           @default(now())
   examinationSession   ExaminationSession @relation(fields: [examinationSessionId], references: [id], onDelete: Cascade)
   invigilator          User               @relation(fields: [invigilatorId], references: [id], onDelete: Cascade)

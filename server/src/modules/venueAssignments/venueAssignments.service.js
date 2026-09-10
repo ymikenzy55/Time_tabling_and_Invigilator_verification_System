@@ -9,6 +9,7 @@ import { broadcast } from '../../utils/broadcast.js';
 const publicSelect = {
   id: true,
   slotAt: true,
+  isDemo: true,
   createdAt: true,
   venue: { select: { id: true, name: true, capacity: true, location: true } },
   invigilator: { select: { id: true, fullName: true, email: true, staffId: true, departmentName: true } },
@@ -190,6 +191,35 @@ export const venueAssignmentsService = {
       });
     }
 
+    // ── Demo scan slot per invigilator ──────────────────────────────────
+    // Every invigilator gets one demo assignment so they can test the
+    // scanning flow at any time, regardless of their real schedule.
+    // The demo slot uses the session start date at midnight (a time no
+    // real exam is ever scheduled) and the first venue they are already
+    // assigned to, so the unique constraint is not violated.
+    const demoRows = [];
+    const demoSlotAt = new Date(session.startDate);
+    demoSlotAt.setHours(0, 0, 0, 0);
+
+    for (const [invigilatorId, slots] of invigilatorSlots) {
+      if (!slots || slots.length === 0) continue;
+      const firstVenueId = slots[0].venueId;
+      demoRows.push({
+        examinationSessionId,
+        venueId: firstVenueId,
+        invigilatorId,
+        slotAt: demoSlotAt,
+        isDemo: true,
+      });
+    }
+
+    if (demoRows.length > 0) {
+      await prisma.venueAssignment.createMany({
+        data: demoRows,
+        skipDuplicates: true,
+      });
+    }
+
     // Batch notification creation for better performance
     const notified = new Set();
     const notificationPromises = [];
@@ -283,6 +313,7 @@ export const venueAssignmentsService = {
       invigilators: invigilators.length,
       slots: new Set(assignmentRows.map((r) => r.slotAt.getTime())).size,
       maxPerVenue: limit,
+      demoSlots: demoRows.length,
     };
   },
 

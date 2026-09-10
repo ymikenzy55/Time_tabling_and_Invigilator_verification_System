@@ -158,6 +158,7 @@ const evaluateVenueScan = async (token, actor) => {
       examinationSessionId: payload.examinationSessionId,
     },
     orderBy: { slotAt: 'asc' },
+    select: { id: true, slotAt: true, isDemo: true },
   });
 
   if (venueAssignments.length === 0) {
@@ -202,6 +203,11 @@ const evaluateVenueScan = async (token, actor) => {
   }
 
   // ── Step 2: pick the assignment this scan refers to ─────────────────────
+  // A demo assignment (isDemo: true) is time-independent — any invigilator
+  // with one can scan at any time to test the system.
+  const demoAssignment = venueAssignments.find((a) => a.isDemo);
+  const isDemoScan = isDemo || !!demoAssignment;
+
   const withinExactWindow = (slotAt) => {
     const start = new Date(slotAt);
     const end = new Date(start.getTime() + SLOT_DURATION_MINUTES * 60 * 1000);
@@ -209,12 +215,12 @@ const evaluateVenueScan = async (token, actor) => {
   };
 
   const todaysAtVenue = venueAssignments.filter(
-    (a) => new Date(a.slotAt) >= dayStart && new Date(a.slotAt) < dayEnd
+    (a) => !a.isDemo && new Date(a.slotAt) >= dayStart && new Date(a.slotAt) < dayEnd
   );
 
   let assignment;
-  if (isDemo) {
-    assignment = venueAssignments.find((a) => withinExactWindow(a.slotAt)) || venueAssignments[0];
+  if (isDemoScan) {
+    assignment = demoAssignment || venueAssignments.find((a) => withinExactWindow(a.slotAt)) || venueAssignments[0];
   } else {
     assignment =
       todaysAtVenue.find((a) => withinExactWindow(a.slotAt)) ||
@@ -238,13 +244,12 @@ const evaluateVenueScan = async (token, actor) => {
   }
 
   // ── Step 3: exam period guard ──────────────────────────────────────────
-  if (!isDemo && !isWithinExamPeriod(session, now)) {
+  if (!isDemoScan && !isWithinExamPeriod(session, now)) {
     return {
       result: 'REJECTED_WINDOW',
       payload,
       venue,
       invigilator,
-      assignment,
       message: `This QR code is only valid during the exam period (${new Date(session.startDate).toLocaleDateString()} – ${new Date(session.endDate).toLocaleDateString()}). Scanning is not available outside this period.`,
     };
   }
@@ -254,7 +259,7 @@ const evaluateVenueScan = async (token, actor) => {
     EXAM_TIME_SLOTS.find((s) => slotHour >= s.startHour && slotHour < s.endHour)?.label || 'Exam Session';
 
   // ── Step 4: duplicate check ────────────────────────────────────────────
-  if (!isDemo) {
+  if (!isDemoScan) {
     const existingScan = await prisma.venueScan.findFirst({
       where: {
         userId: actor.id,
@@ -282,7 +287,7 @@ const evaluateVenueScan = async (token, actor) => {
   // ── Step 5: exact assigned window ──────────────────────────────────────
   // Scanning is allowed only between slot start and slot end — no early
   // grace before the slot and no grace after it closes.
-  if (!isDemo) {
+  if (!isDemoScan) {
     const slotStart = new Date(assignment.slotAt);
     const slotEnd = new Date(slotStart.getTime() + SLOT_DURATION_MINUTES * 60 * 1000);
     if (now < slotStart || now > slotEnd) {

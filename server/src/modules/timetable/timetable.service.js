@@ -693,25 +693,25 @@ export const timetableService = {
       if (onProgress) onProgress(msg);
     };
     
-    progress(`Preparing timetable generation…`);
-    progress(`Found ${courses.length} approved courses and ${venues.length} active venues.`);
-    progress(`Building time slots from ${periodStart.toLocaleDateString()} to ${periodEnd.toLocaleDateString()}…`);
-    progress(`Created ${slots.length} available time slots.`);
+    progress(`📦 Fetching approved courses and active venues…`);
+    progress(`Found ${courses.length} approved course${courses.length === 1 ? '' : 's'} and ${venues.length} active venue${venues.length === 1 ? '' : 's'}.`);
+    progress(`📅 Building time slots from ${periodStart.toLocaleDateString()} to ${periodEnd.toLocaleDateString()}…`);
+    progress(`✅ Created ${slots.length} available time slot${slots.length === 1 ? '' : 's'} across the exam period.`);
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      progress(`Attempt ${attempt}/${maxRetries}: Scheduling courses…`);
+      progress(`🔄 Attempt ${attempt}/${maxRetries}: Grouping and scheduling courses…`);
       // Run the constraint solver in memory
       const { placements, unscheduled } = scheduleCourses(courses, slots, venues, onProgress);
       
       const hasClashes = unscheduled.some(u => u.reason && u.reason.includes('Clash detected'));
       
-      progress(`Attempt ${attempt}: ${placements.length}/${courses.length} courses scheduled, ${unscheduled.length} unscheduled${hasClashes ? ' (due to clashes)' : ''}`);
+      progress(`📊 Attempt ${attempt}: ${placements.length}/${courses.length} courses scheduled, ${unscheduled.length} unscheduled${hasClashes ? ' (due to clashes)' : ''}`);
       
       // If we found a complete solution, use it immediately
       if (unscheduled.length === 0) {
         bestResult = { placements, unscheduled };
         bestAttemptNumber = attempt;
-        progress(`✓ Complete clash-free solution found on attempt ${attempt}!`);
+        progress(`✅ Complete clash-free solution found on attempt ${attempt}!`);
         break;
       }
       
@@ -719,15 +719,15 @@ export const timetableService = {
       if (!bestResult || unscheduled.length < bestResult.unscheduled.length) {
         bestResult = { placements, unscheduled };
         bestAttemptNumber = attempt;
-        progress(`New best: ${placements.length} scheduled (attempt ${attempt})${hasClashes ? ' — clashes still present' : ''}`);
+        progress(`📈 New best: ${placements.length} scheduled (attempt ${attempt})${hasClashes ? ' — clashes still present' : ''}`);
       }
       
       // If this is not the last attempt and we have unscheduled courses, continue trying
       if (attempt < maxRetries && unscheduled.length > 0) {
         if (hasClashes) {
-          progress(`Redesigning with adjusted constraints to resolve clashes…`);
+          progress(`🔧 Redesigning with adjusted constraints to resolve clashes…`);
         } else {
-          progress(`Retrying with different randomization…`);
+          progress(`🎲 Retrying with different randomization…`);
         }
         continue;
       }
@@ -735,7 +735,7 @@ export const timetableService = {
 
     const { placements, unscheduled } = bestResult;
     
-    progress(`Assigning venues to all courses…`);
+    progress(`🏛️ Assigning venues to all courses…`);
 
     // Compute split ranges for courses split across multiple venues.
     // Group split placements by courseId, then assign sequential student ranges.
@@ -776,24 +776,27 @@ export const timetableService = {
     if (rows.length) {
       await prisma.invigilation.createMany({ data: rows });
     }
-    progress(`Saved ${rows.length} timetable entries to database.`);
+    progress(`💾 Saved ${rows.length} timetable entr${rows.length === 1 ? 'y' : 'ies'} to database.`);
 
     // Assign invigilators to every venue+slot in the same operation so an
     // invigilator has a venue the moment the timetable exists.
     let invigilatorAssignment = null;
     let invigilatorAssignmentError = null;
     if (assignVenues && rows.length > 0) {
-      progress(`Assigning invigilators to venues…`);
+      progress(`👥 Assigning invigilators to venues…`);
       try {
         invigilatorAssignment = await venueAssignmentsService.assignForSession(
           examinationSessionId,
           {},
           actor
         );
-        progress(`Assigned ${invigilatorAssignment.assigned} invigilator slots across ${invigilatorAssignment.slots} time slots.`);
+        progress(`✅ Assigned ${invigilatorAssignment.assigned} invigilator slot${invigilatorAssignment.assigned === 1 ? '' : 's'} across ${invigilatorAssignment.slots} time slot${invigilatorAssignment.slots === 1 ? '' : 's'}.`);
+        if (invigilatorAssignment.demoSlots > 0) {
+          progress(`🎯 Created ${invigilatorAssignment.demoSlots} demo scan slot${invigilatorAssignment.demoSlots === 1 ? '' : 's'} so invigilators can test scanning anytime.`);
+        }
       } catch (err) {
         invigilatorAssignmentError = err.message || 'Invigilator assignment failed.';
-        progress(`Invigilator assignment skipped: ${invigilatorAssignmentError}`);
+        progress(`⚠️ Invigilator assignment skipped: ${invigilatorAssignmentError}`);
       }
     }
 
@@ -806,10 +809,10 @@ export const timetableService = {
         : `Best solution found after ${maxRetries} attempts. ${unscheduled.length} courses could not be scheduled (see details below).`;
 
     progress(wasComplete 
-      ? `✓ Timetable generation complete! All ${courses.length} courses scheduled with no clashes.` 
+      ? `🎉 Timetable generation complete! All ${courses.length} courses scheduled with no clashes.` 
       : clashCount > 0
-        ? `Generation complete with ${unscheduled.length} unscheduled courses (${clashCount} clash-related). Output is clash-free for scheduled courses.`
-        : `Generation complete with ${unscheduled.length} unscheduled courses.`);
+        ? `⚠️ Generation complete with ${unscheduled.length} unscheduled course${unscheduled.length === 1 ? '' : 's'} (${clashCount} clash-related). Output is clash-free for scheduled courses.`
+        : `⚠️ Generation complete with ${unscheduled.length} unscheduled course${unscheduled.length === 1 ? '' : 's'}.`);
     console.log(`[Timetable] Final: ${rows.length}/${courses.length} courses scheduled. ${wasComplete ? '✓ Complete' : '⚠ Incomplete'}`);
 
     logAudit({
@@ -839,6 +842,7 @@ export const timetableService = {
       message: resultMessage,
       invigilatorsAssigned: invigilatorAssignment?.assigned || 0,
       invigilatorSlots: invigilatorAssignment?.slots || 0,
+      demoSlots: invigilatorAssignment?.demoSlots || 0,
       invigilatorAssignmentError,
     };
   },

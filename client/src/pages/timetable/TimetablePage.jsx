@@ -317,6 +317,9 @@ export const TimetablePage = () => {
       setInvigilatorsAssigned((data.invigilatorsAssigned || 0) > 0);
       if (data.invigilatorsAssigned > 0) {
         toast.success(`${data.invigilatorsAssigned} invigilator slots assigned across ${data.invigilatorSlots} time slots.`);
+        if (data.demoSlots > 0) {
+          toast.success(`${data.demoSlots} demo scan slots created for testing anytime.`);
+        }
       } else if (data.invigilatorAssignmentError) {
         toast.error(`Invigilators not assigned: ${data.invigilatorAssignmentError}`);
       }

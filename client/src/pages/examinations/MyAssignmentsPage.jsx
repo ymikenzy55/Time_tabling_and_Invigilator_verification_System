@@ -65,7 +65,9 @@ export const MyAssignmentsPage = () => {
     placeholderData: (prev) => prev,
   });
 
-  const assignments = assignmentsQuery.data || [];
+  const allAssignments = assignmentsQuery.data || [];
+  const demoAssignments = allAssignments.filter((a) => a.isDemo);
+  const assignments = allAssignments.filter((a) => !a.isDemo);
   const scans = scansQuery.data || [];
 
   // Live clock so the scan button becomes available the moment the assigned
@@ -76,7 +78,7 @@ export const MyAssignmentsPage = () => {
     return () => clearInterval(id);
   }, []);
 
-  // Group assignments by date
+  // Group assignments by date (exclude demo assignments)
   const grouped = assignments.reduce((acc, a) => {
     const dateKey = new Date(a.slotAt).toDateString();
     if (!acc[dateKey]) acc[dateKey] = [];
@@ -187,7 +189,7 @@ export const MyAssignmentsPage = () => {
 
         {isLoading ? (
           <SkeletonCardGrid count={4} lines={3} label="Loading your assignments…" />
-        ) : assignments.length === 0 ? (
+        ) : allAssignments.length === 0 ? (
           <EmptyState
             icon={ClipboardList}
             title="No invigilation duties assigned"
@@ -195,6 +197,68 @@ export const MyAssignmentsPage = () => {
           />
         ) : (
           <>
+            {/* Demo scan slots — always available for testing */}
+            {demoAssignments.length > 0 && (
+              <div className="mb-6 rounded-xl border-2 border-primary-200 bg-primary-50/50 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <ScanLine className="w-5 h-5 text-primary-600" />
+                  <h3 className="text-sm font-bold text-primary-900">Demo Scan Slots</h3>
+                  <span className="text-xs text-primary-600 bg-primary-100 px-2 py-0.5 rounded-full">
+                    Available anytime
+                  </span>
+                </div>
+                <p className="text-xs text-primary-700 mb-3">
+                  These slots let you test the QR scanning flow at any time, regardless of your real schedule. Scan the QR code at the venue below to try it out.
+                </p>
+                <div className="space-y-2">
+                  {demoAssignments.map((a) => {
+                    const demoScanned = scans.some(
+                      (s) => s.venueId === a.venue?.id && s.result === 'RECORDED'
+                    );
+                    return (
+                      <div
+                        key={a.id}
+                        className="card p-3 flex items-center gap-3 bg-white"
+                      >
+                        <Building className="w-4 h-4 text-primary-500 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-ink-900">{a.venue?.name || '—'}</div>
+                          {a.venue?.location && (
+                            <div className="text-xs text-ink-400 truncate flex items-center gap-1">
+                              <MapPin className="w-3 h-3 shrink-0" />
+                              <span className="truncate">{a.venue.location}</span>
+                            </div>
+                          )}
+                        </div>
+                        {demoScanned ? (
+                          <Badge variant="success">
+                            <CheckCircle2 className="w-3 h-3 mr-1" />
+                            Demo Checked In
+                          </Badge>
+                        ) : (
+                          <button
+                            className="btn-primary btn-sm"
+                            onClick={() => navigate('/scan', {
+                              state: {
+                                fromAssignment: {
+                                  ...a,
+                                  examDurationMinutes: SLOT_DURATION_MINUTES,
+                                  isDemo: true,
+                                },
+                              },
+                            })}
+                          >
+                            <ScanLine className="w-3.5 h-3.5" />
+                            Demo Scan
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Stats summary */}
             <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4">
               <div className="panel p-3 sm:p-4 text-center">
@@ -311,7 +375,7 @@ export const MyAssignmentsPage = () => {
                                           fromAssignment: {
                                             ...a,
                                             examDurationMinutes: SLOT_DURATION_MINUTES,
-                                            isDemo: isDemoUser,
+                                            isDemo: isDemoUser || a.isDemo,
                                           },
                                         },
                                       })}
