@@ -676,7 +676,7 @@ export const attendanceService = {
       where.scannedAt = { gte: dayStart, lt: dayEnd };
     }
 
-    return prisma.venueScan.findMany({
+    const records = await prisma.venueScan.findMany({
       where,
       orderBy: { scannedAt: 'desc' },
       include: {
@@ -684,5 +684,15 @@ export const attendanceService = {
         venue: { select: { id: true, name: true, location: true } },
       },
     });
+
+    // Sort so that successful (RECORDED) scans appear first, then by most recent.
+    records.sort((a, b) => {
+      const aRecorded = a.result === 'RECORDED' ? 0 : 1;
+      const bRecorded = b.result === 'RECORDED' ? 0 : 1;
+      if (aRecorded !== bRecorded) return aRecorded - bRecorded;
+      return new Date(b.scannedAt) - new Date(a.scannedAt);
+    });
+
+    return records;
   },
 };
