@@ -1201,21 +1201,6 @@ export const TimetablePage = () => {
         </div>
       )}
 
-      {/* Clash warning banner */}
-      {hasClashes && grid.length > 0 && !isGenerating && (
-        <div className="mb-6 rounded-lg border-2 border-rose-500 bg-rose-50 px-4 py-3 flex items-start gap-2">
-          <AlertCircle className="w-5 h-5 text-rose-600 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-sm font-bold text-rose-800">
-              {clashes.size} clash{clashes.size === 1 ? '' : 'es'} detected — {clashes.size} course{clashes.size === 1 ? '' : 's'} share the same department and level in the same time slot.
-            </p>
-            <p className="text-xs text-rose-700 mt-0.5">
-              Clashing entries are highlighted with a red border. Click <span className="font-bold">Regenerate Timetable</span> to reschedule.
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Timetable grid */}
       {pendingGenerate || isGenerating ? (
         <div className="card flex flex-col items-center justify-center py-20 gap-3">
@@ -1268,10 +1253,6 @@ export const TimetablePage = () => {
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-3 rounded bg-white border border-slate-300" />
               <span>Theory</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded bg-rose-50 border border-rose-400" />
-              <span>Clash</span>
             </div>
           </div>
 
