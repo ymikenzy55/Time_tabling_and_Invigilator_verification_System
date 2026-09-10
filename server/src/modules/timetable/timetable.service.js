@@ -101,7 +101,7 @@ const shuffle = (arr) => {
 const courseGroupKey = (c) =>
   `${(c.code || '').trim().toUpperCase()}::${(c.title || '').trim().toUpperCase()}`;
 
-const scheduleCourses = (courses, slots, venues, onProgress) => {
+const scheduleCourses = (courses, slots, venues, onProgress, attemptNum = 1) => {
   // Group same code+title courses — they must sit the same day & time.
   const groupsMap = new Map();
   for (const c of courses) {
@@ -123,13 +123,33 @@ const scheduleCourses = (courses, slots, venues, onProgress) => {
     return groupStudents(b) - groupStudents(a);
   });
 
+  // Pre-compute dept+level keys for each group to avoid repeated string concat.
+  const groupKeys = groups.map(g => g.map(c => `${c.departmentId}:${c.level}`));
+
   const hasVenues = venues.length > 0;
   // Sort venues by capacity ascending — first fit = best-fit (smallest that works).
   const sortedVenues = [...venues].sort((a, b) => a.capacity - b.capacity);
   const largestCapacity = sortedVenues[sortedVenues.length - 1]?.capacity || 0;
 
-  // Shuffle slots so courses spread evenly across periods and days.
-  const shuffledSlots = shuffle([...slots]);
+  // Use different slot ordering strategies per attempt for faster convergence.
+  let shuffledSlots;
+  if (attemptNum === 1) {
+    // First attempt: original order (sequential days, morning first)
+    shuffledSlots = [...slots];
+  } else if (attemptNum === 2) {
+    // Second attempt: reverse order (afternoon first, last day first)
+    shuffledSlots = [...slots].reverse();
+  } else if (attemptNum % 3 === 0) {
+    // Every 3rd attempt: sort by day then reverse period order
+    shuffledSlots = [...slots].sort((a, b) => {
+      const dayDiff = Math.floor(a.key / 86_400_000) - Math.floor(b.key / 86_40_000);
+      if (dayDiff !== 0) return dayDiff;
+      return b.key - a.key; // afternoon first within same day
+    });
+  } else {
+    // Other attempts: random shuffle
+    shuffledSlots = shuffle([...slots]);
+  }
 
   // slotKey -> Map(venueId -> remaining capacity)
   const venueRemaining = new Map();
@@ -163,13 +183,14 @@ const scheduleCourses = (courses, slots, venues, onProgress) => {
    * All members must satisfy dept+level constraints and get a venue,
    * preferring a DIFFERENT venue per member. Atomic: places all or none.
    */
-  const tryPlaceGroup = (group, slot, useGapConstraint) => {
+  const tryPlaceGroup = (group, slot, useGapConstraint, precomputedKeys) => {
     const dk = dateKeyOf(slot);
     const busy = deptLevelBusy.get(slot.key);
     const dayBusy = deptLevelDayBusy.get(dk);
 
-    const deptLevelKeys = group.map((c) => `${c.departmentId}:${c.level}`);
-    for (const k of deptLevelKeys) {
+    const deptLevelKeys = precomputedKeys || group.map((c) => `${c.departmentId}:${c.level}`);
+    for (let i = 0; i < deptLevelKeys.length; i++) {
+      const k = deptLevelKeys[i];
       // Hard: no same dept+level already in this slot / this day
       if (busy && busy.has(k)) return false;
       if (dayBusy && dayBusy.has(k)) return false;
@@ -278,11 +299,11 @@ const scheduleCourses = (courses, slots, venues, onProgress) => {
    * on the same day (different period). Used as a last-resort fallback.
    * Same-slot clashes are NEVER allowed.
    */
-  const tryPlaceGroupRelaxed = (group, slot) => {
+  const tryPlaceGroupRelaxed = (group, slot, precomputedKeys) => {
     const busy = deptLevelBusy.get(slot.key);
-    const deptLevelKeys = group.map((c) => `${c.departmentId}:${c.level}`);
-    for (const k of deptLevelKeys) {
-      if (busy && busy.has(k)) return false;
+    const deptLevelKeys = precomputedKeys || group.map((c) => `${c.departmentId}:${c.level}`);
+    for (let i = 0; i < deptLevelKeys.length; i++) {
+      if (busy && busy.has(deptLevelKeys[i])) return false;
     }
 
     // No-venue mode: skip venue allocation.
@@ -357,7 +378,9 @@ const scheduleCourses = (courses, slots, venues, onProgress) => {
     return true;
   };
 
-  for (const group of groups) {
+  for (let gi = 0; gi < groups.length; gi++) {
+    const group = groups[gi];
+    const precomputedKeys = groupKeys[gi];
     // If group has internal dept+level clash (duplicate courses),
     // split into sub-groups by dept+level and place each separately.
     const subGroups = hasInternalClash(group)
@@ -371,17 +394,18 @@ const scheduleCourses = (courses, slots, venues, onProgress) => {
 
     let allPlaced = true;
     for (const subGroup of subGroups) {
+      const subKeys = subGroup.map(c => `${c.departmentId}:${c.level}`);
       let placed = false;
 
       // --- Pass 1: with gap soft constraint ---
       for (const slot of shuffledSlots) {
-        if (tryPlaceGroup(subGroup, slot, true)) { placed = true; break; }
+        if (tryPlaceGroup(subGroup, slot, true, subKeys)) { placed = true; break; }
       }
 
       // --- Pass 2: fallback without gap constraint ---
       if (!placed) {
         for (const slot of shuffledSlots) {
-          if (tryPlaceGroup(subGroup, slot, false)) { placed = true; break; }
+          if (tryPlaceGroup(subGroup, slot, false, subKeys)) { placed = true; break; }
         }
       }
 
@@ -389,7 +413,7 @@ const scheduleCourses = (courses, slots, venues, onProgress) => {
       // Same-slot clashes are NEVER allowed.
       if (!placed) {
         for (const slot of shuffledSlots) {
-          if (tryPlaceGroupRelaxed(subGroup, slot)) { placed = true; break; }
+          if (tryPlaceGroupRelaxed(subGroup, slot, subKeys)) { placed = true; break; }
         }
       }
 
@@ -439,7 +463,7 @@ const scheduleCourses = (courses, slots, venues, onProgress) => {
   if (clashPlacements.size > 0) {
     finalPlacements = placements.filter((p) => !clashPlacements.has(p));
     const clashCourses = [...clashPlacements].map((p) => p.course.code);
-    if (onProgress) onProgress(`⚠ Clash detected: ${clashPlacements.size} entries with same dept+level in same slot (${clashCourses.join(', ')}). Removing and marking as unscheduled.`);
+    if (onProgress) onProgress(`Clash detected: ${clashPlacements.size} entries with same dept+level in same slot (${clashCourses.join(', ')}). Removing and marking as unscheduled.`);
     for (const p of clashPlacements) {
       unscheduled.push({
         id: p.course.id,
@@ -693,41 +717,53 @@ export const timetableService = {
       if (onProgress) onProgress(msg);
     };
     
-    progress(`📦 Fetching approved courses and active venues…`);
+    progress(`Fetching approved courses and active venues...`);
     progress(`Found ${courses.length} approved course${courses.length === 1 ? '' : 's'} and ${venues.length} active venue${venues.length === 1 ? '' : 's'}.`);
-    progress(`📅 Building time slots from ${periodStart.toLocaleDateString()} to ${periodEnd.toLocaleDateString()}…`);
-    progress(`✅ Created ${slots.length} available time slot${slots.length === 1 ? '' : 's'} across the exam period.`);
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      progress(`🔄 Attempt ${attempt}/${maxRetries}: Grouping and scheduling courses…`);
-      // Run the constraint solver in memory
-      const { placements, unscheduled } = scheduleCourses(courses, slots, venues, onProgress);
-      
+    progress(`Building time slots from ${periodStart.toLocaleDateString()} to ${periodEnd.toLocaleDateString()}...`);
+    progress(`Created ${slots.length} available time slot${slots.length === 1 ? '' : 's'} across the exam period.`);
+
+    // Keep retrying until we get a clash-free result or hit the max attempts.
+    // The cap is a safety valve — in practice the algorithm should find a
+    // clash-free solution well before this.
+    const MAX_ATTEMPTS = Math.max(maxRetries, 50);
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      // Only send progress every 5th attempt or on first/last to reduce SSE overhead
+      if (attempt === 1 || attempt === MAX_ATTEMPTS || attempt % 5 === 0) {
+        progress(`Attempt ${attempt}/${MAX_ATTEMPTS}: Scheduling courses...`);
+      }
+      // Run the constraint solver in memory with attempt-specific strategy
+      const { placements, unscheduled } = scheduleCourses(courses, slots, venues, null, attempt);
+
       const hasClashes = unscheduled.some(u => u.reason && u.reason.includes('Clash detected'));
-      
-      progress(`📊 Attempt ${attempt}: ${placements.length}/${courses.length} courses scheduled, ${unscheduled.length} unscheduled${hasClashes ? ' (due to clashes)' : ''}`);
-      
-      // If we found a complete solution, use it immediately
+
+      if (attempt === 1 || attempt === MAX_ATTEMPTS || attempt % 5 === 0 || unscheduled.length === 0) {
+        progress(`Attempt ${attempt}: ${placements.length}/${courses.length} scheduled, ${unscheduled.length} unscheduled${hasClashes ? ' (clashes)' : ''}`);
+      }
+
+      // If we found a complete, clash-free solution, use it immediately
       if (unscheduled.length === 0) {
         bestResult = { placements, unscheduled };
         bestAttemptNumber = attempt;
-        progress(`✅ Complete clash-free solution found on attempt ${attempt}!`);
+        progress(`Complete clash-free solution found on attempt ${attempt}!`);
         break;
       }
-      
-      // Keep track of the best attempt (fewest unscheduled)
-      if (!bestResult || unscheduled.length < bestResult.unscheduled.length) {
+
+      // Keep track of the best attempt (fewest unscheduled, prefer no clashes)
+      const bestClashCount = bestResult ? bestResult.unscheduled.filter(u => u.reason && u.reason.includes('Clash detected')).length : Infinity;
+      const currentClashCount = unscheduled.filter(u => u.reason && u.reason.includes('Clash detected')).length;
+      if (!bestResult || currentClashCount < bestClashCount || (currentClashCount === bestClashCount && unscheduled.length < bestResult.unscheduled.length)) {
         bestResult = { placements, unscheduled };
         bestAttemptNumber = attempt;
-        progress(`📈 New best: ${placements.length} scheduled (attempt ${attempt})${hasClashes ? ' — clashes still present' : ''}`);
+        if (attempt === 1 || attempt % 5 === 0) {
+          progress(`New best: ${placements.length} scheduled (attempt ${attempt})${hasClashes ? ' — clashes still present' : ''}`);
+        }
       }
-      
+
       // If this is not the last attempt and we have unscheduled courses, continue trying
-      if (attempt < maxRetries && unscheduled.length > 0) {
-        if (hasClashes) {
-          progress(`🔧 Redesigning with adjusted constraints to resolve clashes…`);
-        } else {
-          progress(`🎲 Retrying with different randomization…`);
+      if (attempt < MAX_ATTEMPTS && unscheduled.length > 0) {
+        if (hasClashes && attempt % 5 === 0) {
+          progress(`Redesigning with adjusted constraints to resolve clashes...`);
         }
         continue;
       }
@@ -735,7 +771,7 @@ export const timetableService = {
 
     const { placements, unscheduled } = bestResult;
     
-    progress(`🏛️ Assigning venues to all courses…`);
+    progress(`Assigning venues to all courses...`);
 
     // Compute split ranges for courses split across multiple venues.
     // Group split placements by courseId, then assign sequential student ranges.
@@ -776,27 +812,27 @@ export const timetableService = {
     if (rows.length) {
       await prisma.invigilation.createMany({ data: rows });
     }
-    progress(`💾 Saved ${rows.length} timetable entr${rows.length === 1 ? 'y' : 'ies'} to database.`);
+    progress(`Saved ${rows.length} timetable entr${rows.length === 1 ? 'y' : 'ies'} to database.`);
 
     // Assign invigilators to every venue+slot in the same operation so an
     // invigilator has a venue the moment the timetable exists.
     let invigilatorAssignment = null;
     let invigilatorAssignmentError = null;
     if (assignVenues && rows.length > 0) {
-      progress(`👥 Assigning invigilators to venues…`);
+      progress(`Assigning invigilators to venues...`);
       try {
         invigilatorAssignment = await venueAssignmentsService.assignForSession(
           examinationSessionId,
           {},
           actor
         );
-        progress(`✅ Assigned ${invigilatorAssignment.assigned} invigilator slot${invigilatorAssignment.assigned === 1 ? '' : 's'} across ${invigilatorAssignment.slots} time slot${invigilatorAssignment.slots === 1 ? '' : 's'}.`);
+        progress(`Assigned ${invigilatorAssignment.assigned} invigilator slot${invigilatorAssignment.assigned === 1 ? '' : 's'} across ${invigilatorAssignment.slots} time slot${invigilatorAssignment.slots === 1 ? '' : 's'}.`);
         if (invigilatorAssignment.demoSlots > 0) {
-          progress(`🎯 Created ${invigilatorAssignment.demoSlots} demo scan slot${invigilatorAssignment.demoSlots === 1 ? '' : 's'} so invigilators can test scanning anytime.`);
+          progress(`Created ${invigilatorAssignment.demoSlots} demo scan slot${invigilatorAssignment.demoSlots === 1 ? '' : 's'} so invigilators can test scanning anytime.`);
         }
       } catch (err) {
         invigilatorAssignmentError = err.message || 'Invigilator assignment failed.';
-        progress(`⚠️ Invigilator assignment skipped: ${invigilatorAssignmentError}`);
+        progress(`Invigilator assignment skipped: ${invigilatorAssignmentError}`);
       }
     }
 
@@ -805,15 +841,15 @@ export const timetableService = {
     const resultMessage = wasComplete 
       ? `Complete clash-free timetable generated successfully on attempt ${bestAttemptNumber}.`
       : clashCount > 0
-        ? `Best solution found after ${maxRetries} attempts. ${unscheduled.length} courses could not be scheduled (${clashCount} due to unresolved clashes). Try increasing the exam period duration.`
-        : `Best solution found after ${maxRetries} attempts. ${unscheduled.length} courses could not be scheduled (see details below).`;
+        ? `Best solution found after ${MAX_ATTEMPTS} attempts. ${unscheduled.length} courses could not be scheduled (${clashCount} due to unresolved clashes). Try increasing the exam period duration.`
+        : `Best solution found after ${MAX_ATTEMPTS} attempts. ${unscheduled.length} courses could not be scheduled (see details below).`;
 
-    progress(wasComplete 
-      ? `🎉 Timetable generation complete! All ${courses.length} courses scheduled with no clashes.` 
+    progress(wasComplete
+      ? `Timetable generation complete! All ${courses.length} courses scheduled with no clashes.`
       : clashCount > 0
-        ? `⚠️ Generation complete with ${unscheduled.length} unscheduled course${unscheduled.length === 1 ? '' : 's'} (${clashCount} clash-related). Output is clash-free for scheduled courses.`
-        : `⚠️ Generation complete with ${unscheduled.length} unscheduled course${unscheduled.length === 1 ? '' : 's'}.`);
-    console.log(`[Timetable] Final: ${rows.length}/${courses.length} courses scheduled. ${wasComplete ? '✓ Complete' : '⚠ Incomplete'}`);
+        ? `Generation complete with ${unscheduled.length} unscheduled course${unscheduled.length === 1 ? '' : 's'} (${clashCount} clash-related). Output is clash-free for scheduled courses.`
+        : `Generation complete with ${unscheduled.length} unscheduled course${unscheduled.length === 1 ? '' : 's'}.`);
+    console.log(`[Timetable] Final: ${rows.length}/${courses.length} courses scheduled. ${wasComplete ? 'Complete' : 'Incomplete'}`);
 
     logAudit({
       actorId: actor.id,

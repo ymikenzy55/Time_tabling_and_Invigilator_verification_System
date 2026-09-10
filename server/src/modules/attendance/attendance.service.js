@@ -206,7 +206,25 @@ const evaluateVenueScan = async (token, actor) => {
   // A demo assignment (isDemo: true) is time-independent — any invigilator
   // with one can scan at any time to test the system.
   const demoAssignment = venueAssignments.find((a) => a.isDemo);
-  const isDemoScan = isDemo || !!demoAssignment;
+
+  // Also check if the invigilator has a demo assignment for ANY venue in
+  // this session. The demo slot may be for a different venue than the one
+  // being scanned, but if the invigilator IS assigned to the scanned venue
+  // (venueAssignments.length > 0), treat the scan as a demo scan.
+  let hasDemoAssignmentAnywhere = !!demoAssignment;
+  if (!hasDemoAssignmentAnywhere) {
+    const anyDemo = await prisma.venueAssignment.findFirst({
+      where: {
+        invigilatorId: actor.id,
+        examinationSessionId: payload.examinationSessionId,
+        isDemo: true,
+      },
+      select: { id: true },
+    });
+    hasDemoAssignmentAnywhere = !!anyDemo;
+  }
+
+  const isDemoScan = isDemo || hasDemoAssignmentAnywhere;
 
   const withinExactWindow = (slotAt) => {
     const start = new Date(slotAt);
@@ -220,7 +238,9 @@ const evaluateVenueScan = async (token, actor) => {
 
   let assignment;
   if (isDemoScan) {
-    assignment = demoAssignment || venueAssignments.find((a) => withinExactWindow(a.slotAt)) || venueAssignments[0];
+    // For demo scans, use the demo assignment if it's for this venue,
+    // otherwise fall back to any assignment for this venue (time doesn't matter).
+    assignment = demoAssignment || venueAssignments[0];
   } else {
     assignment =
       todaysAtVenue.find((a) => withinExactWindow(a.slotAt)) ||
