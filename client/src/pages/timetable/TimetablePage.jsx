@@ -72,7 +72,7 @@ const periodIndex = (scheduledAt) => {
   return 2;
 };
 
-const DayPeriodGrid = ({ days, clashes, isAdmin, isPracticalSection, onEditEntry, onDeleteEntry, onGenerateVenueQr, venueQrLoading }) => (
+const DayPeriodGrid = ({ days, isAdmin, isPracticalSection, onEditEntry, onDeleteEntry, onGenerateVenueQr, venueQrLoading }) => (
   <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
     <thead>
       <tr>
@@ -101,11 +101,10 @@ const DayPeriodGrid = ({ days, clashes, isAdmin, isPracticalSection, onEditEntry
                   <table className="w-full border-collapse">
                     <tbody>
                       {list.map((entry) => {
-                        const isClashing = clashes.has(entry.id);
                         const isPractical = !!entry.course?.isPractical;
                         return (
-                          <tr key={entry.id} className={`group relative border-b border-black last:border-b-0 ${isClashing ? 'bg-rose-50' : isPractical ? 'bg-blue-50' : ''}`}>
-                            <td className={`px-1.5 py-1.5 text-[9pt] text-black ${isClashing ? 'border-l-[3px] border-l-rose-600' : isPractical ? 'border-l-[3px] border-l-blue-500' : ''}`}>
+                          <tr key={entry.id} className={`group relative border-b border-black last:border-b-0 ${isPractical ? 'bg-blue-50' : ''}`}>
+                            <td className={`px-1.5 py-1.5 text-[9pt] text-black ${isPractical ? 'border-l-[3px] border-l-blue-500' : ''}`}>
                               <div className="flex items-center gap-1 mb-0.5">
                                 <span className="font-bold">{entry.course?.code}</span>
                                 {isPractical && (
@@ -126,9 +125,6 @@ const DayPeriodGrid = ({ days, clashes, isAdmin, isPracticalSection, onEditEntry
                                   ? `${entry.splitRange} students`
                                   : `${entry.course?.studentCount ?? 0} students`}
                               </div>
-                              {isClashing && (
-                                <div className="text-rose-600 font-bold text-[7pt] mt-0.5">⚠ CLASH</div>
-                              )}
                               {isAdmin && (
                                 <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 mt-1 print:hidden">
                                   <button
@@ -556,39 +552,6 @@ export const TimetablePage = () => {
 
   const entries = useMemo(() => applyFilters(allEntries), [allEntries, filterDept, filterVenue, sortBy]);
 
-  // Detect clashes: same dept+level in the same slot (day+period).
-  // Entries with the same courseId are splits (same course across multiple venues), NOT clashes.
-  const clashes = useMemo(() => {
-    const clashSet = new Set();
-    const slotMap = new Map(); // slotKey -> Map(deptLevelKey -> Map(courseId -> count))
-    for (const entry of entries) {
-      const slotKey = `${dateKey(entry.scheduledAt)}-${periodIndex(entry.scheduledAt)}`;
-      const deptLevelKey = `${entry.course?.department?.id}:${entry.course?.level}`;
-      if (!slotMap.has(slotKey)) slotMap.set(slotKey, new Map());
-      const deptMap = slotMap.get(slotKey);
-      if (!deptMap.has(deptLevelKey)) deptMap.set(deptLevelKey, new Set());
-      deptMap.get(deptLevelKey).add(entry.course?.id);
-    }
-    // A clash is when the same dept+level in the same slot has MORE THAN ONE distinct courseId
-    for (const [, deptMap] of slotMap) {
-      for (const [, courseIds] of deptMap) {
-        if (courseIds.size > 1) {
-          // Flag all entries in this dept+level+slot as clashing
-          for (const entry of entries) {
-            const slotKey = `${dateKey(entry.scheduledAt)}-${periodIndex(entry.scheduledAt)}`;
-            const deptLevelKey = `${entry.course?.department?.id}:${entry.course?.level}`;
-            if (slotMap.get(slotKey)?.get(deptLevelKey) === courseIds) {
-              clashSet.add(entry.id);
-            }
-          }
-        }
-      }
-    }
-    return clashSet;
-  }, [entries]);
-
-  const hasClashes = clashes.size > 0;
-
   // Group entries into a day x period grid.
   const grid = useMemo(() => {
     const days = new Map();
@@ -671,15 +634,6 @@ export const TimetablePage = () => {
     const ayName = session?.semester?.academicYear?.name || '';
     const sessionName = session?.name || '';
 
-    // Build clash count map for PDF highlighting
-    const clashCountMap = new Map();
-    for (const entry of freshEntries) {
-      const slotKey = `${dateKey(entry.scheduledAt)}-${periodIndex(entry.scheduledAt)}`;
-      const deptLevelKey = `${entry.course?.department?.id}:${entry.course?.level}`;
-      const key = `${slotKey}:${deptLevelKey}`;
-      clashCountMap.set(key, (clashCountMap.get(key) || 0) + 1);
-    }
-
     // Merge entries with the same course code + title in the same slot into a
     // single row (shared courses sit at the same time in different venues),
     // then group the merged rows by day.
@@ -698,10 +652,6 @@ export const TimetablePage = () => {
         const pi = periodIndex(e.scheduledAt);
         const key = `${dk}|${pi}|${code}|${title.toUpperCase()}`;
 
-        const deptLevelKey = `${e.course?.department?.id}:${e.course?.level}`;
-        const slotKey = `${dk}-${pi}`;
-        const isClashing = clashCountMap.get(`${slotKey}:${deptLevelKey}`) > 1;
-
         if (!mergedRows.has(key)) {
           mergedRows.set(key, {
             dateKey: dk,
@@ -714,7 +664,6 @@ export const TimetablePage = () => {
             splitRanges: [],
             examiners: new Set(),
             venues: new Set(),
-            clash: false,
           });
         }
         const row = mergedRows.get(key);
@@ -724,7 +673,6 @@ export const TimetablePage = () => {
         if (e.splitRange) row.splitRanges.push(e.splitRange);
         if (e.course?.instructorName) row.examiners.add(e.course.instructorName);
         if (e.venue?.name) row.venues.add(e.venue.name);
-        if (isClashing) row.clash = true;
       }
 
       const dayGroups = new Map(); // dateKey -> { date, rows: [] }
@@ -793,15 +741,14 @@ export const TimetablePage = () => {
       const dayName = new Date(day.date).toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
 
       const courseRows = day.rows.map((row, idx) => {
-        const clashStyle = row.clash ? ' style="background:#fee2e1;"' : '';
         const dateCell = idx === Math.max(0, Math.floor((day.rows.length - 1) / 2))
           ? `<td class="date-cell date-value">${fmtShort(day.date)}</td>`
           : '<td class="date-cell"></td>';
         const timeLabel = PERIODS[row.period]?.label?.split('–')[0]?.trim() || '';
-        return `<tr${clashStyle}>
+        return `<tr>
           ${dateCell}
           <td class="code-cell">${esc(row.code)}<div class="time-tag">${esc(timeLabel)}</div></td>
-          <td class="title-cell">${esc(row.title)}${row.clash ? ' <span class="clash-tag">&#9888; CLASH</span>' : ''}</td>
+          <td class="title-cell">${esc(row.title)}</td>
           <td class="class-cell">${esc(row.classes.join(', '))}</td>
           <td class="stds-cell">${row.splitRanges.length > 0 ? esc(row.splitRanges.join(', ')) : (row.students || '')}</td>
           <td class="examiner-cell">${esc([...row.examiners].join(', '))}</td>
@@ -912,7 +859,6 @@ export const TimetablePage = () => {
       .main-table .stds-cell { text-align: center; font-weight: bold; }
       .main-table .examiner-cell { text-align: center; }
       .main-table .venue-cell { text-align: center; font-weight: bold; }
-      .clash-tag { color: #c00; font-size: 7pt; font-weight: bold; }
       .main-table tbody tr { page-break-inside: avoid; }
       .dept-block { page-break-inside: auto; }
       .dept-heading {
@@ -1155,9 +1101,6 @@ export const TimetablePage = () => {
         <div className="panel p-5 mb-6 space-y-4">
           <div className="flex items-center gap-2 text-emerald-700 font-bold text-sm">
             <CheckCircle2 className="w-5 h-5" /> Timetable Generation Complete
-            {result.clashCount > 0 && (
-              <span className="text-rose-600 font-medium">· {result.clashCount} clash{result.clashCount === 1 ? '' : 'es'} resolved</span>
-            )}
           </div>
 
           {result.message && (
@@ -1186,11 +1129,11 @@ export const TimetablePage = () => {
           </div>
 
           {result.unscheduled?.length > 0 && (
-            <div className={`border rounded-lg p-4 ${result.clashCount > 0 ? 'bg-rose-50 border-rose-200' : 'bg-amber-50 border-amber-200'}`}>
-              <div className={`flex items-center gap-2 font-medium text-sm mb-2 ${result.clashCount > 0 ? 'text-rose-800' : 'text-amber-800'}`}>
-                <AlertCircle className="w-4 h-4" /> {result.unscheduled.length} course{result.unscheduled.length === 1 ? '' : 's'} could not be scheduled{result.clashCount > 0 ? ` (${result.clashCount} due to clashes)` : ''}
+            <div className="border rounded-lg p-4 bg-amber-50 border-amber-200">
+              <div className="flex items-center gap-2 font-medium text-sm mb-2 text-amber-800">
+                <AlertCircle className="w-4 h-4" /> {result.unscheduled.length} course{result.unscheduled.length === 1 ? '' : 's'} could not be scheduled
               </div>
-              <ul className={`list-disc list-inside text-xs space-y-1 ${result.clashCount > 0 ? 'text-rose-700' : 'text-amber-700'}`}>
+              <ul className="list-disc list-inside text-xs space-y-1 text-amber-700">
                 {result.unscheduled.map((c) => (
                   <li key={c.id}>{c.code} — {c.title} {c.reason ? `(${c.reason})` : ''}</li>
                 ))}
@@ -1359,7 +1302,6 @@ export const TimetablePage = () => {
                       </div>
                       <DayPeriodGrid
                         days={lv.practicalDays}
-                        clashes={clashes}
                         isAdmin={isAdmin}
                         onEditEntry={setEditEntry}
                         onDeleteEntry={(entry) => { setDeleteTarget(entry); setDeleteConfirm(true); }}
@@ -1380,7 +1322,6 @@ export const TimetablePage = () => {
                       )}
                       <DayPeriodGrid
                         days={lv.theoryDays}
-                        clashes={clashes}
                         isAdmin={isAdmin}
                         onEditEntry={setEditEntry}
                         onDeleteEntry={(entry) => { setDeleteTarget(entry); setDeleteConfirm(true); }}
