@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EntityPage } from '@/components/EntityPage';
+import { EntityPage } from '@/components/common/EntityPage';
 import { departmentsApi } from '@/features/academics/departmentsApi';
 
 const createSchema = z.object({

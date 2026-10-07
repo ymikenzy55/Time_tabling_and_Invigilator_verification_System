@@ -32,14 +32,16 @@ prisma/migrations/dev.db*
 # Coverage
 coverage/
 
-# Generated outputs and screenshots
+# Generated outputs, screenshots, decks (see artifacts/)
+artifacts/
 generated outputs/
 screenshots/
 
-# Playwright test scripts
-playwright-test-responsive.js
+# Office lock files
+~$*
 
-# Secrets files (contains sensitive data)
+# Local secrets (contains sensitive data) — keep them in .secrets/
+.secrets/
 fly-secrets.txt
 render-secrets.txt
 back4app-secrets.txt
@@ -56,3 +58,6 @@ ARKESEL_*.md
 VOKRYN_*.md
 PICK_ANY_*.md
 FREE_*.md
+
+# Local e2e script (uses local dev credentials)
+tests/e2e/responsive.test.cjs

@@ -14,7 +14,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Pagination } from '@/components/ui/Pagination';
 import { ImportPreviewModal } from '@/components/ui/ImportPreviewModal';
 import { venuesApi } from '@/features/venues/venuesApi';
-import { parseSpreadsheet, rowsToVenues } from '@/utils/fileImport';
+import { parseSpreadsheet, rowsToVenues } from '@/lib/fileImport';
 
 const PAGE_SIZE = 10;
 

@@ -5,9 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import {
-  Plus, Loader2, Search, Pencil, Trash2, Send, CheckCircle2, BookOpen, CheckSquare, Square, Clock, AlertCircle, CalendarDays,
-} from 'lucide-react';
+import { Plus, Loader2, Search, Pencil, Trash2, Send, BookOpen, CheckSquare, Square, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Modal } from '@/components/ui/Modal';

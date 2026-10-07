@@ -1,8 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Search, Users as UsersIcon, CheckCircle2, Loader2, Trash2, Ban, CheckCircle, Filter,
-} from 'lucide-react';
+import { Search, Users as UsersIcon, CheckCircle2, Trash2, Ban, CheckCircle, Filter } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usersApi } from './usersApi';
 import { departmentsApi } from '@/features/academics/departmentsApi';

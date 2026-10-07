@@ -1,4 +1,4 @@
-import { prisma } from '../utils/prisma.js';
+import { prisma } from '../../src/utils/prisma.js';
 
 const VENUE_NAMES = [
   'A1', 'A2', 'A3', 'A4', 'A5',

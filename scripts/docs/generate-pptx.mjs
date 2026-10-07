@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import pptxgen from 'pptxgenjs';
 
 const pptx = new pptxgen();
@@ -608,6 +611,9 @@ const COLORS = {
 }
 
 // ── Save ────────────────────────────────────────────────────────────
-const outPath = 'd:\\Time_Table_Web_App\\Results_and_Findings.pptx';
+// Written to <repo>/artifacts/ (git-ignored) regardless of the current directory.
+const outDir = fileURLToPath(new URL('../../artifacts/', import.meta.url));
+fs.mkdirSync(outDir, { recursive: true });
+const outPath = path.join(outDir, 'Results_and_Findings.pptx');
 await pptx.writeFile({ fileName: outPath });
 console.log(`PPTX saved to ${outPath}`);

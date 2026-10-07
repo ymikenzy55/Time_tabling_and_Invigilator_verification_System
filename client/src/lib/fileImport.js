@@ -18,7 +18,7 @@ export const parseSpreadsheet = (file) => {
         const sheet = workbook.Sheets[sheetName];
         const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
         resolve(rows);
-      } catch (err) {
+      } catch {
         reject(new Error('Failed to parse file. Ensure it is a valid CSV or Excel file.'));
       }
     };
@@ -27,18 +27,21 @@ export const parseSpreadsheet = (file) => {
 };
 
 /**
- * Normalises header keys: trims, lowercases, removes non-alphanumeric chars.
- * Maps common variations to canonical field names.
+ * Header aliases, keyed by the normalised header (trimmed, lowercased,
+ * non-alphanumerics removed). Venues and courses have separate maps because
+ * the same header means different things: "Name" is a venue's name but a
+ * course's title.
  */
-const HEADER_MAP = {
-  // Venues
+const VENUE_HEADERS = {
   name: 'name', venuename: 'name', venue: 'name',
   capacity: 'capacity', seats: 'capacity', seatingcapacity: 'capacity',
-  location: 'location', venueLocation: 'location', block: 'location',
+  location: 'location', venuelocation: 'location', block: 'location',
   isactive: 'isActive', active: 'isActive', status: 'isActive',
-  // Courses
-  code: 'code', coursecode: 'code', course_code: 'code',
-  title: 'title', coursetitle: 'title', course_title: 'title', name: 'title',
+};
+
+const COURSE_HEADERS = {
+  code: 'code', coursecode: 'code',
+  title: 'title', coursetitle: 'title', name: 'title', coursename: 'title',
   department: 'departmentName', dept: 'departmentName', departmentname: 'departmentName',
   level: 'level', year: 'level', yearlevel: 'level',
   credithours: 'creditHours', credits: 'creditHours', hours: 'creditHours',
@@ -48,9 +51,21 @@ const HEADER_MAP = {
   ispractical: 'isPractical', practical: 'isPractical', ispracticalcourse: 'isPractical',
 };
 
-const normaliseKey = (key) => {
-  const cleaned = String(key).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-  return HEADER_MAP[cleaned] || cleaned;
+const mapRow = (row, headerMap) => {
+  const mapped = {};
+  for (const [k, v] of Object.entries(row)) {
+    const cleaned = String(k).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const nk = headerMap[cleaned] || cleaned;
+    if (nk) mapped[nk] = v;
+  }
+  return mapped;
+};
+
+/** Spreadsheet cells may hold booleans, numbers or text ("yes", "TRUE", 1). */
+const toBool = (value, fallback) => {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value === 'boolean') return value;
+  return ['true', '1', 'yes', 'y', 'active'].includes(String(value).trim().toLowerCase());
 };
 
 /**
@@ -59,18 +74,12 @@ const normaliseKey = (key) => {
  */
 export const rowsToVenues = (rows) => {
   return rows.map((row) => {
-    const mapped = {};
-    for (const [k, v] of Object.entries(row)) {
-      const nk = normaliseKey(k);
-      if (nk) mapped[nk] = v;
-    }
+    const mapped = mapRow(row, VENUE_HEADERS);
     return {
       name: String(mapped.name || '').trim(),
       capacity: parseInt(mapped.capacity, 10) || 0,
       location: mapped.location ? String(mapped.location).trim() : undefined,
-      isActive: mapped.isActive !== undefined
-        ? String(mapped.isActive).toLowerCase() === 'true' || mapped.isActive === '1' || String(mapped.isActive).toLowerCase() === 'yes'
-        : true,
+      isActive: toBool(mapped.isActive, true),
     };
   }).filter((v) => v.name && v.capacity > 0);
 };
@@ -81,23 +90,17 @@ export const rowsToVenues = (rows) => {
  */
 export const rowsToCourses = (rows) => {
   return rows.map((row) => {
-    const mapped = {};
-    for (const [k, v] of Object.entries(row)) {
-      const nk = normaliseKey(k);
-      if (nk) mapped[nk] = v;
-    }
+    const mapped = mapRow(row, COURSE_HEADERS);
     return {
       code: String(mapped.code || '').trim(),
       title: String(mapped.title || '').trim(),
       departmentName: String(mapped.departmentName || '').trim(),
       level: parseInt(mapped.level, 10) || 100,
       creditHours: mapped.creditHours ? parseInt(mapped.creditHours, 10) : undefined,
-      studentCount: mapped.studentCount !== undefined ? parseInt(mapped.studentCount, 10) : undefined,
+      studentCount: mapped.studentCount !== undefined && mapped.studentCount !== '' ? parseInt(mapped.studentCount, 10) : undefined,
       examDurationMinutes: mapped.examDurationMinutes ? parseInt(mapped.examDurationMinutes, 10) : undefined,
       instructorName: mapped.instructorName ? String(mapped.instructorName).trim() : undefined,
-      isPractical: mapped.isPractical !== undefined
-        ? String(mapped.isPractical).toLowerCase() === 'true' || mapped.isPractical === '1' || String(mapped.isPractical).toLowerCase() === 'yes'
-        : false,
+      isPractical: toBool(mapped.isPractical, false),
     };
   }).filter((c) => c.code && c.title && c.departmentName);
 };

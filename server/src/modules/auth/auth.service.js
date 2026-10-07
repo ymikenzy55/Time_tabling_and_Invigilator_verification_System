@@ -93,7 +93,6 @@ export const authService = {
           await courseLevelsService.ensureDefaultsForDepartment(department.id);
         }
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error('Login side-effect failed (department link / default levels):', err.message);
       }
     }

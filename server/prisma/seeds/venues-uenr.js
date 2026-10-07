@@ -1,4 +1,4 @@
-import { prisma } from '../utils/prisma.js';
+import { prisma } from '../../src/utils/prisma.js';
 
 const NEW_VENUES = [
   { name: 'APP LAB 1', capacity: 60 },

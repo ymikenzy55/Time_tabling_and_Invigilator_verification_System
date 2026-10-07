@@ -5,7 +5,7 @@
  * Demo invigilators can scan at any time (no exam period or time window check),
  * but they must still be assigned to the venue they scan.
  *
- * Run with: node --env-file=.env server/prisma/seed-demo-invigilator.js
+ * Run with: npm run seed:demo-invigilator  (from server/)
  *
  * Prerequisites:
  *   - At least one examination session exists (with venue assignments or without)

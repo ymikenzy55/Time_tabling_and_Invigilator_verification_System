@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Modal } from './Modal';
 import { Loader2, Upload, AlertCircle } from 'lucide-react';
 

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api/v1';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api/v1';
 const TOKEN_KEY = 'ems.token';
 
 export const tokenStore = {
@@ -11,13 +11,19 @@ export const tokenStore = {
 
 // Lightweight pub/sub so AuthContext can react to 401s without importing axios.
 const authListeners = new Set();
+/** Clear the session and notify listeners (used by non-axios callers such as SSE fetches). */
+export const notifyAuthError = () => {
+  tokenStore.clear();
+  authListeners.forEach((fn) => fn());
+};
+
 export const onAuthError = (fn) => {
   authListeners.add(fn);
   return () => authListeners.delete(fn);
 };
 
 export const api = axios.create({
-  baseURL: BASE_URL,
+  baseURL: API_BASE_URL,
   withCredentials: false,
 });
 
@@ -34,8 +40,7 @@ api.interceptors.response.use(
     const status = error?.response?.status;
     if (status === 401) {
       // Session expired / invalid — clear token and notify auth context.
-      tokenStore.clear();
-      authListeners.forEach((fn) => fn());
+      notifyAuthError();
     }
 
     let message;

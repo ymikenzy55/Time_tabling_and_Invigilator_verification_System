@@ -11,3 +11,6 @@ README.md
 dist
 coverage
 *.log
+
+# Seed source spreadsheets are not needed at runtime
+prisma/seeds/data/*.xlsx

@@ -1,0 +1,34 @@
+{
+  "name": "uenr-exam-timetable",
+  "version": "0.1.0",
+  "private": true,
+  "description": "University Examination Timetable & Invigilation Management System (monorepo root: client + server)",
+  "engines": {
+    "node": ">=20 <23"
+  },
+  "scripts": {
+    "install:all": "npm install && npm --prefix server install && npm --prefix client install",
+    "dev": "concurrently -n server,client -c blue,magenta \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix server run build && npm --prefix client run build",
+    "start": "npm --prefix server start",
+    "lint": "eslint client/src server/src server/prisma server/scripts scripts",
+    "db:migrate": "npm --prefix server run prisma:migrate",
+    "db:deploy": "npm --prefix server run deploy:migrate",
+    "db:seed": "npm --prefix server run seed",
+    "db:studio": "npm --prefix server run prisma:studio",
+    "secrets:generate": "bash scripts/deploy/generate-secrets.sh",
+    "docs:pptx": "node scripts/docs/generate-pptx.mjs",
+    "test:e2e": "node tests/e2e/responsive.test.cjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "concurrently": "^10.0.5",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^17.13.0",
+    "pptxgenjs": "^4.0.1"
+  }
+}

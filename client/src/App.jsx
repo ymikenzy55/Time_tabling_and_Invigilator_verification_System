@@ -5,7 +5,7 @@ import { queryClient } from '@/lib/queryClient';
 import { AuthProvider } from '@/context/AuthContext';
 import { AppRoutes } from '@/routes/AppRoutes';
 import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
-import { InstallPrompt } from '@/components/InstallPrompt';
+import { InstallPrompt } from '@/components/common/InstallPrompt';
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

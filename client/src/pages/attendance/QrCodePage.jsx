@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import QRCode from 'qrcode';
-import { Loader2, QrCode } from 'lucide-react';
+import { QrCode } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { Skeleton } from '@/components/ui/Skeleton';
+
 import { attendanceApi } from '@/features/attendance/attendanceApi';
 
 export const QrCodePage = () => {

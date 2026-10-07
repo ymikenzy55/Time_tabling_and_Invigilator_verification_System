@@ -45,43 +45,37 @@ const processMissedScans = async () => {
     let absentCount = 0;
 
     for (const assignment of assignments) {
-      // Check if a RECORDED scan already exists for this assignment
-      const existingScan = await prisma.venueScan.findFirst({
-        where: {
-          venueId: assignment.venueId,
-          examinationSessionId: assignment.examinationSessionId,
-          userId: assignment.invigilatorId,
-          result: 'RECORDED',
-          scannedAt: {
-            gte: new Date(assignment.slotAt),
-            lt: new Date(assignment.slotAt.getTime() + 24 * 60 * 60 * 1000),
-          },
-        },
-      });
+      // Scans are only accepted inside the exact exam window, so check that
+      // window — a scan for an earlier slot must not cover a later duty.
+      const slotStart = new Date(assignment.slotAt);
+      const slotEnd = new Date(slotStart.getTime() + EXAM_DURATION_DEFAULT_MIN * 60 * 1000);
+      const scope = {
+        venueId: assignment.venueId,
+        examinationSessionId: assignment.examinationSessionId,
+        userId: assignment.invigilatorId,
+      };
 
+      const existingScan = await prisma.venueScan.findFirst({
+        where: { ...scope, result: 'RECORDED', scannedAt: { gte: slotStart, lte: slotEnd } },
+        select: { id: true },
+      });
       if (existingScan) continue;
 
-      // Check if an ABSENT scan was already created (avoid duplicates)
+      // ABSENT records are stamped at the slot's end, so this slot's record
+      // falls in [slotEnd, slotEnd + duration). Checking only this range lets
+      // a missed duty in a later slot at the same venue still be recorded.
       const existingAbsent = await prisma.venueScan.findFirst({
         where: {
-          venueId: assignment.venueId,
-          examinationSessionId: assignment.examinationSessionId,
-          userId: assignment.invigilatorId,
+          ...scope,
           result: 'ABSENT',
+          scannedAt: { gte: slotEnd, lt: new Date(slotEnd.getTime() + EXAM_DURATION_DEFAULT_MIN * 60 * 1000) },
         },
+        select: { id: true },
       });
-
       if (existingAbsent) continue;
 
-      // Create ABSENT scan record
       await prisma.venueScan.create({
-        data: {
-          venueId: assignment.venueId,
-          examinationSessionId: assignment.examinationSessionId,
-          userId: assignment.invigilatorId,
-          result: 'ABSENT',
-          scannedAt: now,
-        },
+        data: { ...scope, result: 'ABSENT', scannedAt: slotEnd },
       });
 
       absentCount++;

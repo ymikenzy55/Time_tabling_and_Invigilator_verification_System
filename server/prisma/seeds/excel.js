@@ -25,7 +25,7 @@ const HEAD_PASSWORD = 'Head@2026';
 const INVIG_PASSWORD = 'Invig@2026';
 const GENERAL_DEPT_NAME = 'General Studies';
 
-const rows = JSON.parse(fs.readFileSync(path.join(__dirname, 'seed-data.json'), 'utf8'));
+const rows = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'seed-data.json'), 'utf8'));
 
 const normalizeName = (v) => (typeof v === 'string' ? v.trim().replace(/\s+/g, ' ') : null);
 

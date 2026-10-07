@@ -63,7 +63,6 @@ export const createNotification = async ({
 
     return notification;
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error('Failed to create notification:', err.message);
     return null;
   }
@@ -100,7 +99,6 @@ export const notifyRole = async (role, { type, title, message, link, data, sendS
       )
     );
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error('Failed to notify role:', err.message);
   }
 };

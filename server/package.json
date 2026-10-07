@@ -13,6 +13,17 @@
     "start": "node src/index.js",
     "build": "prisma generate",
     "seed": "node prisma/seed.js",
+    "seed:super-admin": "node prisma/seeds/super-admin.js",
+    "seed:excel": "node prisma/seeds/excel.js",
+    "seed:invigilators": "node prisma/seeds/invigilators.js",
+    "seed:demo-invigilator": "node prisma/seeds/demo-invigilator.js",
+    "seed:second-semester": "node prisma/seeds/second-semester.js",
+    "seed:test-data": "node prisma/seeds/test-data.js",
+    "seed:venues": "node prisma/seeds/venues.js",
+    "seed:venues-uenr": "node prisma/seeds/venues-uenr.js",
+    "db:inspect": "node scripts/inspect-db.js",
+    "db:inspect-users": "node scripts/inspect-users.js",
+    "db:reset-users": "node scripts/reset-users.js",
     "deploy:migrate": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
@@ -40,5 +51,14 @@
   "devDependencies": {
     "nodemon": "^3.1.7",
     "prisma": "^5.22.0"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
+  "nodemonConfig": {
+    "watch": [
+      "src"
+    ],
+    "ext": "js,json"
   }
 }

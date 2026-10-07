@@ -1,7 +1,8 @@
 import { io } from 'socket.io-client';
-import { tokenStore } from './api';
+import { API_BASE_URL, tokenStore } from './api';
 
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api/v1').replace('/api/v1', '');
+// Socket.IO lives at the API origin, without the /api/v1 prefix.
+const BASE_URL = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
 
 let socket = null;
 

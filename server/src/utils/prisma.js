@@ -33,6 +33,5 @@ if (!isProd) globalForPrisma.__prisma = prisma;
 // Pre-warm the connection pool so the first request doesn't pay cold-start latency.
 // Don't crash the server if the DB is temporarily unavailable — it will retry on demand.
 prisma.$connect().catch((err) => {
-  // eslint-disable-next-line no-console
   console.error('Failed to pre-warm database connection:', err.message);
 });

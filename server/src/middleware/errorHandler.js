@@ -4,7 +4,6 @@ import { logger } from '../utils/logger.js';
 import { ZodError } from 'zod';
 import { isProd } from '../config/env.js';
 
-// eslint-disable-next-line no-unused-vars
 export const errorHandler = (err, req, res, next) => {
   // Known operational errors
   if (err instanceof ApiError) {

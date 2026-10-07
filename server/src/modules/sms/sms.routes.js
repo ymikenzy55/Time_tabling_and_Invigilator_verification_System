@@ -1,16 +1,16 @@
 import express from 'express';
-import { sendSMS, isSMSConfigured, formatGhanaPhone } from '../utils/sms.js';
-import { requireAuth } from '../middleware/auth.js';
-import { requireRole } from '../middleware/rbac.js';
+import { sendSMS, isSMSConfigured, formatGhanaPhone } from '../../utils/sms.js';
+import { requireAuth } from '../../middleware/auth.js';
+import { requireRole } from '../../middleware/rbac.js';
 
 const router = express.Router();
 
 /**
  * Test SMS endpoint - only accessible by SUPER_ADMIN
- * POST /api/test-sms
+ * POST /api/v1/test-sms
  * Body: { phoneNumber: string, message: string }
  */
-router.post('/test-sms', requireAuth, requireRole(['SUPER_ADMIN']), async (req, res) => {
+router.post('/', requireAuth, requireRole('SUPER_ADMIN'), async (req, res) => {
   try {
     const { phoneNumber, message } = req.body;
 
@@ -67,9 +67,9 @@ router.post('/test-sms', requireAuth, requireRole(['SUPER_ADMIN']), async (req, 
 
 /**
  * Check SMS configuration status
- * GET /api/test-sms/status
+ * GET /api/v1/test-sms/status
  */
-router.get('/test-sms/status', requireAuth, requireRole(['SUPER_ADMIN']), (req, res) => {
+router.get('/status', requireAuth, requireRole('SUPER_ADMIN'), (req, res) => {
   const configured = isSMSConfigured();
   
   res.json({

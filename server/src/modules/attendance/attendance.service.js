@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../../utils/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { env, primaryClientOrigin } from '../../config/env.js';
-import { createNotification, notifyRole } from '../notifications/notifications.service.js';
+import { notifyRole } from '../notifications/notifications.service.js';
 import { broadcast } from '../../utils/broadcast.js';
 
 const QR_SECRET = env.QR_SIGNING_SECRET || env.JWT_SECRET;

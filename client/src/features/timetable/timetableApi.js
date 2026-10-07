@@ -1,4 +1,4 @@
-import { api, tokenStore } from '@/lib/api';
+import { api, API_BASE_URL, notifyAuthError, tokenStore } from '@/lib/api';
 
 export const timetableApi = {
   initialData: () => api.get('/timetable/initial').then((r) => r.data),
@@ -11,8 +11,7 @@ export const timetableApi = {
 
   generateStream: (payload, onProgress) => {
     const token = tokenStore.get();
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1';
-    return fetch(`${baseUrl}/timetable/generate`, {
+    return fetch(`${API_BASE_URL}/timetable/generate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -21,7 +20,11 @@ export const timetableApi = {
       body: JSON.stringify(payload),
     }).then(async (response) => {
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // Auth/validation errors are rejected before streaming starts and use
+        // the standard JSON error envelope — surface the server's message.
+        if (response.status === 401) notifyAuthError();
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error?.message || `Timetable generation failed (HTTP ${response.status}).`);
       }
       
       const reader = response.body.getReader();

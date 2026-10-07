@@ -118,7 +118,7 @@ export const ConfirmProvider = ({ children }) => {
     }
   }, [state.opts, state.resolve]);
 
-  useEffect(() => () => state.resolve?.(false), []); // eslint-disable-line
+  useEffect(() => () => state.resolve?.(false), []);  
 
   return (
     <ConfirmContext.Provider value={confirm}>

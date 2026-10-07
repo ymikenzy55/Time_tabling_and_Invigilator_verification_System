@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Download, X, Loader2 } from 'lucide-react';
+import { Download, Loader2 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Modal } from '@/components/ui/Modal';
 

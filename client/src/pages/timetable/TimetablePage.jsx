@@ -6,11 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import {
-  Loader2, CalendarRange, AlertCircle, CheckCircle2, Clock, ShieldAlert,
-  FileDown, MapPin, User, Building, QrCode, Users, Pencil, Trash2, X, Upload,
-  RefreshCw,
-} from 'lucide-react';
+import { Loader2, CalendarRange, AlertCircle, CheckCircle2, Clock, ShieldAlert, FileDown, MapPin, User, Building, QrCode, Users, Pencil, Trash2, Upload, RefreshCw } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -25,7 +21,7 @@ import { timetableApi } from '@/features/timetable/timetableApi';
 import { venueAssignmentsApi } from '@/features/venueAssignments/venueAssignmentsApi';
 import { attendanceApi } from '@/features/attendance/attendanceApi';
 import { coursesApi } from '@/features/courses/coursesApi';
-import { parseSpreadsheet, rowsToCourses } from '@/utils/fileImport';
+import { parseSpreadsheet, rowsToCourses } from '@/lib/fileImport';
 
 const PERIODS = [
   { hour: 8, label: '8:00 AM – 11:00 AM' },

@@ -1,6 +1,11 @@
 #!/bin/bash
 # Bash script to generate secrets for Fly.io deployment
-# Run this: chmod +x generate-secrets.sh && ./generate-secrets.sh
+# Run from anywhere: bash scripts/deploy/generate-secrets.sh
+# Output is written to <repo>/.secrets/fly-secrets.txt (git-ignored).
+
+SECRETS_DIR="$(cd "$(dirname "$0")/../.." && pwd)/.secrets"
+mkdir -p "$SECRETS_DIR"
+OUT_FILE="$SECRETS_DIR/fly-secrets.txt"
 
 echo "========================================"
 echo "  Fly.io Secrets Generator"
@@ -52,11 +57,11 @@ EOF
 
 echo ""
 echo "========================================"
-echo "  Secrets saved to: fly-secrets.txt"
+echo "  Secrets saved to: $OUT_FILE"
 echo "========================================"
 
 # Save to file
-cat > fly-secrets.txt << EOF
+cat > "$OUT_FILE" << EOF
 # Fly.io Secrets for Exam Management System
 # Generated: $(date)
 
@@ -96,4 +101,4 @@ flyctl secrets set SMTP_FROM=""
 EOF
 
 echo ""
-echo "✅ Secrets saved! Open fly-secrets.txt to copy commands."
+echo "✅ Secrets saved! Open $OUT_FILE to copy commands."

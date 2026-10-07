@@ -1,3 +1,9 @@
+﻿# Run from anywhere: powershell -File scripts/deploy/generate-secrets.ps1
+# Output is written to <repo>/.secrets/fly-secrets.txt (git-ignored).
+$SecretsDir = Join-Path $PSScriptRoot '..\..\.secrets'
+New-Item -ItemType Directory -Force -Path $SecretsDir | Out-Null
+$OutFile = Join-Path $SecretsDir 'fly-secrets.txt'
+
 # PowerShell script to generate secrets for Fly.io deployment
 # Run this in PowerShell: .\generate-secrets.ps1
 
@@ -49,7 +55,7 @@ Write-Host "flyctl secrets set SMTP_FROM=`"`"" -ForegroundColor White
 Write-Host ""
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  Secrets saved to: fly-secrets.txt" -ForegroundColor Cyan
+Write-Host "  Secrets saved to: $OutFile" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
 # Save to file
@@ -92,7 +98,7 @@ flyctl secrets set SMTP_FROM=""
 # flyctl secrets set CLIENT_ORIGIN="https://YOUR-FRONTEND-URL.fly.dev"
 "@
 
-$output | Out-File -FilePath "fly-secrets.txt" -Encoding UTF8
+$output | Out-File -FilePath $OutFile -Encoding UTF8
 
 Write-Host ""
-Write-Host "✅ Secrets saved! Open fly-secrets.txt to copy commands." -ForegroundColor Green
+Write-Host "✅ Secrets saved! Open $OutFile to copy commands." -ForegroundColor Green

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { z } from 'zod';
-import { EntityPage } from '@/components/EntityPage';
+import { EntityPage } from '@/components/common/EntityPage';
 import { semestersApi } from '@/features/academics/semestersApi';
 import { academicYearsApi } from '@/features/academics/academicYearsApi';
 import { Badge } from '@/components/ui/Badge';

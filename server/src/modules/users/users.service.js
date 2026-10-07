@@ -1,7 +1,7 @@
 import { prisma } from '../../utils/prisma.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { hashPassword, verifyPassword } from '../../utils/password.js';
-import { createNotification, notifyRole } from '../notifications/notifications.service.js';
+import { createNotification } from '../notifications/notifications.service.js';
 import { courseLevelsService } from '../courseLevels/courseLevels.service.js';
 import { normalizeDepartmentName, ensureDepartmentForName, linkDepartmentToUser } from '../departments/departmentAutoLink.js';
 import { invalidateAuthCache } from '../../middleware/auth.js';
@@ -204,7 +204,6 @@ export const usersService = {
         </div>
       `,
     }).catch((err) => {
-      // eslint-disable-next-line no-console
       console.error('[users] Failed to send deletion email:', err);
     });
 
@@ -357,7 +356,6 @@ export const usersService = {
         </div>
       `,
     }).catch((err) => {
-      // eslint-disable-next-line no-console
       console.error('[users] Failed to send approval email:', err);
     });
 
@@ -474,7 +472,6 @@ export const usersService = {
         </div>
       `,
     }).catch((err) => {
-      // eslint-disable-next-line no-console
       console.error('[users] Failed to send rejection email:', err);
     });
 
@@ -570,7 +567,6 @@ export const usersService = {
           </div>
         `,
       }).catch((err) => {
-        // eslint-disable-next-line no-console
         console.error('[users] Failed to send suspension email:', err);
       });
     } else if (status === 'ACTIVE' && user.status !== 'PENDING_APPROVAL') {
@@ -617,7 +613,6 @@ export const usersService = {
           </div>
         `,
       }).catch((err) => {
-        // eslint-disable-next-line no-console
         console.error('[users] Failed to send reactivation email:', err);
       });
     }

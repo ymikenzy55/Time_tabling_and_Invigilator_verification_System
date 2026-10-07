@@ -1,11 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  ClipboardList, MapPin, Clock, CheckCircle2,
-  Building, BookOpen, Download, UserPlus, Send, Loader2, AlertCircle,
-  ScanLine, Bell,
-} from 'lucide-react';
+import { ClipboardList, MapPin, Clock, CheckCircle2, Building, BookOpen, Download, UserPlus, Send, Loader2, AlertCircle, ScanLine } from 'lucide-react';
 import { getSocket } from '@/lib/socket';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';

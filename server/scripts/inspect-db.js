@@ -1,4 +1,4 @@
-import { prisma } from '../utils/prisma.js';
+import { prisma } from '../src/utils/prisma.js';
 
 async function main() {
   const users = await prisma.user.findMany({

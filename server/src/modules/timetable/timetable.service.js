@@ -142,7 +142,7 @@ const scheduleCourses = (courses, slots, venues, onProgress, attemptNum = 1) => 
   } else if (attemptNum % 3 === 0) {
     // Every 3rd attempt: sort by day then reverse period order
     shuffledSlots = [...slots].sort((a, b) => {
-      const dayDiff = Math.floor(a.key / 86_400_000) - Math.floor(b.key / 86_40_000);
+      const dayDiff = Math.floor(a.key / 86_400_000) - Math.floor(b.key / 86_400_000);
       if (dayDiff !== 0) return dayDiff;
       return b.key - a.key; // afternoon first within same day
     });
@@ -268,7 +268,7 @@ const scheduleCourses = (courses, slots, venues, onProgress, attemptNum = 1) => 
         }
         if (remainingStudents <= 0) {
           for (const [vid, left] of splitTrial) trial.set(vid, left);
-          usedVenues.add(...splitUsed);
+          for (const su of splitUsed) usedVenues.add(su);
           for (const sc of splitChosen) chosen.push(sc);
           continue;
         }
@@ -470,7 +470,8 @@ const scheduleCourses = (courses, slots, venues, onProgress, attemptNum = 1) => 
     // course and place it in the first one that satisfies all hard
     // constraints. We also try to evict a non-clashed course from a slot
     // if direct placement fails, then re-place the evicted course.
-    const clashedCourses = [...clashPlacements].map((p) => p.course);
+    // A split course has several placements — repair each course only once.
+    const clashedCourses = [...new Map([...clashPlacements].map((p) => [p.course.id, p.course])).values()];
     if (onProgress) onProgress(`Clash detected: ${clashPlacements.size} entries. Running local search repair...`);
 
     // Rebuild constraint maps from finalPlacements (clashes removed).
@@ -486,7 +487,7 @@ const scheduleCourses = (courses, slots, venues, onProgress, attemptNum = 1) => 
       if (p.venue) {
         if (!repairVenueRemaining.has(p.slot.key)) repairVenueRemaining.set(p.slot.key, new Map(sortedVenues.map(v => [v.id, v.capacity])));
         const rem = repairVenueRemaining.get(p.slot.key);
-        const cur = rem.get(p.venue.id) || p.venue.capacity;
+        const cur = rem.get(p.venue.id) ?? p.venue.capacity;
         rem.set(p.venue.id, cur - (p.splitCount || p.course.studentCount || 0));
       }
     }
@@ -511,10 +512,10 @@ const scheduleCourses = (courses, slots, venues, onProgress, attemptNum = 1) => 
           if (!repairVenueRemaining.has(slot.key)) repairVenueRemaining.set(slot.key, new Map(sortedVenues.map(v => [v.id, v.capacity])));
           const rem = repairVenueRemaining.get(slot.key);
           for (const v of sortedVenues) {
-            if ((rem.get(v.id) || v.capacity) >= students && students <= v.capacity) { venue = v; break; }
+            if ((rem.get(v.id) ?? v.capacity) >= students && students <= v.capacity) { venue = v; break; }
           }
           if (!venue) continue;
-          rem.set(venue.id, (rem.get(venue.id) || venue.capacity) - students);
+          rem.set(venue.id, (rem.get(venue.id) ?? venue.capacity) - students);
         }
 
         // Place it.
@@ -538,10 +539,10 @@ const scheduleCourses = (courses, slots, venues, onProgress, attemptNum = 1) => 
             if (!repairVenueRemaining.has(slot.key)) repairVenueRemaining.set(slot.key, new Map(sortedVenues.map(v => [v.id, v.capacity])));
             const rem = repairVenueRemaining.get(slot.key);
             for (const v of sortedVenues) {
-              if ((rem.get(v.id) || v.capacity) >= students && students <= v.capacity) { venue = v; break; }
+              if ((rem.get(v.id) ?? v.capacity) >= students && students <= v.capacity) { venue = v; break; }
             }
             if (!venue) continue;
-            rem.set(venue.id, (rem.get(venue.id) || venue.capacity) - students);
+            rem.set(venue.id, (rem.get(venue.id) ?? venue.capacity) - students);
           }
 
           if (!repairDeptLevelBusy.has(slot.key)) repairDeptLevelBusy.set(slot.key, new Set());
@@ -786,8 +787,9 @@ export const timetableService = {
     if (Number.isNaN(periodStart.getTime()) || Number.isNaN(periodEnd.getTime())) {
       throw ApiError.badRequest('Invalid exam period dates.');
     }
-    if (periodEnd <= periodStart) {
-      throw ApiError.badRequest('The exam end date must be after the start date.');
+    // A one-day exam period (start === end) is valid; buildSlots covers the whole end day.
+    if (periodEnd < periodStart) {
+      throw ApiError.badRequest('The exam end date cannot be before the start date.');
     }
     if (skipWeekends && isWeekend(periodStart)) {
       throw ApiError.badRequest('The exam start date cannot be on a weekend when weekends are skipped.');
@@ -802,8 +804,10 @@ export const timetableService = {
       );
     }
 
-    // Fetch venues, courses, and clear existing entries in parallel.
-    const [venues, courses] = await Promise.all([
+    // Fetch venues and courses in parallel. Existing entries are only cleared
+    // after every validation below passes, so a rejected request never wipes
+    // the current timetable.
+    const [venues, approvedCourses] = await Promise.all([
       assignVenues
         ? prisma.venue.findMany({
             where: { isActive: true },
@@ -814,11 +818,6 @@ export const timetableService = {
         where: { status: 'APPROVED', semesterId: session.semesterId },
         orderBy: [{ isPractical: 'desc' }, { level: 'asc' }, { code: 'asc' }],
       }),
-      clearExisting
-        ? prisma.invigilation.deleteMany({
-            where: { examinationSessionId, invigilatorId: null },
-          })
-        : Promise.resolve(),
     ]);
 
     if (assignVenues && venues.length < MIN_VENUES) {
@@ -827,10 +826,29 @@ export const timetableService = {
       );
     }
 
-    if (!courses.length) throw ApiError.badRequest('No approved courses found for this session semester.');
+    if (!approvedCourses.length) throw ApiError.badRequest('No approved courses found for this session semester.');
 
     const slots = buildSlots(periodStart, periodEnd, { skipWeekends });
     if (!slots.length) throw ApiError.badRequest('No available time slots in the selected date range.');
+
+    if (clearExisting) {
+      await prisma.invigilation.deleteMany({
+        where: { examinationSessionId, invigilatorId: null },
+      });
+    }
+
+    // Entries that survive (manually assigned ones, or everything when
+    // clearExisting is off) already schedule their course — never schedule
+    // the same course twice in one session.
+    const kept = await prisma.invigilation.findMany({
+      where: { examinationSessionId },
+      select: { courseId: true },
+    });
+    const alreadyScheduled = new Set(kept.map((e) => e.courseId));
+    const courses = approvedCourses.filter((c) => !alreadyScheduled.has(c.id));
+    if (!courses.length) {
+      throw ApiError.badRequest('Every approved course already has a timetable entry in this session. Delete the manually assigned entries or the whole timetable to regenerate.');
+    }
 
     // NEW: Retry mechanism - try multiple times to find complete solution
     let bestResult = null;

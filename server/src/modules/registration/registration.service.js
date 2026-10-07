@@ -8,7 +8,7 @@ import { cache } from '../../utils/cache.js';
 import { courseLevelsService } from '../courseLevels/courseLevels.service.js';
 import { normalizeDepartmentName, linkDepartmentToUser } from '../departments/departmentAutoLink.js';
 import { sendEmail, isEmailConfigured } from '../../utils/email.js';
-import { primaryClientOrigin } from '../../config/env.js';
+
 import crypto from 'crypto';
 
 const OPEN_ROLES = ['DEPARTMENT_HEAD', 'INVIGILATOR'];
@@ -512,7 +512,6 @@ export const registrationService = {
           </div>
         `,
       }).catch((err) => {
-        // eslint-disable-next-line no-console
         console.error('[registration] Failed to send confirmation email:', err);
       });
 

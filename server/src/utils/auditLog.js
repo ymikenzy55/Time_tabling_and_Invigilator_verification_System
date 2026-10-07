@@ -7,7 +7,6 @@ import { prisma } from './prisma.js';
  */
 export const logAudit = (data) => {
   prisma.auditLog.create({ data }).catch((err) => {
-    // eslint-disable-next-line no-console
     console.error('Failed to write audit log:', err.message);
   });
 };
@@ -20,7 +19,6 @@ export const logAudit = (data) => {
 export const logAuditBatch = (entries) => {
   if (!entries.length) return;
   prisma.auditLog.createMany({ data: entries }).catch((err) => {
-    // eslint-disable-next-line no-console
     console.error('Failed to write audit log batch:', err.message);
   });
 };

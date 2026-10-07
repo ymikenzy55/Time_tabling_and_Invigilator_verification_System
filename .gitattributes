@@ -1,0 +1,13 @@
+# Normalise line endings: LF in the repo and the working tree (Docker/Linux builds),
+# except Windows-only scripts.
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets
+*.png binary
+*.webp binary
+*.jpg binary
+*.xlsx binary
+*.pptx binary
+*.pdf binary

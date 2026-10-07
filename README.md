@@ -399,32 +399,49 @@ Referential integrity is deliberate: `onDelete: Restrict` protects records that 
 
 ```
 Time_Table_Web_App/
+├── package.json                     # Root scripts: dev (both apps), build, lint, db:*
+├── eslint.config.mjs                # Single ESLint config for client + server
+├── render.yaml                      # Render blueprint (must stay at repo root)
+├── .github/workflows/               # CI/CD — Fly.io deploy
+├── assets/branding/                 # Source logo files
+├── docs/                            # Guides (local only)
+├── scripts/
+│   ├── deploy/                      # generate-secrets.{sh,ps1} → .secrets/
+│   └── docs/                        # generate-pptx.mjs → artifacts/
+├── tests/e2e/                       # Playwright smoke scripts
+├── artifacts/                       # Screenshots, PDFs, decks (git-ignored)
+├── .secrets/                        # Local secret notes (git-ignored)
+│
 ├── client/                          # React + Vite SPA (PWA)
 │   ├── public/
 │   │   ├── assets/images/           # Logo, login backdrop
 │   │   ├── manifest.json            # PWA manifest
 │   │   └── sw.js                    # Service worker — app-shell cache
 │   └── src/
-│       ├── components/              # Reusable UI
-│       │   ├── EntityPage.jsx       # Generic CRUD page w/ skeleton loaders
-│       │   ├── InstallPrompt.jsx    # One-time PWA install prompt
+│       ├── components/
+│       │   ├── common/              # EntityPage (generic CRUD), InstallPrompt (PWA)
+│       │   ├── layout/              # Sidebar, Topbar, BottomNav
 │       │   └── ui/                  # Modal, PageHeader, EmptyState, ConfirmDialog…
+│       ├── config/nav.js            # Role-aware navigation
 │       ├── context/AuthContext.jsx  # Session state + 401 interception
 │       ├── features/                # Per-domain API clients & widgets
 │       ├── layouts/                 # AuthLayout, DashboardLayout
-│       ├── lib/                     # axios instance, queryClient, helpers
+│       ├── lib/                     # axios instance, socket, queryClient, fileImport, helpers
 │       ├── pages/                   # Route screens by domain
-│       │   ├── auth/                # Login, Register, Reset password
-│       │   ├── academic/ courses/ examinations/
+│       │   ├── auth/ dashboard/ settings/ common/ (404, placeholder)
+│       │   ├── academic/ courses/ examinations/ department/
 │       │   ├── attendance/          # Scan, QR codes, records, history
-│       │   ├── timetable/ venues/ users/ notifications/
+│       │   └── timetable/ venues/ users/ notifications/
 │       └── routes/                  # AppRoutes, ProtectedRoute
 │
 └── server/                          # Express + Prisma API
     ├── prisma/
     │   ├── schema.prisma            # Single source of truth for the DB
     │   ├── migrations/              # Version-controlled schema history
-    │   └── seed.js                  # Super Admin bootstrap
+    │   ├── seed.js                  # Super Admin bootstrap (npm run seed)
+    │   └── seeds/                   # Optional data seeds (npm run seed:<name>)
+    │       └── data/                # seed-data.json + source spreadsheet
+    ├── scripts/                     # DB maintenance (npm run db:inspect, db:reset-users)
     └── src/
         ├── app.js                   # Express app assembly
         ├── index.js                 # HTTP server + Socket.IO + shutdown
@@ -436,9 +453,9 @@ Time_Table_Web_App/
         │   ├── courses/ courseLevels/
         │   ├── examinationSessions/ venues/ venueAssignments/
         │   ├── invigilations/ timetable/ attendance/
-        │   └── dashboard/ notifications/
+        │   └── dashboard/ notifications/ sms/
         ├── routes/index.js          # Mounts all modules under /api/v1
-        └── utils/                   # prisma, jwt, qr, socket, mailer, logger
+        └── utils/                   # prisma, jwt, socket, email, sms, logger
 ```
 
 Each feature module is self-contained and follows the same shape, so adding a domain is mechanical:
@@ -448,7 +465,7 @@ modules/<feature>/
 ├── <feature>.routes.js       # HTTP verbs + middleware wiring
 ├── <feature>.controller.js   # Request/response translation
 ├── <feature>.service.js      # Business rules + Prisma access
-└── <feature>.schema.js       # Zod request validation
+└── <feature>.validators.js   # Zod request validation
 ```
 
 ---
@@ -468,7 +485,7 @@ All endpoints are namespaced under `/api/v1`. Authenticated routes expect an `Au
 | Course levels | `GET|POST|DELETE /course-levels` |
 | Venues | `GET|POST|PATCH|DELETE /venues` |
 | Sessions | `GET|POST|PATCH /examination-sessions` |
-| Timetable | `GET /timetable` · `POST /timetable/allocate` |
+| Timetable | `GET /timetable` · `GET /timetable/initial` · `POST /timetable/generate` (SSE progress) · `PATCH|DELETE /timetable/entries/:id` |
 | Assignments | `GET|POST|DELETE /venue-assignments` · `GET /invigilations/mine` |
 | Attendance | `POST /attendance/scan-venue/preview` · `POST /attendance/scan-venue` · `POST /attendance/scan` · `GET /attendance` · `GET /attendance/mine` · `GET /attendance/venue-qr` |
 | Notifications | `GET /notifications` · `POST /notifications/:id/read` · `POST /notifications/read-all` |
@@ -523,18 +540,32 @@ Sign in with the Super Admin credentials you supplied to the seed script, then o
 
 ### Useful Scripts
 
+From the repository root (run `npm run install:all` once):
+
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | API + Vite dev server together |
+| `npm run build` | Prisma client + production client bundle |
+| `npm run lint` | ESLint across client, server, seeds and scripts |
+| `npm run db:migrate` / `db:deploy` | Dev migration / apply migrations in production |
+| `npm run db:seed` | Bootstrap the Super Admin |
+| `npm run secrets:generate` | Generate JWT/QR secrets into `.secrets/` |
+
+Per package:
+
 | Location | Command | Purpose |
 | --- | --- | --- |
 | `server` | `npm run dev` | API with hot reload (nodemon) |
 | `server` | `npm start` | Production API |
 | `server` | `npm run seed` | Bootstrap the Super Admin |
+| `server` | `npm run seed:<name>` | Optional seeds: `excel`, `invigilators`, `demo-invigilator`, `second-semester`, `test-data`, `venues`, `venues-uenr`, `super-admin` |
+| `server` | `npm run db:inspect` | Print users, departments and courses |
 | `server` | `npm run prisma:migrate` | Create & apply a dev migration |
 | `server` | `npm run deploy:migrate` | Apply migrations in production |
 | `server` | `npm run prisma:studio` | Browse data in Prisma Studio |
 | `client` | `npm run dev` | Vite dev server |
 | `client` | `npm run build` | Production bundle to `dist/` |
 | `client` | `npm run preview` | Serve the built bundle locally |
-| `client` | `npm run lint` | ESLint |
 
 ---
 

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EntityPage } from '@/components/EntityPage';
+import { EntityPage } from '@/components/common/EntityPage';
 import { academicYearsApi } from '@/features/academics/academicYearsApi';
 import { Badge } from '@/components/ui/Badge';
 

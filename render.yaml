@@ -4,7 +4,7 @@
 #
 # The database is NOT managed by Render — it lives on Neon (https://neon.tech).
 # Set DATABASE_URL manually in the Render dashboard using the Neon pooled
-# connection string. See DEPLOYMENT.md for the full walkthrough.
+# connection string. See the Deployment section of README.md.
 
 services:
   # ── Backend: Express + Socket.IO API ──────────────────────────
@@ -21,7 +21,7 @@ services:
       - key: DATABASE_URL
         sync: false  # Neon pooled connection string (must include ?sslmode=require)
       - key: JWT_SECRET
-        sync: false  # set manually in Render dashboard (min 16 chars)
+        sync: false  # set manually in Render dashboard (min 32 chars)
       - key: JWT_EXPIRES_IN
         value: 1d
       - key: QR_SIGNING_SECRET
